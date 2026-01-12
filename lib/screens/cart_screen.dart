@@ -120,6 +120,12 @@ class _CartScreenState extends State<CartScreen> {
         if (mounted) {
           setState(() {
             _cartData = response['data']['response'];
+
+            // Sync method ID if returned from backend
+            if (_cartData!['order_method_id'] != null) {
+              _selectedOrderMethodId = _cartData!['order_method_id'];
+            }
+
             _isLoading = false;
             _filterSuggestions(animate: true);
           });
@@ -135,6 +141,11 @@ class _CartScreenState extends State<CartScreen> {
           if (mounted) {
             setState(() {
               _cartData = response['data']['response'];
+
+              if (_cartData!['order_method_id'] != null) {
+                _selectedOrderMethodId = _cartData!['order_method_id'];
+              }
+
               _isLoading = false;
               _filterSuggestions(animate: true);
             });
@@ -501,6 +512,10 @@ class _CartScreenState extends State<CartScreen> {
           padding: const EdgeInsets.only(bottom: 100),
           child: Column(
             children: [
+              if (_isLoading && _cartData != null)
+                const LinearProgressIndicator(minHeight: 2),
+
+              // ... existing column children
               // ... existing column children
               // Delivery Alert / Savings
               Container(

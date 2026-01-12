@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:exanor/models/product_model.dart';
 import 'package:exanor/services/api_service.dart';
 
@@ -21,68 +23,139 @@ class ProductVariantSheet extends StatefulWidget {
 }
 
 class _ProductVariantSheetState extends State<ProductVariantSheet> {
-  // Map of Variation Name -> Selected Value Object
-  final Map<String, dynamic> _selectedVariations = {};
-  bool _isLoading = false;
+  // Map of Variation Name -> Selected Value ID Strings
+  // Using IDs to match API requirements
+  final Map<String, String> _selectedVariationIds = {};
+
+  // State for validation
+  bool _isValidating = false;
+  bool _isAdding = false;
   String? _error;
+
+  // Confirmed details from validation
+  double _currentPrice = 0.0;
+  bool _isAvailable = true;
+  int _quantity = 1;
+  String? _productCombinationId;
+
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
     _initializeSelections();
+    // Validate immediately with initial selections
+    _validateAvailability();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
   }
 
   void _initializeSelections() {
-    // Try to pre-select first option for each variation if possible
+    // Parse variants based on user sample structure (nested variants list)
+    // Structure: List -> Map with 'variation_name', 'variation_value' (List)
     for (var variantGroup in widget.variants) {
       if (variantGroup is Map) {
         final name = variantGroup['variation_name'];
-        final values = variantGroup['variation_values'];
+        final values =
+            variantGroup['variation_value']; // Note: 'variation_value' not 'variation_values' based on sample
+
         if (name != null && values is List && values.isNotEmpty) {
           // Default to first
-          _selectedVariations[name] = values.first;
+          final firstVal = values.first;
+          if (firstVal is Map && firstVal['id'] != null) {
+            _selectedVariationIds[name] = firstVal['id'];
+          }
         }
       }
     }
   }
 
+  Future<void> _validateAvailability() async {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+
+    // Debounce to avoid spamming if user taps rapidly
+    _debounce = Timer(const Duration(milliseconds: 200), () async {
+      if (!mounted) return;
+
+      setState(() {
+        _isValidating = true;
+        _error = null;
+      });
+
+      try {
+        // Construct variations list: just the IDs
+        final variationIds = _selectedVariationIds.values.toList();
+
+        final requestBody = {
+          "product_id": widget.product.id,
+          "store_id": widget.storeId,
+          "quantity": _quantity,
+          "variations": variationIds,
+        };
+
+        final response = await ApiService.post(
+          '/validate-product-availability/',
+          body: requestBody,
+          useBearerToken: true,
+        );
+
+        if (response['data'] != null) {
+          // status might be != 200 based on availability logic, check body
+          final data = response['data']['response'];
+          if (data != null) {
+            if (mounted) {
+              setState(() {
+                // Ensure types match API sample
+                _isAvailable = data['is_available'] ?? false;
+
+                // Pricing
+                if (data['pricing_details'] != null) {
+                  _currentPrice =
+                      (data['pricing_details']['selling_amount_including_tax']
+                              as num)
+                          .toDouble();
+                }
+
+                _productCombinationId = data['product_combination_id'];
+                debugPrint("Validated Combination: $_productCombinationId");
+                _isValidating = false;
+              });
+            }
+          } else {
+            // Handle unexpected structure
+            if (mounted) setState(() => _isValidating = false);
+          }
+        }
+      } catch (e) {
+        print("Validation error: $e");
+        if (mounted) {
+          setState(() {
+            _isValidating = false;
+            // Don't show error to user immediately on validation fail, just maybe disable button or show unavail
+          });
+        }
+      }
+    });
+  }
+
   Future<void> _addToCart() async {
+    if (!_isAvailable) return;
+
     setState(() {
-      _isLoading = true;
+      _isAdding = true;
       _error = null;
     });
 
     try {
-      // Construct variations list for API
-      // Expected format based on usage in other parts of app:
-      // "variations": [ { "variation_id": "...", "variation_value_id": "..." } ]
-      // Or similar.
-      // Based on typical backend for this user (Exanor), usually it wants the combination.
-      // But let's check what CartScreen uses for increment:
-      // "variations": productEntry['product_variations'] ?? [],
-
-      // We need to construct the list of selected variations.
-      List<Map<String, dynamic>> selectedVars = [];
-
-      _selectedVariations.forEach((key, value) {
-        // Assuming value has needed IDs.
-        // If the structure from /product-variation-value/ is:
-        // { "variation_name": "Size", "variation_id": "123", "variation_values": [{"id": "v1", "value": "Small"}] }
-
-        // We might need to pass specific structure.
-        // Let's guess typical structure:
-        if (value is Map) {
-          // This is the selected value object.
-          // We probably need to send back what defines the combination.
-          selectedVars.add(Map<String, dynamic>.from(value));
-        }
-      });
-
       final requestBody = {
-        "quantity": 1,
+        "quantity": _quantity,
         "product_id": widget.product.id,
         "store_id": widget.storeId,
-        "variations": selectedVars,
+        "variations": _selectedVariationIds.values.toList(),
       };
 
       final response = await ApiService.post(
@@ -92,11 +165,7 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
       );
 
       if (response['data'] != null && response['data']['status'] == 200) {
-        widget.onAddToCartSuccess(1);
-        // helper handles closing if needed, or we close here?
-        // Usually caller closes logic?
-        // CartScreen usage: _showVariantsBottomSheet(..., onSuccess: (qty) { ... Navigator.pop ... })
-        // So we just call success.
+        widget.onAddToCartSuccess(_quantity);
       } else {
         setState(() {
           _error = response['data']?['message'] ?? "Failed to add to cart";
@@ -106,18 +175,29 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
       setState(() {
         _error = "An error occurred";
       });
-      print("Add to cart error: $e");
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _isAdding = false;
         });
       }
     }
   }
 
+  void _updateQuantity(int delta) {
+    if (_quantity + delta < 1) return;
+    setState(() {
+      _quantity += delta;
+      // Trigger validation to get updated price or stock check
+      _validateAvailability();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.primaryColor;
+
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -127,146 +207,270 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
         ),
       ),
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
         top: 20,
-        left: 20,
-        right: 20,
+        left: 0,
+        right: 0,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  widget.product.productName,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+          // Title Header with Padding
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.product.productName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ],
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
           ),
-          const Divider(),
+          const Divider(height: 24),
+
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.only(bottom: 10.0),
-              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
             ),
 
           // Variants List
-          ...widget.variants.map((variantGroup) {
-            if (variantGroup is! Map) return const SizedBox.shrink();
-
-            final name = variantGroup['variation_name'] ?? 'Option';
-            final values = variantGroup['variation_values'] as List?;
-
-            if (values == null || values.isEmpty)
-              return const SizedBox.shrink();
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 12, // Horizontal spacing
-                    runSpacing: 12, // Vertical spacing
-                    children: values.map((val) {
-                      final isSelected = _selectedVariations[name] == val;
-                      final valLabel =
-                          val['value'] ??
-                          val['name'] ??
-                          'Unknown'; // Adjust based on actual API
+                children: widget.variants.map((variantGroup) {
+                  if (variantGroup is! Map) return const SizedBox.shrink();
 
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedVariations[name] = val;
-                          });
-                        },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isSelected ? Colors.black : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.black
-                                  : Colors.grey[300]!,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Text(
-                            valLabel,
-                            style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.black87,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
+                  final name = variantGroup['variation_name'] ?? 'Option';
+                  final values =
+                      variantGroup['variation_value']
+                          as List?; // 'variation_value' from sample
+
+                  if (values == null || values.isEmpty)
+                    return const SizedBox.shrink();
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name.toString().toUpperCase(),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            letterSpacing: 1.0,
                           ),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: values.map((val) {
+                            final valId = val['id'];
+                            final valName =
+                                val['variation_value_name'] ??
+                                'Unknown'; // from sample
+                            final isSelected =
+                                _selectedVariationIds[name] == valId;
 
-          const SizedBox(height: 24),
-
-          // Action Button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _isLoading ? null : _addToCart,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 24,
-                      width: 24,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Text(
-                      'Add to Cart',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedVariationIds[name] = valId;
+                                });
+                                _validateAvailability(); // Re-validate on change
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? primaryColor.withOpacity(0.1)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? primaryColor
+                                        : Colors.grey[300]!,
+                                    width: isSelected ? 1.5 : 1.0,
+                                  ),
+                                ),
+                                child: Text(
+                                  valName,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? primaryColor
+                                        : Colors.black87,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // Bottom Bar: Quantity + Add Button
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                // Quantity Stepper
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: Row(
+                    children: [
+                      InkWell(
+                        onTap: () => _updateQuantity(-1),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Icon(
+                            Icons.remove,
+                            size: 20,
+                            color: _quantity > 1 ? primaryColor : Colors.grey,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: 30,
+                        child: Text(
+                          '$_quantity',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: () => _updateQuantity(1),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Icon(Icons.add, size: 20, color: primaryColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 16),
+
+                // Add Item Button
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: (_isAdding || !_isAvailable)
+                          ? null
+                          : _addToCart,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            primaryColor, // Matching 'Add Item' style often used
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: _isAdding || _isValidating
+                          ? Shimmer.fromColors(
+                              baseColor: Colors.white.withOpacity(0.4),
+                              highlightColor: Colors.white,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    'ADD ITEM',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '₹${_currentPrice.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : !_isAvailable
+                          ? const Text(
+                              'Item Unavailable',
+                              style: TextStyle(
+                                // Disabled text color is usually handled by theme, but explicit here ensures visibility if needed
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'ADD ITEM',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '₹${_currentPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

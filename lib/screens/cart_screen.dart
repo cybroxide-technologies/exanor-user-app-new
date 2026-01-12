@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
+import 'package:exanor/screens/saved_addresses_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:exanor/models/product_model.dart';
 
 import 'package:exanor/components/custom_cached_network_image.dart';
@@ -48,18 +51,178 @@ class _CartScreenState extends State<CartScreen> {
   Map<String, dynamic>? _selectedPaymentMethod;
   bool _isLoadingPaymentMethods = false;
 
+  // Order Initialization State
+  bool _isOrderPlaceable = false;
+  bool _isInitializingOrder = false;
+  String _orderInitMessage = "";
+
+  // Location Data
+  String? _addressTitle;
+  String? _addressSubtitle;
+  late String _currentAddressId;
+  late double _currentLat;
+  late double _currentLng;
+
   @override
   void initState() {
     super.initState();
+    _currentAddressId = widget.userAddressId;
+    _currentLat = widget.lat.toDouble();
+    _currentLng = widget.lng.toDouble();
+
     _fetchOrderMethods();
     _fetchPaymentMethods();
+    _loadAddressDetails();
     _initDataSequentially();
+  }
+
+  Future<void> _loadAddressDetails() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() {
+          _addressTitle =
+              prefs.getString('address_title') ?? "Selected Location";
+          _addressSubtitle = prefs.getString('address_subtitle') ?? "";
+        });
+      }
+    } catch (e) {
+      print("Error loading address details: $e");
+    }
+  }
+
+  Future<void> _updateLocationFromPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = prefs.getString('saved_address_id');
+      final lat = prefs.getDouble('latitude');
+      final lng = prefs.getDouble('longitude');
+
+      if (id != null && lat != null && lng != null) {
+        if (mounted) {
+          setState(() {
+            _currentAddressId = id;
+            _currentLat = lat;
+            _currentLng = lng;
+          });
+          await _loadAddressDetails();
+        }
+      }
+    } catch (e) {
+      print("Error updating location from prefs: $e");
+    }
   }
 
   Future<void> _initDataSequentially() async {
     await _fetchCartData();
     if (mounted) {
       _fetchProductSuggestions();
+      _initializeOrder();
+    }
+  }
+
+  Future<void> _initializeOrder() async {
+    // Comprehensive validation of all required fields
+    if (_selectedPaymentMethod == null ||
+        _selectedOrderMethodId == null ||
+        _currentAddressId.isEmpty) {
+      print("⚠️ Cannot initialize order - missing required data:");
+      print(
+        "   Payment Method: ${_selectedPaymentMethod != null ? 'Set' : 'Missing'}",
+      );
+      print("   Order Method ID: ${_selectedOrderMethodId ?? 'Missing'}");
+      print(
+        "   Address ID: ${_currentAddressId.isEmpty ? 'Missing/Empty' : _currentAddressId}",
+      );
+
+      if (mounted) {
+        setState(() {
+          _isOrderPlaceable = false;
+          _orderInitMessage = "Please select Order Method and Address";
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _isInitializingOrder = true;
+      });
+    }
+
+    try {
+      final requestBody = {
+        "coupon_code": "taco1", // TODO: Add coupon support if needed
+        "lat": _currentLat,
+        "lng": _currentLng,
+        "order_method_id": _selectedOrderMethodId,
+        "payment_method_id": _selectedPaymentMethod!['id'],
+        "store_id": widget.storeId,
+        "user_address_id": _currentAddressId,
+      };
+
+      print("🛒 Initializing Order with:");
+      print("   Coupon: taco1");
+      print("   Lat/Lng: $_currentLat, $_currentLng");
+      print("   Order Method ID: $_selectedOrderMethodId");
+      print("   Payment Method ID: ${_selectedPaymentMethod!['id']}");
+      print("   Store ID: ${widget.storeId}");
+      print("   Address ID: $_currentAddressId");
+
+      final response = await ApiService.post(
+        '/order-init/',
+        body: requestBody,
+        useBearerToken: true,
+      );
+
+      if (mounted) {
+        if (response['data'] != null && response['data']['status'] == 200) {
+          final respData = response['data']['response'];
+          final message = respData['message'];
+
+          final isOk = message == "All OK." || message == "ALL OK";
+
+          setState(() {
+            _isOrderPlaceable = isOk;
+            _orderInitMessage = respData['message_for_user'] ?? "";
+
+            // Optionally update cart data from this response as it contains fresh pricing/availability
+            // _cartData = respData;
+            // Using specific fields might be safer to avoid overwriting UI state not present in this response
+
+            _isInitializingOrder = false;
+          });
+
+          print("✅ Order initialization successful - Order placeable: $isOk");
+        } else {
+          // Handle 400 or other error statuses
+          final respData = response['data']?['response'];
+          final errorMessage =
+              respData?['message_for_user'] ??
+              respData?['message'] ??
+              "Unable to initialize order";
+
+          print(
+            "❌ Order initialization failed: ${response['data']?['status']}",
+          );
+          print("   Message: $errorMessage");
+
+          setState(() {
+            _isOrderPlaceable = false;
+            _orderInitMessage = errorMessage;
+            _isInitializingOrder = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("❌ Error initializing order: $e");
+      if (mounted) {
+        setState(() {
+          _isOrderPlaceable = false;
+          _orderInitMessage = "Unable to validate order";
+          _isInitializingOrder = false;
+        });
+      }
     }
   }
 
@@ -117,9 +280,9 @@ class _CartScreenState extends State<CartScreen> {
         "coupon_code": "",
         "store_id": widget.storeId,
         "order_method_id": _selectedOrderMethodId ?? "",
-        "user_address_id": widget.userAddressId,
-        "lat": widget.lat,
-        "lng": widget.lng,
+        "user_address_id": _currentAddressId,
+        "lat": _currentLat,
+        "lng": _currentLng,
       };
 
       final response = await ApiService.post(
@@ -473,6 +636,9 @@ class _CartScreenState extends State<CartScreen> {
               );
             }
             _isLoadingPaymentMethods = false;
+
+            // Re-initialize order as payment method might have changed (or set to default)
+            _initializeOrder();
           });
         }
       } else {
@@ -526,6 +692,7 @@ class _CartScreenState extends State<CartScreen> {
                               _selectedPaymentMethod = method;
                             });
                             Navigator.pop(context);
+                            _initializeOrder(); // Trigger check on selection
                           },
                           child: Container(
                             margin: const EdgeInsets.symmetric(
@@ -700,12 +867,13 @@ class _CartScreenState extends State<CartScreen> {
                 child: OrderMethodSelector(
                   methods: _orderMethods,
                   selectedMethodId: _selectedOrderMethodId,
-                  onMethodSelected: (id) {
+                  onMethodSelected: (id) async {
                     setState(() {
                       _selectedOrderMethodId = id;
                       _isLoading = true; // Reload cart with new method
                     });
-                    _fetchCartData(forceLoading: true);
+                    await _fetchCartData(forceLoading: true);
+                    _initializeOrder(); // Validate order with new method
                   },
                 ),
               )
@@ -792,6 +960,7 @@ class _CartScreenState extends State<CartScreen> {
                       const Divider(height: 1),
 
                       // Note and Cutlery
+                      /*
                       Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Row(
@@ -850,6 +1019,7 @@ class _CartScreenState extends State<CartScreen> {
                           ],
                         ),
                       ),
+                      */
                     ],
                   ),
                 ),
@@ -867,7 +1037,7 @@ class _CartScreenState extends State<CartScreen> {
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Text(
-                        "Complete your meal with",
+                        "Recommended products",
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -938,6 +1108,7 @@ class _CartScreenState extends State<CartScreen> {
                 decoration: BoxDecoration(
                   color: theme.cardColor, // Use theme card color
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: theme.dividerColor),
                 ),
                 child: ListTile(
                   leading: const Icon(Icons.percent, color: Colors.blue),
@@ -951,7 +1122,98 @@ class _CartScreenState extends State<CartScreen> {
                   },
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
+
+              // Location Details Card
+              if (_addressTitle != null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Your Address",
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: theme.dividerColor),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.location_on,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _addressTitle!,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (_addressSubtitle?.isNotEmpty == true) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                _addressSubtitle!,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.textTheme.bodySmall?.color
+                                      ?.withOpacity(0.7),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final result =
+                              await Navigator.push<Map<String, dynamic>>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const SavedAddressesScreen(),
+                                ),
+                              );
+
+                          if (result != null &&
+                              result['addressSelected'] == true) {
+                            await _updateLocationFromPrefs();
+                            await _fetchCartData(forceLoading: true);
+                            _initializeOrder();
+                          }
+                        },
+                        child: const Text("Change"),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // Bill Details
               Container(
@@ -1173,26 +1435,68 @@ class _CartScreenState extends State<CartScreen> {
                   else
                     Expanded(
                       flex: 2,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          // Place order logic
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_orderInitMessage.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4.0),
+                              child: Text(
+                                _orderInitMessage,
+                                style: TextStyle(
+                                  color: Colors.green[700],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed:
+                                  _isOrderPlaceable && !_isInitializingOrder
+                                  ? () {
+                                      // Place order logic
+                                    }
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _isOrderPlaceable
+                                    ? theme.colorScheme.primary
+                                    : Colors.grey, // Grayscale if disabled
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: _isInitializingOrder
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Place Order',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                            ),
                           ),
-                          elevation: 0,
-                        ),
-                        child: const Text(
-                          'Place Order',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                 ],

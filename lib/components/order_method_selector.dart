@@ -17,6 +17,9 @@ class OrderMethodSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     if (methods.isEmpty) return const SizedBox.shrink();
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: ClipRRect(
@@ -26,9 +29,11 @@ class OrderMethodSelector extends StatelessWidget {
           child: Container(
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.grey.withOpacity(
-                0.15,
-              ), // Daker for visibility on off-white background
+              color: isDark
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.grey.withOpacity(
+                      0.15,
+                    ), // Daker for visibility on off-white background
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: Colors.white.withOpacity(0.5),
@@ -65,10 +70,19 @@ class OrderMethodSelector extends StatelessWidget {
                         child: Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [
-                                Colors.white.withOpacity(0.9),
-                                Colors.white.withOpacity(0.7),
-                              ],
+                              colors: isDark
+                                  ? [
+                                      theme.colorScheme.primary.withOpacity(
+                                        0.9,
+                                      ),
+                                      theme.colorScheme.primary.withOpacity(
+                                        0.7,
+                                      ),
+                                    ]
+                                  : [
+                                      Colors.white.withOpacity(0.9),
+                                      Colors.white.withOpacity(0.7),
+                                    ],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -105,8 +119,10 @@ class OrderMethodSelector extends StatelessWidget {
                                       ? FontWeight.w700
                                       : FontWeight.w500,
                                   color: isSelected
-                                      ? Colors.black
-                                      : Colors.black54,
+                                      ? (isDark ? Colors.white : Colors.black)
+                                      : (isDark
+                                            ? Colors.white54
+                                            : Colors.black54),
                                   letterSpacing: 0.5,
                                 ),
                                 child: Row(

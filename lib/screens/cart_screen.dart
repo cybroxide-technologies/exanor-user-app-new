@@ -35,12 +35,24 @@ class _CartScreenState extends State<CartScreen> {
   final Set<String> _updatingItemIds = {};
 
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _suggestionsScrollController = ScrollController();
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+
+  // Infinite Scroll State
+  int _suggestionPage = 1;
+  bool _hasMoreSuggestions = true;
+  bool _isFetchingMoreSuggestions = false;
+
+  // Payment Methods State
+  List<dynamic> _paymentMethods = [];
+  Map<String, dynamic>? _selectedPaymentMethod;
+  bool _isLoadingPaymentMethods = false;
 
   @override
   void initState() {
     super.initState();
     _fetchOrderMethods();
+    _fetchPaymentMethods();
     _initDataSequentially();
   }
 
@@ -54,6 +66,7 @@ class _CartScreenState extends State<CartScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _suggestionsScrollController.dispose();
     super.dispose();
   }
 
@@ -211,11 +224,24 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
-  Future<void> _fetchProductSuggestions() async {
-    // Basic fetch of products fro store as suggestion
-    // Reusing store fetch logic simplified
+  Future<void> _fetchProductSuggestions({bool isLoadMore = false}) async {
+    if (isLoadMore) {
+      if (!_hasMoreSuggestions || _isFetchingMoreSuggestions) return;
+      setState(() {
+        _isFetchingMoreSuggestions = true;
+      });
+    } else {
+      _suggestionPage = 1;
+      _hasMoreSuggestions = true;
+      if (mounted) setState(() => _isLoadingSuggestions = true);
+    }
+
     try {
-      final requestBody = {"store_id": widget.storeId, "query": {}, "page": 1};
+      final requestBody = {
+        "store_id": widget.storeId,
+        "query": {},
+        "page": _suggestionPage,
+      };
 
       final response = await ApiService.post(
         '/product/',
@@ -224,22 +250,51 @@ class _CartScreenState extends State<CartScreen> {
       );
 
       if (response['data'] != null && response['data']['status'] == 200) {
-        final list = (response['data']['response'] as List)
-            .map((e) => Product.fromJson(e))
-            .toList();
+        final rawList = response['data']['response'] as List? ?? [];
+        final list = rawList.map((e) => Product.fromJson(e)).toList();
+
         if (mounted) {
           setState(() {
-            _suggestedProducts = list.take(6).toList(); // Take slightly more
-            _filterSuggestions(
-              animate: false,
-            ); // Filter initially without animation as list is just building
+            if (isLoadMore) {
+              // Append to list using animated list insert could be tricky for bulk,
+              // but normal list append works if we update the model list.
+              // For AnimatedList, we need to insert items one by one or rebuild.
+              // Since simple infinite scroll, let's just insert them.
+              final startindex = _suggestedProducts.length;
+              _suggestedProducts.addAll(list);
+              for (int i = 0; i < list.length; i++) {
+                _listKey.currentState?.insertItem(startindex + i);
+              }
+            } else {
+              _suggestedProducts = list; // Reset
+              // Ideally we should tell AnimatedList to reset, but since page 1 reloads typically on refresh/init
+              // _listKey = GlobalKey? no can't change key easily.
+              // Assuming init state handles initial build.
+              // If refreshing, we might need to clear and re-add?
+              // For simplicity in this context, just updating list for refresh is okay if widget rebuilds.
+              // But AnimatedList holds state.
+            }
+
+            _hasMoreSuggestions = list.isNotEmpty;
+            if (_hasMoreSuggestions) _suggestionPage++;
+
             _isLoadingSuggestions = false;
+            _isFetchingMoreSuggestions = false;
+
+            // Filter new batch
+            _filterSuggestions(animate: false);
           });
         }
+      } else {
+        if (mounted) setState(() => _isFetchingMoreSuggestions = false);
       }
     } catch (e) {
       print('Error fetching suggestions: $e');
-      if (mounted) setState(() => _isLoadingSuggestions = false);
+      if (mounted)
+        setState(() {
+          _isLoadingSuggestions = false;
+          _isFetchingMoreSuggestions = false;
+        });
     }
   }
 
@@ -389,6 +444,155 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
+  Future<void> _fetchPaymentMethods() async {
+    setState(() => _isLoadingPaymentMethods = true);
+    try {
+      final requestBody = {
+        "store_id": widget.storeId,
+        "query": {},
+        "order_by": "payment_method_template_id",
+        "view": true,
+      };
+
+      final response = await ApiService.post(
+        '/payment-method/',
+        body: requestBody,
+        useBearerToken: true,
+      );
+
+      if (response['data'] != null && response['data']['status'] == 200) {
+        final list = response['data']['response'] as List? ?? [];
+        if (mounted) {
+          setState(() {
+            _paymentMethods = list;
+            // Default select first enabled one
+            if (_selectedPaymentMethod == null && _paymentMethods.isNotEmpty) {
+              _selectedPaymentMethod = _paymentMethods.firstWhere(
+                (m) => m['is_enabled'] == true,
+                orElse: () => _paymentMethods.first,
+              );
+            }
+            _isLoadingPaymentMethods = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingPaymentMethods = false);
+      }
+    } catch (e) {
+      print("Error fetching payment methods: $e");
+      if (mounted) setState(() => _isLoadingPaymentMethods = false);
+    }
+  }
+
+  void _showPaymentMethodSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  "Select Payment Method",
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              if (_isLoadingPaymentMethods)
+                const Center(child: CircularProgressIndicator())
+              else
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: _paymentMethods.map((method) {
+                        final isSelected =
+                            _selectedPaymentMethod?['id'] == method['id'];
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _selectedPaymentMethod = method;
+                            });
+                            Navigator.pop(context);
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 8,
+                            ),
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? theme.primaryColor
+                                    : theme.dividerColor,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                if (method['img_url'] != null)
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      image: DecorationImage(
+                                        image: NetworkImage(method['img_url']),
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Text(
+                                    method['payment_method_name'] ?? 'Unknown',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: theme.primaryColor,
+                                  )
+                                else
+                                  const Icon(
+                                    Icons.circle_outlined,
+                                    color: Colors.grey,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _handleSuggestionAdded(int index) {
     // 1. Refresh Cart
     _fetchCartData(forceLoading: false);
@@ -458,7 +662,8 @@ class _CartScreenState extends State<CartScreen> {
 
     if (_cartData == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF5F6F8),
+        backgroundColor:
+            theme.scaffoldBackgroundColor, // Use theme background color
         appBar: AppBar(title: const Text('Cart')),
         body: const Center(child: Text('Failed to load cart')),
       );
@@ -469,7 +674,7 @@ class _CartScreenState extends State<CartScreen> {
     // User sample has items in items_available.
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F8),
+      backgroundColor: theme.scaffoldBackgroundColor, // Use theme background
       appBar: AppBar(
         title: Text(
           'Cart',
@@ -477,12 +682,16 @@ class _CartScreenState extends State<CartScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor:
+            theme.appBarTheme.backgroundColor ??
+            theme.cardColor, // Use theme appbar color or card color
         elevation: 0,
         centerTitle: false,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          color: Colors.black,
+          icon: Icon(
+            Icons.arrow_back,
+            color: theme.iconTheme.color,
+          ), // Use theme icon color
           onPressed: () => Navigator.pop(context),
         ),
         bottom: _orderMethods.isNotEmpty
@@ -544,7 +753,7 @@ class _CartScreenState extends State<CartScreen> {
                 Container(
                   margin: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.cardColor, // Use theme card color
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
@@ -591,7 +800,7 @@ class _CartScreenState extends State<CartScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
+                                  border: Border.all(color: theme.dividerColor),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
@@ -617,7 +826,7 @@ class _CartScreenState extends State<CartScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  border: Border.all(color: Colors.grey[300]!),
+                                  border: Border.all(color: theme.dividerColor),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
@@ -667,33 +876,56 @@ class _CartScreenState extends State<CartScreen> {
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 180,
-                      child: AnimatedList(
-                        key: _listKey,
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        initialItemCount: _suggestedProducts.length,
-                        itemBuilder: (context, index, animation) {
-                          // Ideally handle out of bounds if removing fast, but AnimatedList usually handles indices well
-                          if (index >= _suggestedProducts.length)
-                            return const SizedBox.shrink();
-
-                          return SlideTransition(
-                            position: animation.drive(
-                              Tween(
-                                begin: const Offset(1, 0),
-                                end: const Offset(0, 0),
-                              ),
-                            ),
-                            child: _buildSuggestionCard(
-                              _suggestedProducts[index],
-                              theme,
-                              onTapAdd: () => _addSuggestedProduct(
-                                _suggestedProducts[index],
-                                index,
-                              ),
-                            ),
-                          );
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: (ScrollNotification scrollInfo) {
+                          if (!_isFetchingMoreSuggestions &&
+                              _hasMoreSuggestions &&
+                              scrollInfo.metrics.pixels >=
+                                  scrollInfo.metrics.maxScrollExtent - 200) {
+                            _fetchProductSuggestions(isLoadMore: true);
+                          }
+                          return false;
                         },
+                        child: AnimatedList(
+                          key: _listKey,
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          initialItemCount:
+                              _suggestedProducts.length +
+                              (_hasMoreSuggestions ? 1 : 0),
+                          itemBuilder: (context, index, animation) {
+                            if (index >= _suggestedProducts.length) {
+                              // Loader at end
+                              if (_hasMoreSuggestions) {
+                                return const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(16.0),
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              } else {
+                                return const SizedBox.shrink();
+                              }
+                            }
+
+                            return SlideTransition(
+                              position: animation.drive(
+                                Tween(
+                                  begin: const Offset(1, 0),
+                                  end: const Offset(0, 0),
+                                ),
+                              ),
+                              child: _buildSuggestionCard(
+                                _suggestedProducts[index],
+                                theme,
+                                onTapAdd: () => _addSuggestedProduct(
+                                  _suggestedProducts[index],
+                                  index,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -704,7 +936,7 @@ class _CartScreenState extends State<CartScreen> {
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.cardColor, // Use theme card color
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: ListTile(
@@ -726,7 +958,7 @@ class _CartScreenState extends State<CartScreen> {
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.cardColor, // Use theme card color
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -825,132 +1057,146 @@ class _CartScreenState extends State<CartScreen> {
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: theme.cardColor, // Use card color for bottom bar
           boxShadow: [
             BoxShadow(
-              color: Colors.black12,
+              color: theme.shadowColor.withOpacity(0.05),
               blurRadius: 10,
-              offset: const Offset(0, -2),
+              offset: const Offset(0, -5),
             ),
           ],
         ),
         child: SafeArea(
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        // Payment method icon/text
-                        const Icon(
-                          Icons.payment,
-                          size: 16,
-                          color: Colors.orange,
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          "PAY USING",
-                          style: TextStyle(
-                            fontSize: 10,
+              // Payment Method Selector
+              if (_selectedPaymentMethod != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: InkWell(
+                    onTap: _showPaymentMethodSelector,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.scaffoldBackgroundColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: theme.dividerColor),
+                      ),
+                      child: Row(
+                        children: [
+                          const Text(
+                            "Pay using",
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                          const Spacer(),
+                          if (_selectedPaymentMethod!['img_url'] != null)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Image.network(
+                                _selectedPaymentMethod!['img_url'],
+                                width: 24,
+                                height: 24,
+                                errorBuilder: (c, e, s) =>
+                                    const SizedBox.shrink(),
+                              ),
+                            ),
+                          Text(
+                            _selectedPaymentMethod!['payment_method_name'] ??
+                                '',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.keyboard_arrow_up,
+                            size: 20,
                             color: Colors.grey,
-                            fontWeight: FontWeight.bold,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Total',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
                           ),
                         ),
-                        const Icon(
-                          Icons.arrow_drop_up,
-                          size: 16,
-                          color: Colors.grey,
+                        Text(
+                          '₹${((_cartData!['grand_total'] ?? 0) as num).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "Google Pay UPI",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(width: 16),
+                  if (_selectedOrderMethodId == null)
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.5),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            "Select Order Method",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red[700],
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          // Place order logic
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Place Order',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                ),
+                ],
               ),
-              const SizedBox(width: 16),
-              if (_selectedOrderMethodId == null)
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.withOpacity(0.5)),
-                    ),
-                    child: Center(
-                      child: Text(
-                        "Select Order Method",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red[700],
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          theme.colorScheme.primary, // Primary color
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '₹${(_cartData!['grand_total'] as num).toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const Text(
-                              "TOTAL",
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: const [
-                            Text(
-                              "Place Order",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
-                            Icon(Icons.arrow_right, color: Colors.white),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
             ],
           ),
         ),
@@ -1091,14 +1337,14 @@ class _CartScreenState extends State<CartScreen> {
       width: 140,
       margin: const EdgeInsets.only(right: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: theme.dividerColor),
         boxShadow: isRemoving
             ? []
             : [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: theme.shadowColor.withOpacity(0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),

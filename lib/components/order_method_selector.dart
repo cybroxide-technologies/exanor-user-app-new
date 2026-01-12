@@ -109,12 +109,34 @@ class OrderMethodSelector extends StatelessWidget {
                                       : Colors.black54,
                                   letterSpacing: 0.5,
                                 ),
-                                child: Text(
-                                  // Try to find the name field, fallback to 'Unknown'
-                                  method['order_method_name'] ??
-                                      method['name'] ??
-                                      'Unknown',
-                                  textAlign: TextAlign.center,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (method['img_url'] != null &&
+                                        method['img_url'].toString().isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 6.0,
+                                        ),
+                                        child: Image.network(
+                                          method['img_url'],
+                                          width: 20,
+                                          height: 20,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  const SizedBox.shrink(),
+                                        ),
+                                      ),
+                                    Text(
+                                      // Try to find the name field, fallback to 'Unknown'
+                                      method['order_method_name'] ??
+                                          method['name'] ??
+                                          'Unknown',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

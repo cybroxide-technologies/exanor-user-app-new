@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:exanor/components/translation_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:exanor/models/store_model.dart';
@@ -8,6 +9,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:exanor/components/custom_cached_network_image.dart';
 import 'package:exanor/screens/cart_screen.dart';
 import 'package:exanor/components/product_variant_sheet.dart';
+import 'package:exanor/components/universal_translation_wrapper.dart';
 
 class StoreScreen extends StatefulWidget {
   final String storeId;
@@ -506,15 +508,15 @@ class _StoreScreenState extends State<StoreScreen> {
         }
       } else {
         print('❌ Failed to add to cart: ${response['data']}');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to add to cart')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: TranslatedText('Failed to add to cart')),
+        );
       }
     } catch (e) {
       print('❌ Error adding to cart: $e');
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error adding to cart')));
+      ).showSnackBar(SnackBar(content: TranslatedText('Error adding to cart')));
     }
   }
 
@@ -648,7 +650,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   stretch: true,
                   backgroundColor: theme.colorScheme.surface,
                   title: _store != null
-                      ? Text(
+                      ? TranslatedText(
                           _store!.storeName,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -724,7 +726,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                 color: theme.colorScheme.outline,
                               ),
                               const SizedBox(height: 16),
-                              Text(
+                              TranslatedText(
                                 "No products found for '$_searchQuery'",
                                 style: theme.textTheme.bodyLarge?.copyWith(
                                   color: theme.colorScheme.outline,
@@ -831,7 +833,7 @@ class _StoreScreenState extends State<StoreScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              TranslatedText(
                 '$_cartItemCount item${_cartItemCount != 1 ? 's' : ''} added',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: Colors.white,
@@ -839,7 +841,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 ),
               ),
               if (_cartGrandTotal != null)
-                Text(
+                TranslatedText(
                   '₹${_cartGrandTotal!.toStringAsFixed(2)}', // Total directly from API
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: Colors.white.withOpacity(0.9),
@@ -869,7 +871,7 @@ class _StoreScreenState extends State<StoreScreen> {
             },
             child: Row(
               children: [
-                Text(
+                TranslatedText(
                   'View cart',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.white,
@@ -1018,7 +1020,7 @@ class _StoreScreenState extends State<StoreScreen> {
               color: theme.colorScheme.error,
             ),
             const SizedBox(height: 16),
-            Text(
+            TranslatedText(
               _errorMessage ?? 'An error occurred',
               style: theme.textTheme.titleMedium?.copyWith(
                 color: theme.colorScheme.error,
@@ -1026,7 +1028,7 @@ class _StoreScreenState extends State<StoreScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            TextButton(onPressed: _refreshAll, child: const Text('Retry')),
+            TextButton(onPressed: _refreshAll, child: TranslatedText('Retry')),
           ],
         ),
       ),
@@ -1088,7 +1090,7 @@ class _StoreScreenState extends State<StoreScreen> {
                         ),
                       ],
                     ),
-                    child: Text(
+                    child: TranslatedText(
                       'Featured',
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: Colors.white,
@@ -1157,7 +1159,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(
+                            child: TranslatedText(
                               _store!.storeName,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -1170,7 +1172,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       ),
                       const SizedBox(height: 2),
                       // Category
-                      Text(
+                      TranslatedText(
                         _store!.category,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -1241,7 +1243,7 @@ class _StoreScreenState extends State<StoreScreen> {
         children: [
           Icon(icon, size: 12, color: iconColor),
           const SizedBox(width: 3),
-          Text(
+          TranslatedText(
             text,
             style: theme.textTheme.labelSmall?.copyWith(
               fontSize: 10,
@@ -1315,7 +1317,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     ),
 
                   // Product Name
-                  Text(
+                  TranslatedText(
                     product.productName,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -1328,7 +1330,7 @@ class _StoreScreenState extends State<StoreScreen> {
 
                   // Price
                   if (hasPrice)
-                    Text(
+                    TranslatedText(
                       '₹${product.priceStartsFrom!.toStringAsFixed(0)}',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -1336,7 +1338,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       ),
                     )
                   else
-                    Text(
+                    TranslatedText(
                       'Currently Unavailable',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -1349,7 +1351,7 @@ class _StoreScreenState extends State<StoreScreen> {
 
                   // Description
                   if (displayDescription)
-                    Text(
+                    TranslatedText(
                       product.description.length > 80
                           ? '${product.description.substring(0, 80)}... more'
                           : product.description,
@@ -1410,7 +1412,7 @@ class _StoreScreenState extends State<StoreScreen> {
                                 color: Colors.amber,
                               ),
                               const SizedBox(width: 4),
-                              Text(
+                              TranslatedText(
                                 '${product.averageRating.toStringAsFixed(1)} (${product.ratingCount})',
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   fontWeight: FontWeight.w600,
@@ -1511,7 +1513,7 @@ class _StoreScreenState extends State<StoreScreen> {
         border: isSubtle ? Border.all(color: color, width: 1) : null,
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
+      child: TranslatedText(
         text,
         style: theme.textTheme.labelSmall?.copyWith(
           color: isSubtle ? color : color,
@@ -1529,7 +1531,7 @@ class _StoreScreenState extends State<StoreScreen> {
         color: theme.colorScheme.primaryContainer.withOpacity(0.3),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(
+      child: TranslatedText(
         category,
         style: theme.textTheme.labelSmall?.copyWith(
           fontWeight: FontWeight.w600,
@@ -1554,7 +1556,7 @@ class _StoreScreenState extends State<StoreScreen> {
               border: Border.all(color: theme.colorScheme.primary, width: 2),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text(
+            child: TranslatedText(
               'ADD',
               style: theme.textTheme.labelLarge?.copyWith(
                 color: theme.colorScheme.primary,
@@ -1597,7 +1599,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     horizontal: 12,
                     vertical: 8,
                   ),
-                  child: Text(
+                  child: TranslatedText(
                     '−',
                     style: TextStyle(
                       color: Colors.white,
@@ -1621,7 +1623,7 @@ class _StoreScreenState extends State<StoreScreen> {
               child: Container(
                 key: ValueKey<int>(product.quantity),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(
+                child: TranslatedText(
                   '${product.quantity}',
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: Colors.white,
@@ -1643,7 +1645,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     horizontal: 12,
                     vertical: 8,
                   ),
-                  child: Text(
+                  child: TranslatedText(
                     '+',
                     style: TextStyle(
                       color: Colors.white,

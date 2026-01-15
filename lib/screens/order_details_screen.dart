@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,15 +22,62 @@ class OrderDetailsScreen extends StatefulWidget {
 class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   bool _isLoadingOrder = true;
   bool _isLoadingProducts = true;
+  bool _isLoadingStatuses = true;
   Map<String, dynamic>? _orderData;
   List<dynamic> _products = [];
+  List<dynamic> _orderStatuses = [];
   String? _errorMessage;
+  Timer? _statusTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchOrderDetails();
     _fetchOrderProducts();
+    _startStatusPolling();
+  }
+
+  @override
+  void dispose() {
+    _stopStatusPolling();
+    super.dispose();
+  }
+
+  void _startStatusPolling() {
+    _fetchOrderStatuses(); // Fetch immediately
+    _statusTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      _fetchOrderStatuses();
+    });
+  }
+
+  void _stopStatusPolling() {
+    _statusTimer?.cancel();
+    _statusTimer = null;
+  }
+
+  Future<void> _fetchOrderStatuses() async {
+    try {
+      final requestBody = {"order_id": widget.orderId, "query": {}};
+      // print("🔄 Polling order status...");
+
+      final response = await ApiService.post(
+        '/order-status/',
+        body: requestBody,
+        useBearerToken: true,
+      );
+
+      if (response['data'] != null &&
+          response['data']['status'] == 200 &&
+          mounted) {
+        final List<dynamic> statuses = response['data']['response'] ?? [];
+        setState(() {
+          _orderStatuses = statuses;
+          _isLoadingStatuses = false;
+        });
+      }
+    } catch (e) {
+      print("❌ Error fetching order statuses: $e");
+    }
   }
 
   Future<void> _fetchOrderDetails() async {
@@ -254,12 +303,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Success Banner
-            _buildSuccessBanner(theme),
-            const SizedBox(height: 16),
-
-            // Order Status Card
-            _buildOrderStatusCard(theme),
+            // Live Order Status Banner
+            _buildLiveStatusBanner(theme),
             const SizedBox(height: 16),
 
             // Store & Order Info
@@ -289,128 +334,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             const SizedBox(height: 32),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildSuccessBanner(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.green[600]!, Colors.green[400]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.check_circle_rounded,
-              color: Colors.white,
-              size: 32,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Order Placed Successfully!',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Order #${_orderData!['order_number'] ?? widget.orderId}',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderStatusCard(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: _getStatusColor(theme).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _orderData!['order_status_title'] ?? 'Order Placed',
-                  style: TextStyle(
-                    color: _getStatusColor(theme),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _orderData!['order_status_subtitle'] ?? '',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(
-                Icons.access_time_rounded,
-                size: 16,
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _orderData!['timestamp'] ?? '',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.5),
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -805,8 +728,325 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
-  Color _getStatusColor(ThemeData theme) {
-    final status = _orderData!['status']?.toString().toLowerCase() ?? '';
+  Widget _buildLiveStatusBanner(ThemeData theme) {
+    if (_isLoadingStatuses && _orderStatuses.isEmpty) {
+      return Shimmer.fromColors(
+        baseColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        highlightColor: theme.colorScheme.surface,
+        child: Container(
+          height: 100,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      );
+    }
+
+    if (_orderStatuses.isEmpty) return const SizedBox.shrink();
+
+    final latestStatus = _orderStatuses.last;
+    final pastStatuses = _orderStatuses.length > 1
+        ? _orderStatuses.sublist(0, _orderStatuses.length - 1).reversed.toList()
+        : [];
+
+    final bannerColor = _getStatusColorFromString(latestStatus['status']);
+    final orderId =
+        _orderData?['order_number'] ??
+        _orderData?['order_id'] ??
+        _orderData?['id'] ??
+        widget.orderId;
+    final timestamp = latestStatus['timestamp'] ?? '';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: bannerColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: bannerColor.withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Main Status
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildAnimatedStatusIcon(theme, latestStatus['status']),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        latestStatus['status_title'] ?? 'Updating...',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        latestStatus['status_subtitle'] ?? '',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withOpacity(0.8),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (timestamp.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.access_time_rounded,
+                                    size: 14,
+                                    color: Colors.white.withOpacity(0.8),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    latestStatus['timestamp'] ?? '',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          GestureDetector(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: orderId));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Order ID copied to clipboard'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.receipt_long_rounded,
+                                    size: 14,
+                                    color: Colors.white.withOpacity(0.8),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Order ID: ${orderId.toString().length > 12 ? "${orderId.toString().substring(0, 8)}..." : orderId}',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Icon(
+                                    Icons.copy_rounded,
+                                    size: 12,
+                                    color: Colors.white.withOpacity(0.6),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Divider if there are past statuses
+          if (pastStatuses.isNotEmpty)
+            Divider(height: 1, color: Colors.white.withOpacity(0.2)),
+
+          // Expandable Past Statuses
+          if (pastStatuses.isNotEmpty)
+            Theme(
+              data: theme.copyWith(
+                dividerColor: Colors.transparent,
+                expansionTileTheme: ExpansionTileThemeData(
+                  iconColor: Colors.white,
+                  collapsedIconColor: Colors.white,
+                  textColor: Colors.white,
+                  collapsedTextColor: Colors.white,
+                ),
+              ),
+              child: ExpansionTile(
+                title: Text(
+                  'Past Updates',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.history_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+                childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                children: [
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: pastStatuses.length,
+                    itemBuilder: (context, index) {
+                      final status = pastStatuses[index];
+                      final isLast = index == pastStatuses.length - 1;
+                      return _buildTimelineItem(
+                        theme,
+                        status,
+                        isLast: isLast,
+                        isDarkBg: true,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnimatedStatusIcon(ThemeData theme, String? status) {
+    Color statusColor = _getStatusColorFromString(status);
+    IconData iconData = _getStatusIcon(status);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.4), width: 2),
+      ),
+      child: Icon(iconData, color: Colors.white, size: 24),
+    );
+  }
+
+  Widget _buildTimelineItem(
+    ThemeData theme,
+    dynamic status, {
+    bool isLast = false,
+    bool isDarkBg = false,
+  }) {
+    Color statusColor = _getStatusColorFromString(
+      status['status']?.toString().toLowerCase(),
+    );
+
+    // If on dark background, use white for text and lighter status color
+    final titleColor = isDarkBg
+        ? Colors.white
+        : theme.textTheme.bodyMedium?.color;
+    final subtitleColor = isDarkBg
+        ? Colors.white.withOpacity(0.8)
+        : theme.colorScheme.onSurface.withOpacity(0.6);
+    final timestampColor = isDarkBg
+        ? Colors.white.withOpacity(0.6)
+        : theme.colorScheme.onSurface.withOpacity(0.4);
+    final dotColor = isDarkBg ? Colors.white : statusColor;
+    final lineColor = isDarkBg
+        ? Colors.white.withOpacity(0.2)
+        : theme.dividerColor.withOpacity(0.1);
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: dotColor.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                  border: isDarkBg
+                      ? Border.all(color: Colors.white, width: 1.5)
+                      : null,
+                ),
+              ),
+              if (!isLast)
+                Expanded(child: Container(width: 2, color: lineColor)),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    status['status_title'] ?? '',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: titleColor,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    status['status_subtitle'] ?? '',
+                    style: TextStyle(color: subtitleColor, fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    status['timestamp'] ?? '',
+                    style: TextStyle(color: timestampColor, fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getStatusColorFromString(String? status) {
+    status = status?.toLowerCase() ?? '';
     if (status.contains('placed') || status.contains('confirmed')) {
       return Colors.green;
     } else if (status.contains('preparing') || status.contains('processing')) {
@@ -816,6 +1056,20 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     } else if (status.contains('cancelled') || status.contains('rejected')) {
       return Colors.red;
     }
-    return theme.colorScheme.primary;
+    return Colors.purple;
+  }
+
+  IconData _getStatusIcon(String? status) {
+    status = status?.toLowerCase() ?? '';
+    if (status.contains('placed') || status.contains('confirmed')) {
+      return Icons.check_circle_outline_rounded;
+    } else if (status.contains('preparing') || status.contains('processing')) {
+      return Icons.soup_kitchen_rounded;
+    } else if (status.contains('ready') || status.contains('completed')) {
+      return Icons.done_all_rounded;
+    } else if (status.contains('cancelled') || status.contains('rejected')) {
+      return Icons.cancel_outlined;
+    }
+    return Icons.info_outline_rounded;
   }
 }

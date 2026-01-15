@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:exanor/components/translation_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
@@ -716,7 +717,7 @@ class _CartScreenState extends State<CartScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
+                child: TranslatedText(
                   "Select Payment Method",
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -773,7 +774,7 @@ class _CartScreenState extends State<CartScreen> {
                                   ),
                                 const SizedBox(width: 16),
                                 Expanded(
-                                  child: Text(
+                                  child: TranslatedText(
                                     method['payment_method_name'] ?? 'Unknown',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -815,7 +816,9 @@ class _CartScreenState extends State<CartScreen> {
       print("⚠️ Cannot place order - missing required data");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please ensure all order details are selected'),
+          content: TranslatedText(
+            'Please ensure all order details are selected',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -893,7 +896,7 @@ class _CartScreenState extends State<CartScreen> {
             // Fallback if order_id is not found
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Order placed successfully!'),
+                content: TranslatedText('Order placed successfully!'),
                 backgroundColor: Colors.green,
                 duration: Duration(seconds: 2),
               ),
@@ -911,7 +914,7 @@ class _CartScreenState extends State<CartScreen> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(errorMessage),
+              content: TranslatedText(errorMessage),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 3),
             ),
@@ -928,7 +931,7 @@ class _CartScreenState extends State<CartScreen> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error placing order: $e'),
+            content: TranslatedText('Error placing order: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -945,7 +948,9 @@ class _CartScreenState extends State<CartScreen> {
       print("⚠️ Cannot place order - missing required data");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please ensure all order details are selected'),
+          content: TranslatedText(
+            'Please ensure all order details are selected',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -1109,7 +1114,7 @@ class _CartScreenState extends State<CartScreen> {
                                     ),
                                   );
                                 },
-                                child: Text(
+                                child: TranslatedText(
                                   '$_countdownSeconds',
                                   key: ValueKey<int>(_countdownSeconds),
                                   style: TextStyle(
@@ -1121,7 +1126,7 @@ class _CartScreenState extends State<CartScreen> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Text(
+                              TranslatedText(
                                 'seconds',
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   color: theme.colorScheme.onSurface
@@ -1139,14 +1144,14 @@ class _CartScreenState extends State<CartScreen> {
                   const SizedBox(height: 32),
 
                   // Title and description
-                  Text(
+                  TranslatedText(
                     'Placing Your Order',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
+                  TranslatedText(
                     'Your order will be placed automatically',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.7),
@@ -1202,7 +1207,7 @@ class _CartScreenState extends State<CartScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _cancelOrderCountdown,
                       icon: const Icon(Icons.close_rounded),
-                      label: const Text('Cancel Order'),
+                      label: const TranslatedText('Cancel Order'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red, width: 2),
@@ -1241,14 +1246,14 @@ class _CartScreenState extends State<CartScreen> {
       children: [
         Icon(icon, size: 20, color: theme.colorScheme.primary.withOpacity(0.7)),
         const SizedBox(width: 12),
-        Text(
+        TranslatedText(
           label,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurface.withOpacity(0.7),
           ),
         ),
         const Spacer(),
-        Text(
+        TranslatedText(
           value,
           style: theme.textTheme.bodyMedium?.copyWith(
             fontWeight: FontWeight.bold,
@@ -1329,7 +1334,7 @@ class _CartScreenState extends State<CartScreen> {
       return Scaffold(
         backgroundColor: const Color(0xFFF5F6F8),
         appBar: AppBar(
-          title: const Text('Cart'),
+          title: const TranslatedText('Cart'),
           backgroundColor: Colors.white,
           elevation: 0,
         ),
@@ -1341,8 +1346,8 @@ class _CartScreenState extends State<CartScreen> {
       return Scaffold(
         backgroundColor:
             theme.scaffoldBackgroundColor, // Use theme background color
-        appBar: AppBar(title: const Text('Cart')),
-        body: const Center(child: Text('Failed to load cart')),
+        appBar: AppBar(title: const TranslatedText('Cart')),
+        body: const Center(child: TranslatedText('Failed to load cart')),
       );
     }
 
@@ -1353,7 +1358,7 @@ class _CartScreenState extends State<CartScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor, // Use theme background
       appBar: AppBar(
-        title: Text(
+        title: TranslatedText(
           'Cart',
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
@@ -1411,10 +1416,10 @@ class _CartScreenState extends State<CartScreen> {
                 color: Colors.green.withOpacity(0.1),
                 child: Row(
                   children: [
-                    const Text('🎉'),
+                    const TranslatedText('🎉'),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
+                      child: TranslatedText(
                         'You saved ₹10 with Gold', // Placeholder from screenshot
                         style: TextStyle(
                           color: Colors.blue[800],
@@ -1453,7 +1458,7 @@ class _CartScreenState extends State<CartScreen> {
                                     color: Colors.deepOrange,
                                   ),
                                   const SizedBox(width: 8),
-                                  Text(
+                                  TranslatedText(
                                     'Add more items',
                                     style: TextStyle(
                                       color: theme.colorScheme.primary,
@@ -1491,7 +1496,7 @@ class _CartScreenState extends State<CartScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     const Expanded(
-                                      child: Text(
+                                      child: TranslatedText(
                                         "Add a note",
                                         style: TextStyle(color: Colors.grey),
                                       ),
@@ -1517,7 +1522,7 @@ class _CartScreenState extends State<CartScreen> {
                                     ),
                                     const SizedBox(width: 8),
                                     const Expanded(
-                                      child: Text(
+                                      child: TranslatedText(
                                         "No cutlery",
                                         style: TextStyle(color: Colors.grey),
                                       ),
@@ -1546,7 +1551,7 @@ class _CartScreenState extends State<CartScreen> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
+                      child: TranslatedText(
                         "Recommended products",
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
@@ -1622,7 +1627,7 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 child: ListTile(
                   leading: const Icon(Icons.percent, color: Colors.blue),
-                  title: const Text(
+                  title: const TranslatedText(
                     "View all coupons",
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
@@ -1643,7 +1648,7 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text(
+                    child: TranslatedText(
                       "Your Address",
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -1678,7 +1683,7 @@ class _CartScreenState extends State<CartScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            TranslatedText(
                               _addressTitle!,
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -1686,7 +1691,7 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                             if (_addressSubtitle?.isNotEmpty == true) ...[
                               const SizedBox(height: 4),
-                              Text(
+                              TranslatedText(
                                 _addressSubtitle!,
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.textTheme.bodySmall?.color
@@ -1717,7 +1722,7 @@ class _CartScreenState extends State<CartScreen> {
                             _initializeOrder();
                           }
                         },
-                        child: const Text("Change"),
+                        child: const TranslatedText("Change"),
                       ),
                     ],
                   ),
@@ -1736,7 +1741,7 @@ class _CartScreenState extends State<CartScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    TranslatedText(
                       "Bill Details",
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
@@ -1752,11 +1757,13 @@ class _CartScreenState extends State<CartScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
+                            TranslatedText(
                               e['title'],
                               style: TextStyle(color: Colors.grey[700]),
                             ),
-                            Text('₹${(e['value'] as num).toStringAsFixed(2)}'),
+                            TranslatedText(
+                              '₹${(e['value'] as num).toStringAsFixed(2)}',
+                            ),
                           ],
                         ),
                       );
@@ -1768,14 +1775,14 @@ class _CartScreenState extends State<CartScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        const TranslatedText(
                           "Grand Total",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
                         ),
-                        Text(
+                        TranslatedText(
                           '₹${(_cartData!['grand_total'] as num).toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
@@ -1803,7 +1810,7 @@ class _CartScreenState extends State<CartScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        const TranslatedText(
                           "Refund Policy",
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -1811,7 +1818,7 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
+                        TranslatedText(
                           _cartData!['refund_policy'],
                           style: TextStyle(
                             color: Colors.grey[600],
@@ -1857,7 +1864,7 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Text(
+                          const TranslatedText(
                             "Pay using",
                             style: TextStyle(color: Colors.grey, fontSize: 12),
                           ),
@@ -1873,7 +1880,7 @@ class _CartScreenState extends State<CartScreen> {
                                     const SizedBox.shrink(),
                               ),
                             ),
-                          Text(
+                          TranslatedText(
                             _selectedPaymentMethod!['payment_method_name'] ??
                                 '',
                             style: const TextStyle(
@@ -1900,14 +1907,14 @@ class _CartScreenState extends State<CartScreen> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        TranslatedText(
                           'Total',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 12,
                           ),
                         ),
-                        Text(
+                        TranslatedText(
                           '₹${((_cartData!['grand_total'] ?? 0) as num).toStringAsFixed(2)}',
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
@@ -1931,7 +1938,7 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                         ),
                         child: Center(
-                          child: Text(
+                          child: TranslatedText(
                             "Select Order Method",
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
@@ -1951,7 +1958,7 @@ class _CartScreenState extends State<CartScreen> {
                           if (_orderInitMessage.isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Text(
+                              child: TranslatedText(
                                 _orderInitMessage,
                                 style: TextStyle(
                                   color: _isOrderPlaceable
@@ -2005,7 +2012,7 @@ class _CartScreenState extends State<CartScreen> {
                                                   ),
                                             ),
                                           )
-                                        : const Text(
+                                        : const TranslatedText(
                                             'Place Order',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
@@ -2059,7 +2066,7 @@ class _CartScreenState extends State<CartScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                TranslatedText(
                   item['product_name'] ?? 'Unknown',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
@@ -2067,7 +2074,7 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text('₹${unitPrice.toStringAsFixed(2)}'),
+                TranslatedText('₹${unitPrice.toStringAsFixed(2)}'),
               ],
             ),
           ),
@@ -2106,7 +2113,7 @@ class _CartScreenState extends State<CartScreen> {
                         )
                         ? Opacity(
                             opacity: 0.5,
-                            child: Text(
+                            child: TranslatedText(
                               '$qty',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
@@ -2114,7 +2121,7 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                             ),
                           )
-                        : Text(
+                        : TranslatedText(
                             '$qty',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
@@ -2143,7 +2150,7 @@ class _CartScreenState extends State<CartScreen> {
 
           const SizedBox(width: 16),
 
-          Text(
+          TranslatedText(
             '₹${price.toStringAsFixed(2)}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
@@ -2192,7 +2199,7 @@ class _CartScreenState extends State<CartScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                TranslatedText(
                   product.productName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -2206,7 +2213,7 @@ class _CartScreenState extends State<CartScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     if (product.priceStartsFrom != null)
-                      Text(
+                      TranslatedText(
                         '₹${product.priceStartsFrom!.toStringAsFixed(0)}',
                         style: const TextStyle(fontSize: 12),
                       ),
@@ -2243,21 +2250,21 @@ class _CartScreenState extends State<CartScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Remove Item?'),
-            content: const Text(
+            title: const TranslatedText('Remove Item?'),
+            content: const TranslatedText(
               'Are you sure you want to remove this item from your cart?',
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text(
+                child: const TranslatedText(
                   'Cancel',
                   style: TextStyle(color: Colors.grey),
                 ),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text(
+                child: const TranslatedText(
                   'Remove',
                   style: TextStyle(
                     color: Colors.red,

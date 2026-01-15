@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:exanor/components/translation_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:exanor/services/api_service.dart';
@@ -181,7 +182,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open invoice')),
+            const SnackBar(content: TranslatedText('Could not open invoice')),
           );
         }
       }
@@ -195,7 +196,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Order Details'),
+        title: const TranslatedText('Order Details'),
         backgroundColor: theme.colorScheme.surface,
         elevation: 0,
         leading: IconButton(
@@ -233,7 +234,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             color: theme.colorScheme.error,
           ),
           const SizedBox(height: 16),
-          Text(
+          TranslatedText(
             _errorMessage ?? 'An error occurred',
             style: theme.textTheme.titleMedium?.copyWith(
               color: theme.colorScheme.error,
@@ -245,7 +246,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               _fetchOrderDetails();
               _fetchOrderProducts();
             },
-            child: const Text('Retry'),
+            child: const TranslatedText('Retry'),
           ),
         ],
       ),
@@ -349,7 +350,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          TranslatedText(
             'Order Information',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
@@ -392,7 +393,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          TranslatedText(
             'Products Ordered',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
@@ -403,7 +404,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             const Center(child: CircularProgressIndicator())
           else if (_products.isEmpty)
             Center(
-              child: Text(
+              child: TranslatedText(
                 'No products found',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.5),
@@ -440,7 +441,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             color: theme.colorScheme.primary.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Text(
+          child: TranslatedText(
             '${quantity}x',
             style: TextStyle(
               color: theme.colorScheme.primary,
@@ -454,14 +455,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              TranslatedText(
                 product['product_name'] ?? 'Unknown Product',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
+              TranslatedText(
                 '₹${itemTotal.toStringAsFixed(2)}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -470,7 +471,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             ],
           ),
         ),
-        Text(
+        TranslatedText(
           '₹${itemTotal.toStringAsFixed(2)}',
           style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.bold,
@@ -494,7 +495,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          TranslatedText(
             'Billing Address',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
@@ -514,12 +515,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    TranslatedText(
                       billing['area'] ?? 'N/A',
                       style: theme.textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    TranslatedText(
                       '${billing['state'] ?? ''} - ${billing['pincode'] ?? ''}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -548,7 +549,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          TranslatedText(
             'Payment Details',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
@@ -588,7 +589,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          TranslatedText(
             'Price Breakdown',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
@@ -603,13 +604,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
+                  TranslatedText(
                     item['title'] ?? '',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.7),
                     ),
                   ),
-                  Text(
+                  TranslatedText(
                     '₹${(item['value'] ?? 0.0).toStringAsFixed(2)}',
                     style: theme.textTheme.bodyMedium,
                   ),
@@ -631,13 +632,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
+                      TranslatedText(
                         item['title'] ?? '',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurface.withOpacity(0.7),
                         ),
                       ),
-                      Text(
+                      TranslatedText(
                         '₹${(double.tryParse(item['value'].toString()) ?? 0.0).toStringAsFixed(2)}',
                         style: theme.textTheme.bodyMedium,
                       ),
@@ -655,13 +656,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              TranslatedText(
                 'Grand Total',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Text(
+              TranslatedText(
                 '₹${grandTotal.toStringAsFixed(2)}',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
@@ -681,7 +682,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       child: ElevatedButton.icon(
         onPressed: _launchInvoice,
         icon: const Icon(Icons.download_rounded),
-        label: const Text('Download Invoice'),
+        label: const TranslatedText('Download Invoice'),
         style: ElevatedButton.styleFrom(
           backgroundColor: theme.colorScheme.primary,
           foregroundColor: Colors.white,
@@ -708,14 +709,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              TranslatedText(
                 label,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurface.withOpacity(0.5),
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
+              TranslatedText(
                 value,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
@@ -786,7 +787,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      TranslatedText(
                         latestStatus['status_title'] ?? 'Updating...',
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
@@ -794,7 +795,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
+                      TranslatedText(
                         latestStatus['status_subtitle'] ?? '',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: Colors.white.withOpacity(0.8),
@@ -825,7 +826,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                                     color: Colors.white.withOpacity(0.8),
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
+                                  TranslatedText(
                                     latestStatus['timestamp'] ?? '',
                                     style: theme.textTheme.labelSmall?.copyWith(
                                       color: Colors.white.withOpacity(0.8),
@@ -840,7 +841,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                               Clipboard.setData(ClipboardData(text: orderId));
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Order ID copied to clipboard'),
+                                  content: TranslatedText(
+                                    'Order ID copied to clipboard',
+                                  ),
                                   duration: Duration(seconds: 2),
                                 ),
                               );
@@ -863,7 +866,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                                     color: Colors.white.withOpacity(0.8),
                                   ),
                                   const SizedBox(width: 6),
-                                  Text(
+                                  TranslatedText(
                                     'Order ID: ${orderId.toString().length > 12 ? "${orderId.toString().substring(0, 8)}..." : orderId}',
                                     style: theme.textTheme.labelSmall?.copyWith(
                                       color: Colors.white.withOpacity(0.8),
@@ -906,7 +909,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 ),
               ),
               child: ExpansionTile(
-                title: Text(
+                title: TranslatedText(
                   'Past Updates',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
@@ -1018,7 +1021,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  TranslatedText(
                     status['status_title'] ?? '',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
@@ -1027,12 +1030,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
+                  TranslatedText(
                     status['status_subtitle'] ?? '',
                     style: TextStyle(color: subtitleColor, fontSize: 12),
                   ),
                   const SizedBox(height: 4),
-                  Text(
+                  TranslatedText(
                     status['timestamp'] ?? '',
                     style: TextStyle(color: timestampColor, fontSize: 10),
                   ),

@@ -1,3 +1,4 @@
+import 'package:exanor/components/translation_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'; // Added for ScrollDirection
 import 'package:shared_preferences/shared_preferences.dart';
@@ -382,7 +383,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: theme.colorScheme.primary,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
+                        child: TranslatedText(
                           'Featured',
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: Colors.white,
@@ -425,7 +426,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        TranslatedText(
                           store.storeName,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
@@ -434,7 +435,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        Text(
+                        TranslatedText(
                           '${store.category} • ${store.area}',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -451,7 +452,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: theme.colorScheme.primary,
                             ),
                             const SizedBox(width: 4),
-                            Text(
+                            TranslatedText(
                               store.fulfillmentSpeed,
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: theme.colorScheme.primary,
@@ -467,13 +468,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                 color: Colors.amber,
                               ),
                               const SizedBox(width: 2),
-                              Text(
+                              TranslatedText(
                                 store.averageRating.toStringAsFixed(1),
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              Text(
+                              TranslatedText(
                                 ' (${store.ratingCount})',
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: theme.colorScheme.onSurface
@@ -517,7 +518,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
+                      child: TranslatedText(
                         store.bottomOfferTitle,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.primary,

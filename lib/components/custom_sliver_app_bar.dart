@@ -137,7 +137,7 @@ class CustomSliverAppBar extends StatelessWidget {
                             children: [
                               Row(
                                 children: [
-                                  Text(
+                                  TranslatedText(
                                     addressTitle ?? 'Set Location',
                                     style: TextStyle(
                                       fontSize: 18,
@@ -152,7 +152,7 @@ class CustomSliverAppBar extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              Text(
+                              TranslatedText(
                                 _buildAddressExcerpt(),
                                 style: TextStyle(
                                   fontSize: 12,
@@ -194,7 +194,7 @@ class CustomSliverAppBar extends StatelessWidget {
                                     ? NetworkImage(userImgUrl!)
                                     : null,
                                 child: userImgUrl == null || userImgUrl!.isEmpty
-                                    ? Text(
+                                    ? TranslatedText(
                                         userName?.isNotEmpty == true
                                             ? userName!
                                                   .substring(0, 1)
@@ -395,7 +395,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                           size: 24,
                         ),
                         const SizedBox(width: 12),
-                        Text(
+                        TranslatedText(
                           'Search "ice cream"',
                           style: theme.textTheme.bodyLarge?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
@@ -474,7 +474,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                             ),
                             const SizedBox(height: 8),
                             // Text
-                            Text(
+                            TranslatedText(
                               category['category_name'] ?? '',
                               style: TextStyle(
                                 color: isSelected

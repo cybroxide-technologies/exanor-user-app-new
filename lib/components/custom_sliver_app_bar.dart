@@ -13,6 +13,7 @@ import 'package:exanor/services/enhanced_translation_service.dart';
 import 'package:exanor/components/custom_cached_network_image.dart';
 import 'package:exanor/services/interstitial_ads_service.dart';
 import 'package:exanor/components/language_selector.dart';
+import 'package:exanor/screens/global_search_screen.dart';
 
 class CustomSliverAppBar extends StatelessWidget {
   final String? addressTitle;
@@ -370,39 +371,49 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
             child: Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: isDarkMode ? Colors.grey[900] : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GlobalSearchScreen(),
                         ),
-                      ],
-                      border: Border.all(
-                        color: theme.colorScheme.outline.withOpacity(0.1),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 16),
-                        Icon(
-                          Icons.search,
-                          color: theme.colorScheme.primary,
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        TranslatedText(
-                          'Search "ice cream"',
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontSize: 16,
+                      );
+                    },
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: isDarkMode ? Colors.grey[900] : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
+                        ],
+                        border: Border.all(
+                          color: theme.colorScheme.outline.withOpacity(0.1),
                         ),
-                      ],
+                      ),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 16),
+                          Icon(
+                            Icons.search,
+                            color: theme.colorScheme.primary,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          TranslatedText(
+                            'Search "ice cream"',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

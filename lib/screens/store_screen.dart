@@ -13,7 +13,13 @@ import 'package:exanor/components/universal_translation_wrapper.dart';
 
 class StoreScreen extends StatefulWidget {
   final String storeId;
-  const StoreScreen({super.key, required this.storeId});
+  final String? initialSearchQuery;
+
+  const StoreScreen({
+    super.key,
+    required this.storeId,
+    this.initialSearchQuery,
+  });
 
   @override
   State<StoreScreen> createState() => _StoreScreenState();
@@ -226,7 +232,17 @@ class _StoreScreenState extends State<StoreScreen> {
         _userLng = finalLng;
       });
 
+      // Handle initial search if provided
+      if (widget.initialSearchQuery != null &&
+          widget.initialSearchQuery!.isNotEmpty) {
+        _searchController.text = widget.initialSearchQuery!;
+        _searchQuery = widget.initialSearchQuery!;
+        _searchProducts(widget.storeId, _searchQuery);
+      }
+
       await _fetchStoreDetails();
+      // Only fetch default products if NOT searching (or fetch anyway, but UI will show search results)
+      // It's better to fetch default products too so if user closes search, they see something.
       await _fetchProducts();
       await _fetchCartDetails();
     } catch (e) {
@@ -641,6 +657,7 @@ class _StoreScreenState extends State<StoreScreen> {
             onRefresh: _refreshAll,
             child: CustomScrollView(
               controller: _scrollController,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 // Custom App Bar with Store Header (25% of screen height)

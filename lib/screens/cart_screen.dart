@@ -8,6 +8,7 @@ import 'package:exanor/models/product_model.dart';
 import 'package:exanor/components/custom_cached_network_image.dart';
 import 'package:exanor/components/order_method_selector.dart';
 import 'package:exanor/components/product_variant_sheet.dart'; // Added
+import 'package:exanor/screens/order_details_screen.dart';
 import 'package:shimmer/shimmer.dart';
 
 class CartScreen extends StatefulWidget {
@@ -853,18 +854,32 @@ class _CartScreenState extends State<CartScreen> {
         if (response['data'] != null && response['data']['status'] == 200) {
           print("✅ Order placed successfully!");
 
-          // Show success message
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Order placed successfully!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
+          // Extract order_id from the response
+          final responseData = response['data']['response'];
+          final executeOrderData = responseData?['execute_order_data'];
+          final orderId = executeOrderData?['order_id'];
 
-          // Optional: Navigate to order confirmation or back
-          // You can customize this based on your app's flow
-          Navigator.of(context).pop(); // Go back to previous screen
+          if (orderId != null) {
+            // Navigate to Order Details Screen
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => OrderDetailsScreen(
+                  orderId: orderId,
+                  storeId: widget.storeId,
+                ),
+              ),
+            );
+          } else {
+            // Fallback if order_id is not found
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Order placed successfully!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            Navigator.of(context).pop();
+          }
         } else {
           // Handle error
           final errorMessage =
@@ -1582,16 +1597,18 @@ class _CartScreenState extends State<CartScreen> {
                         children: [
                           if (_orderInitMessage.isNotEmpty)
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 4.0),
+                              padding: const EdgeInsets.only(bottom: 8.0),
                               child: Text(
                                 _orderInitMessage,
                                 style: TextStyle(
-                                  color: Colors.green[700],
+                                  color: _isOrderPlaceable
+                                      ? Colors.green[700]
+                                      : Colors.red[700],
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
                                 ),
                                 textAlign: TextAlign.center,
-                                maxLines: 1,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -1603,9 +1620,10 @@ class _CartScreenState extends State<CartScreen> {
                                   ? _placeOrder
                                   : null,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _isOrderPlaceable
-                                    ? theme.colorScheme.primary
-                                    : Colors.grey, // Grayscale if disabled
+                                backgroundColor: theme.colorScheme.primary,
+                                disabledBackgroundColor: Colors.grey[400],
+                                foregroundColor: Colors.white,
+                                disabledForegroundColor: Colors.white70,
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 16,
                                 ),
@@ -1629,7 +1647,6 @@ class _CartScreenState extends State<CartScreen> {
                                   : const Text(
                                       'Place Order',
                                       style: TextStyle(
-                                        color: Colors.white,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
                                       ),

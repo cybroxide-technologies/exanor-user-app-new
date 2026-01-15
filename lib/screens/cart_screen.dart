@@ -70,10 +70,13 @@ class _CartScreenState extends State<CartScreen> {
     _currentLat = widget.lat.toDouble();
     _currentLng = widget.lng.toDouble();
 
-    _fetchOrderMethods();
-    _fetchPaymentMethods();
-    _loadAddressDetails();
-    _initDataSequentially();
+    // Log initial values for debugging
+    print("🚀 CartScreen initState:");
+    print("   Address ID: $_currentAddressId");
+    print("   Lat/Lng: $_currentLat, $_currentLng");
+    print("   Store ID: ${widget.storeId}");
+
+    _initializeCartScreen();
   }
 
   Future<void> _loadAddressDetails() async {
@@ -84,6 +87,31 @@ class _CartScreenState extends State<CartScreen> {
           _addressTitle =
               prefs.getString('address_title') ?? "Selected Location";
           _addressSubtitle = prefs.getString('address_subtitle') ?? "";
+
+          // If lat/lng are 0 (invalid), try to load from SharedPreferences
+          if (_currentLat == 0.0 || _currentLng == 0.0) {
+            final savedLat = prefs.getDouble('latitude');
+            final savedLng = prefs.getDouble('longitude');
+            final savedAddressId = prefs.getString('saved_address_id');
+
+            if (savedLat != null &&
+                savedLng != null &&
+                savedAddressId != null) {
+              print(
+                "⚠️ Widget lat/lng were 0.0, loading from SharedPreferences:",
+              );
+              print("   Saved Lat/Lng: $savedLat, $savedLng");
+              print("   Saved Address ID: $savedAddressId");
+
+              _currentLat = savedLat;
+              _currentLng = savedLng;
+              _currentAddressId = savedAddressId;
+            } else {
+              print("❌ ERROR: No valid coordinates available!");
+              print("   Widget lat/lng: ${widget.lat}, ${widget.lng}");
+              print("   SharedPreferences lat/lng: $savedLat, $savedLng");
+            }
+          }
         });
       }
     } catch (e) {
@@ -113,8 +141,18 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
-  Future<void> _initDataSequentially() async {
+  Future<void> _initializeCartScreen() async {
+    // Fetch order methods and payment methods FIRST
+    await Future.wait([
+      _fetchOrderMethods(),
+      _fetchPaymentMethods(),
+      _loadAddressDetails(),
+    ]);
+
+    // Then fetch cart data
     await _fetchCartData();
+
+    // Finally initialize order validation and fetch suggestions
     if (mounted) {
       _fetchProductSuggestions();
       _initializeOrder();
@@ -152,7 +190,7 @@ class _CartScreenState extends State<CartScreen> {
 
     try {
       final requestBody = {
-        "coupon_code": "taco1", // TODO: Add coupon support if needed
+        "coupon_code": "", // TODO: Add coupon support if needed
         "lat": _currentLat,
         "lng": _currentLng,
         "order_method_id": _selectedOrderMethodId,
@@ -758,6 +796,110 @@ class _CartScreenState extends State<CartScreen> {
         );
       },
     );
+  }
+
+  Future<void> _placeOrder() async {
+    // Validate all required parameters
+    if (_selectedPaymentMethod == null ||
+        _selectedOrderMethodId == null ||
+        _currentAddressId.isEmpty) {
+      print("⚠️ Cannot place order - missing required data");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please ensure all order details are selected'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading indicator
+      if (mounted) {
+        setState(() {
+          _isInitializingOrder = true;
+        });
+      }
+
+      final requestBody = {
+        "coupon_code": "", // Empty string as per requirement
+        "lat": _currentLat,
+        "lng": _currentLng,
+        "order_method_id": _selectedOrderMethodId,
+        "payment_method_id": _selectedPaymentMethod!['id'],
+        "store_id": widget.storeId,
+        "user_address_id": _currentAddressId,
+      };
+
+      print("📦 Placing Order with:");
+      print("   Coupon Code: (empty)");
+      print("   Lat/Lng: $_currentLat, $_currentLng");
+      print("   Order Method ID: $_selectedOrderMethodId");
+      print("   Payment Method ID: ${_selectedPaymentMethod!['id']}");
+      print("   Store ID: ${widget.storeId}");
+      print("   Address ID: $_currentAddressId");
+
+      final response = await ApiService.post(
+        '/place-order/',
+        body: requestBody,
+        useBearerToken: true,
+      );
+
+      if (mounted) {
+        setState(() {
+          _isInitializingOrder = false;
+        });
+
+        if (response['data'] != null && response['data']['status'] == 200) {
+          print("✅ Order placed successfully!");
+
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Order placed successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+
+          // Optional: Navigate to order confirmation or back
+          // You can customize this based on your app's flow
+          Navigator.of(context).pop(); // Go back to previous screen
+        } else {
+          // Handle error
+          final errorMessage =
+              response['data']?['response']?['message'] ??
+              response['data']?['message'] ??
+              'Failed to place order';
+
+          print("❌ Order placement failed: $errorMessage");
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("❌ Error placing order: $e");
+
+      if (mounted) {
+        setState(() {
+          _isInitializingOrder = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error placing order: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   void _handleSuggestionAdded(int index) {
@@ -1458,9 +1600,7 @@ class _CartScreenState extends State<CartScreen> {
                             child: ElevatedButton(
                               onPressed:
                                   _isOrderPlaceable && !_isInitializingOrder
-                                  ? () {
-                                      // Place order logic
-                                    }
+                                  ? _placeOrder
                                   : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: _isOrderPlaceable

@@ -178,23 +178,25 @@ class _StoreScreenState extends State<StoreScreen> {
       final prefs = await SharedPreferences.getInstance();
       final savedAddressId = prefs.getString('saved_address_id');
 
-      // Robust fetch for lat/lng (handle both double and string storage)
-      double? lat =
-          prefs.getDouble('latitude') ?? prefs.getDouble('user_latitude');
-      double? lng =
-          prefs.getDouble('longitude') ?? prefs.getDouble('user_longitude');
+      // Try to get coordinates as double first, then as string if needed
+      double? lat;
+      double? lng;
 
+      // Try to get latitude
+      lat = prefs.getDouble('latitude');
       if (lat == null) {
         final latStr =
-            prefs.getString('latitude') ?? prefs.getString('user_latitude');
+            prefs.getString('lat_string') ?? prefs.getString('user_latitude');
         if (latStr != null) {
           lat = double.tryParse(latStr);
         }
       }
 
+      // Try to get longitude
+      lng = prefs.getDouble('longitude');
       if (lng == null) {
         final lngStr =
-            prefs.getString('longitude') ?? prefs.getString('user_longitude');
+            prefs.getString('lng_string') ?? prefs.getString('user_longitude');
         if (lngStr != null) {
           lng = double.tryParse(lngStr);
         }
@@ -203,7 +205,14 @@ class _StoreScreenState extends State<StoreScreen> {
       final finalLat = lat ?? 0.0;
       final finalLng = lng ?? 0.0;
 
-      print('📍 Loaded coordinates for StoreScreen: $finalLat, $finalLng');
+      print('📍 StoreScreen - Loaded coordinates from SharedPreferences:');
+      print(
+        '   Lat: $finalLat (from ${lat != null ? 'double' : 'string/default'})',
+      );
+      print(
+        '   Lng: $finalLng (from ${lng != null ? 'double' : 'string/default'})',
+      );
+      print('   Address ID: ${savedAddressId ?? _constAddressId}');
 
       setState(() {
         if (savedAddressId != null && savedAddressId.isNotEmpty) {

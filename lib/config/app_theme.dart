@@ -36,7 +36,7 @@ class AppTheme {
   static const ColorScheme _darkColorScheme = ColorScheme(
     brightness: Brightness.dark,
     primary: _flutterBlueDark, // Light Flutter blue
-    onPrimary: Color(0xFF212121),
+    onPrimary: Color.fromARGB(255, 171, 171, 171),
     secondary: Color(0xFF03DAC6), // Teal accent
     onSecondary: Colors.black,
     surface: Color(0xFF121212), // Dark grey

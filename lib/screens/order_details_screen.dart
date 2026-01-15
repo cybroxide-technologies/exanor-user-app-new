@@ -411,6 +411,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 ),
               ),
             )
+          else if (_orderData?['status'] == 'order_completed' &&
+              _products.length > 1)
+            _ReviewCarousel(
+              products: _products,
+              orderId: widget.orderId,
+              theme: theme,
+            )
           else
             ListView.separated(
               shrinkWrap: true,
@@ -419,6 +426,17 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               separatorBuilder: (context, index) => const Divider(height: 24),
               itemBuilder: (context, index) {
                 final product = _products[index];
+                // Check if order is completed to show review items
+                final isCompleted = _orderData?['status'] == 'order_completed';
+
+                if (isCompleted) {
+                  return _ProductReviewItem(
+                    product: product,
+                    orderId: widget.orderId,
+                    theme: theme,
+                  );
+                }
+
                 return _buildProductItem(theme, product);
               },
             ),
@@ -1074,5 +1092,390 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       return Icons.cancel_outlined;
     }
     return Icons.info_outline_rounded;
+  }
+}
+// ... (existing code for _ProductReviewItem will be appended to the file)
+
+class _ProductReviewItem extends StatefulWidget {
+  final Map<String, dynamic> product;
+  final String orderId;
+  final ThemeData theme;
+
+  const _ProductReviewItem({
+    required this.product,
+    required this.orderId,
+    required this.theme,
+  });
+
+  @override
+  State<_ProductReviewItem> createState() => _ProductReviewItemState();
+}
+
+class _ProductReviewItemState extends State<_ProductReviewItem> {
+  int _rating = 0;
+  final TextEditingController _reviewController = TextEditingController();
+  bool _isExpanded = false;
+  bool _isSubmitting = false;
+  bool _isSubmitted = false;
+
+  Future<void> _submitReview() async {
+    if (_rating == 0) return;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final requestBody = {
+        "order_id": widget.orderId,
+        "product_combination_id":
+            widget.product['product_combination_id'] ?? widget.product['id'],
+        "rating": _rating,
+        "review": _reviewController.text,
+      };
+
+      final response = await ApiService.post(
+        '/review-order-product/',
+        body: requestBody,
+        useBearerToken: true,
+      );
+
+      if (response['status'] == 200 || response['data']?['status'] == 200) {
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+            _isSubmitted = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: TranslatedText('Review submitted successfully!'),
+            ),
+          );
+        }
+      } else if (response['status'] == 500 &&
+          response['response'].toString().toLowerCase().contains(
+            "review already exists",
+          )) {
+        if (mounted) {
+          setState(() {
+            _isSubmitting = false;
+            _isSubmitted = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: TranslatedText('You have already reviewed this item'),
+            ),
+          );
+        }
+      } else {
+        throw Exception(
+          response['message'] ??
+              response['response'] ??
+              'Failed to submit review',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: TranslatedText('Error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isSubmitted) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: widget.theme.colorScheme.primary.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: widget.theme.colorScheme.primary.withOpacity(0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.check_circle_rounded,
+              color: widget.theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: TranslatedText(
+                'Thanks for your review!',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: widget.theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isExpanded
+              ? widget.theme.colorScheme.primary.withOpacity(0.5)
+              : widget.theme.dividerColor.withOpacity(0.1),
+        ),
+        boxShadow: [
+          if (_isExpanded)
+            BoxShadow(
+              color: widget.theme.colorScheme.primary.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Product Info Row (Similar to original)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: widget.theme.colorScheme.surfaceContainerHighest
+                      .withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.shopping_bag_outlined,
+                  size: 20,
+                  color: widget.theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TranslatedText(
+                      widget.product['product_name'] ?? 'Unknown Product',
+                      style: widget.theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    TranslatedText(
+                      'How was this item?',
+                      style: widget.theme.textTheme.bodySmall?.copyWith(
+                        color: widget.theme.colorScheme.onSurface.withOpacity(
+                          0.6,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Rating Stars
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (index) {
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _rating = index + 1;
+                    _isExpanded = true;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: AnimatedScale(
+                    scale: _rating > index ? 1.2 : 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      index < _rating
+                          ? Icons.star_rounded
+                          : Icons.star_outline_rounded,
+                      color: index < _rating
+                          ? Colors.amber
+                          : widget.theme.disabledColor,
+                      size: 32,
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+
+          // Review Textbox
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              children: [
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _reviewController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Write your review here...',
+                    hintStyle: TextStyle(
+                      color: widget.theme.colorScheme.onSurface.withOpacity(
+                        0.4,
+                      ),
+                    ),
+                    filled: true,
+                    fillColor: widget.theme.scaffoldBackgroundColor,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isSubmitting ? null : _submitReview,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: widget.theme.colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const TranslatedText('Submit Review'),
+                  ),
+                ),
+              ],
+            ),
+            crossFadeState: _isExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 300),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewCarousel extends StatefulWidget {
+  final List<dynamic> products;
+  final String orderId;
+  final ThemeData theme;
+
+  const _ReviewCarousel({
+    required this.products,
+    required this.orderId,
+    required this.theme,
+  });
+
+  @override
+  State<_ReviewCarousel> createState() => _ReviewCarouselState();
+}
+
+class _ReviewCarouselState extends State<_ReviewCarousel> {
+  int _currentIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Progress Indicator
+        Row(
+          children: [
+            TranslatedText(
+              'Reviewing ${_currentIndex + 1}/${widget.products.length}',
+              style: widget.theme.textTheme.bodySmall?.copyWith(
+                color: widget.theme.colorScheme.onSurface.withOpacity(0.6),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            if (widget.products.length > 1) ...[
+              IconButton(
+                onPressed: _currentIndex > 0
+                    ? () => setState(() => _currentIndex--)
+                    : null,
+                icon: const Icon(Icons.arrow_back_ios_rounded, size: 16),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 16),
+              IconButton(
+                onPressed: _currentIndex < widget.products.length - 1
+                    ? () => setState(() => _currentIndex++)
+                    : null,
+                icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Active Review Item
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0.1, 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          child: KeyedSubtree(
+            key: ValueKey(_currentIndex),
+            child: _ProductReviewItem(
+              product: widget.products[_currentIndex],
+              orderId: widget.orderId,
+              theme: widget.theme,
+            ),
+          ),
+        ),
+
+        // Dots Indicator
+        if (widget.products.length > 1) ...[
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.products.length, (index) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: _currentIndex == index ? 24 : 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _currentIndex == index
+                      ? widget.theme.colorScheme.primary
+                      : widget.theme.disabledColor.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
   }
 }

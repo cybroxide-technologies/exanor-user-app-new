@@ -776,16 +776,23 @@ class _CartScreenState extends State<CartScreen> {
                                 Expanded(
                                   child: TranslatedText(
                                     method['payment_method_name'] ?? 'Unknown',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
+                                      color: isSelected
+                                          ? (theme.brightness == Brightness.dark
+                                                ? Colors.white
+                                                : theme.primaryColor)
+                                          : theme.textTheme.bodyLarge?.color,
                                     ),
                                   ),
                                 ),
                                 if (isSelected)
                                   Icon(
                                     Icons.check_circle,
-                                    color: theme.primaryColor,
+                                    color: theme.brightness == Brightness.dark
+                                        ? Colors.white
+                                        : theme.primaryColor,
                                   )
                                 else
                                   const Icon(

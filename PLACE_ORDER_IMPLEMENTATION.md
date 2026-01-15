@@ -51,7 +51,7 @@ Updated the button's `onPressed` callback to call `_placeOrder` when:
 
 ## Button States
 
-The "Place Order" button has three distinct states:
+The "Place Order" button has four distinct states:
 
 ### 1. **Disabled (Greyscale)**
 The button is shown in greyscale and cannot be clicked when:
@@ -66,26 +66,45 @@ The button is shown in greyscale and cannot be clicked when:
 - Message above button: Red text (if error message exists)
 - Button is not clickable (`onPressed: null`)
 
-### 2. **Loading**
+### 2. **Countdown (Active - 5 seconds)**
+**NEW:** When the user taps the Place Order button, a 5-second countdown begins:
+- Countdown timer displays with circular progress indicator
+- Text shows: "Placing order in X s..."
+- Progress indicator fills as countdown decreases
+- **Red CANCEL button** appears on the right side of the button
+- User can tap CANCEL to abort the order placement
+
+**Visual Indicators:**
+- Background: Primary theme color
+- Progress bar: White circular indicator showing remaining time
+- Countdown text: "Placing order in 5 s..." (counting down)
+- Cancel button: Red background with white text overlay
+
+**User Actions:**
+- **Wait**: Order places automatically after 5 seconds
+- **Cancel**: Tap the CANCEL button to abort order placement
+
+### 3. **Loading**
 The button shows a loading spinner when:
 - Order is being initialized (`_isInitializingOrder == true`)
-- Order is being placed (`_isInitializingOrder == true`)
+- Order is being placed (API call in progress)
 
 **Visual Indicators:**
 - White circular progress indicator
 - Button remains in its current enabled/disabled color state
 
-### 3. **Enabled (Active)**
+### 4. **Enabled (Active)**
 The button is fully enabled and clickable when:
 - All required data is fetched (payment method, order method, address)
 - Order initialization validates successfully (status "All OK.")
 - Not currently processing
+- Not in countdown state
 
 **Visual Indicators:**
 - Background: Primary theme color
-- Text: White
+- Text: White "Place Order"
 - Message above button: Green text showing success message
-- Button is clickable and calls `_placeOrder()`
+- Button is clickable and calls `_startOrderCountdown()`
 
 ## State Variables Used
 
@@ -97,6 +116,45 @@ The button is fully enabled and clickable when:
 - `_isOrderPlaceable`: bool - Whether order can be placed (set by `/order-init/`)
 - `_isInitializingOrder`: bool - Loading state for order operations
 - `_orderInitMessage`: String - Message to display above the button (success or error)
+- **`_isCountingDown`**: bool - **NEW:** Whether countdown timer is active
+- **`_countdownSeconds`**: int - **NEW:** Remaining seconds in countdown (15 to 0)
+- **`_countdownTimer`**: Timer? - **NEW:** Timer instance for countdown
+
+## Countdown Feature Details
+
+### How It Works
+
+1. **User Taps "Place Order"**
+   - Calls `_startOrderCountdown()`
+   - Validates all required parameters
+   - Sets `_isCountingDown = true`
+   - Initializes `_countdownSeconds = 5`
+
+2. **Countdown Begins**
+   - `Timer.periodic` runs every 1 second
+   - Decrements `_countdownSeconds` each second
+   - Updates circular progress indicator (value = remaining/5)
+   - Shows text: "Placing order in X s..."
+
+3. **User Can Cancel**
+   - Red "CANCEL" button appears on right side
+   - Tapping calls `_cancelOrderCountdown()`
+   - Stops timer
+   - Resets countdown state
+   - Returns button to normal "Place Order" state
+
+4. **Timer Reaches Zero**
+   - Automatically calls `_placeOrderImmediate()`
+   - Resets countdown state
+   - Shows loading indicator
+   - Makes API call to `/place-order/`
+   - Navigates to Order Details screen on success
+
+### Implementation Methods
+
+- **`_startOrderCountdown()`**: Initiates the 15-second countdown timer
+- **`_cancelOrderCountdown()`**: Cancels the countdown and resets state
+- **`_placeOrderImmediate()`**: Executes the actual order placement API call
 
 ## Validation Flow
 

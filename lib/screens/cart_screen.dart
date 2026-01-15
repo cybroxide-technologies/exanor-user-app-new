@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
@@ -56,6 +58,11 @@ class _CartScreenState extends State<CartScreen> {
   bool _isOrderPlaceable = false;
   bool _isInitializingOrder = false;
   String _orderInitMessage = "";
+
+  // Countdown Timer State
+  bool _isCountingDown = false;
+  int _countdownSeconds = 5;
+  Timer? _countdownTimer;
 
   // Location Data
   String? _addressTitle;
@@ -269,6 +276,7 @@ class _CartScreenState extends State<CartScreen> {
   void dispose() {
     _scrollController.dispose();
     _suggestionsScrollController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -799,7 +807,7 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Future<void> _placeOrder() async {
+  Future<void> _placeOrderImmediate() async {
     // Validate all required parameters
     if (_selectedPaymentMethod == null ||
         _selectedOrderMethodId == null ||
@@ -859,17 +867,29 @@ class _CartScreenState extends State<CartScreen> {
           final executeOrderData = responseData?['execute_order_data'];
           final orderId = executeOrderData?['order_id'];
 
+          print("📋 Response data: $responseData");
+          print("📋 Execute order data: $executeOrderData");
+          print("🆔 Extracted order_id: $orderId");
+
           if (orderId != null) {
+            print("🚀 Navigating to OrderDetailsScreen with orderId: $orderId");
             // Navigate to Order Details Screen
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => OrderDetailsScreen(
-                  orderId: orderId,
-                  storeId: widget.storeId,
-                ),
-              ),
-            );
+            if (mounted) {
+              // Add small delay to ensure bottom sheet is fully closed
+              await Future.delayed(const Duration(milliseconds: 300));
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (context) => OrderDetailsScreen(
+                      orderId: orderId,
+                      storeId: widget.storeId,
+                    ),
+                  ),
+                );
+              }
+            }
           } else {
+            print("⚠️ orderId is null, showing snackbar instead");
             // Fallback if order_id is not found
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -914,6 +934,339 @@ class _CartScreenState extends State<CartScreen> {
           ),
         );
       }
+    }
+  }
+
+  void _startOrderCountdown() {
+    // Validate all required parameters
+    if (_selectedPaymentMethod == null ||
+        _selectedOrderMethodId == null ||
+        _currentAddressId.isEmpty) {
+      print("⚠️ Cannot place order - missing required data");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please ensure all order details are selected'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Show beautiful bottom sheet instead of inline countdown
+    _showOrderCountdownBottomSheet();
+  }
+
+  void _showOrderCountdownBottomSheet() {
+    final theme = Theme.of(context);
+
+    // Start countdown
+    setState(() {
+      _isCountingDown = true;
+      _countdownSeconds = 5;
+    });
+
+    // Store the modal state setter to update bottom sheet
+    late StateSetter modalStateSetter;
+
+    // Create periodic timer
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      setState(() {
+        _countdownSeconds--;
+      });
+
+      // IMPORTANT: Also update the bottom sheet UI
+      try {
+        modalStateSetter(() {
+          // This triggers rebuild of the bottom sheet content
+        });
+      } catch (e) {
+        // Bottom sheet might be closed
+      }
+
+      if (_countdownSeconds <= 0) {
+        timer.cancel();
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop(); // Close bottom sheet only
+        }
+        _placeOrderImmediate();
+      }
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false, // Prevent back button dismiss
+        child: StatefulBuilder(
+          builder: (context, setModalState) {
+            // Capture the state setter for use in timer
+            modalStateSetter = setModalState;
+
+            return Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    theme.colorScheme.surface,
+                    theme.colorScheme.surface.withOpacity(0.95),
+                  ],
+                ),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+                top: 24,
+                left: 24,
+                right: 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Drag handle
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.onSurface.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Animated circular progress
+                  TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 500),
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    builder: (context, value, child) {
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Outer glow effect
+                          Container(
+                            width: 200,
+                            height: 200,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.colorScheme.primary.withOpacity(
+                                    0.3 * value,
+                                  ),
+                                  blurRadius: 40,
+                                  spreadRadius: 10,
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Progress circle
+                          SizedBox(
+                            width: 180,
+                            height: 180,
+                            child: CircularProgressIndicator(
+                              value: _countdownSeconds / 5,
+                              strokeWidth: 12,
+                              backgroundColor: theme
+                                  .colorScheme
+                                  .surfaceContainerHighest
+                                  .withOpacity(0.3),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                theme.colorScheme.primary,
+                              ),
+                              strokeCap: StrokeCap.round,
+                            ),
+                          ),
+                          // Center content
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Animated countdown number
+                              AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 300),
+                                transitionBuilder: (child, animation) {
+                                  return ScaleTransition(
+                                    scale: animation,
+                                    child: FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: Text(
+                                  '$_countdownSeconds',
+                                  key: ValueKey<int>(_countdownSeconds),
+                                  style: TextStyle(
+                                    fontSize: 56,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
+                                    height: 1,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'seconds',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.6),
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Title and description
+                  Text(
+                    'Placing Your Order',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your order will be placed automatically',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Order summary card
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest
+                          .withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withOpacity(0.1),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildSummaryRow(
+                          theme,
+                          Icons.shopping_bag_outlined,
+                          'Items',
+                          '${_cartData?['total_products_in_cart'] ?? 0}',
+                        ),
+                        const Divider(height: 16),
+                        _buildSummaryRow(
+                          theme,
+                          Icons.payments_outlined,
+                          'Total',
+                          '₹${(_cartData?['grand_total'] ?? 0.0).toStringAsFixed(2)}',
+                        ),
+                        const Divider(height: 16),
+                        _buildSummaryRow(
+                          theme,
+                          Icons.payment_rounded,
+                          'Payment',
+                          _selectedPaymentMethod?['payment_method_name'] ??
+                              'N/A',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Cancel button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _cancelOrderCountdown,
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('Cancel Order'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red, width: 2),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    ).then((_) {
+      // Cleanup when bottom sheet is dismissed (don't call _cancelOrderCountdown to avoid double pop)
+      _countdownTimer?.cancel();
+      if (mounted) {
+        setState(() {
+          _isCountingDown = false;
+          _countdownSeconds = 5;
+        });
+      }
+    });
+  }
+
+  Widget _buildSummaryRow(
+    ThemeData theme,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: theme.colorScheme.primary.withOpacity(0.7)),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurface.withOpacity(0.7),
+          ),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _cancelOrderCountdown() {
+    _countdownTimer?.cancel();
+    if (mounted) {
+      setState(() {
+        _isCountingDown = false;
+        _countdownSeconds = 5;
+      });
+      // Close bottom sheet ONLY - don't pop the cart screen
+      Navigator.of(context, rootNavigator: false).pop();
     }
   }
 
@@ -1614,43 +1967,54 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                           SizedBox(
                             width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed:
-                                  _isOrderPlaceable && !_isInitializingOrder
-                                  ? _placeOrder
-                                  : null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: theme.colorScheme.primary,
-                                disabledBackgroundColor: Colors.grey[400],
-                                foregroundColor: Colors.white,
-                                disabledForegroundColor: Colors.white70,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: _isInitializingOrder
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
+                            child: Stack(
+                              children: [
+                                // Main button
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed:
+                                        _isOrderPlaceable &&
+                                            !_isInitializingOrder &&
+                                            !_isCountingDown
+                                        ? _startOrderCountdown
+                                        : null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          theme.colorScheme.primary,
+                                      disabledBackgroundColor: Colors.grey[400],
+                                      foregroundColor: Colors.white,
+                                      disabledForegroundColor: Colors.white70,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
                                       ),
-                                    )
-                                  : const Text(
-                                      'Place Order',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
+                                      elevation: 0,
                                     ),
+                                    child: _isInitializingOrder
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                    Colors.white,
+                                                  ),
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Place Order',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],

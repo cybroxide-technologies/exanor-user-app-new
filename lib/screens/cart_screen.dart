@@ -85,7 +85,66 @@ class _CartScreenState extends State<CartScreen> {
     print("   Lat/Lng: $_currentLat, $_currentLng");
     print("   Store ID: ${widget.storeId}");
 
+    // Check if lat/lng are invalid (null or 0) and navigate to address selection if needed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndNavigateToAddressSelection();
+    });
+
     _initializeCartScreen();
+  }
+
+  Future<void> _checkAndNavigateToAddressSelection() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedLat = prefs.getDouble('latitude');
+      final savedLng = prefs.getDouble('longitude');
+
+      // Check if coordinates are invalid (0 or null)
+      final bool hasInvalidCoordinates =
+          (_currentLat == 0.0 || _currentLng == 0.0) &&
+          (savedLat == null ||
+              savedLng == null ||
+              savedLat == 0.0 ||
+              savedLng == 0.0);
+
+      if (hasInvalidCoordinates) {
+        print(
+          "⚠️ CartScreen: Invalid coordinates detected, opening SavedAddressesScreen",
+        );
+
+        if (!mounted) return;
+
+        // Navigate to SavedAddressesScreen
+        final result = await Navigator.push<Map<String, dynamic>>(
+          context,
+          MaterialPageRoute(builder: (context) => const SavedAddressesScreen()),
+        );
+
+        // If user selected an address, update the cart with new coordinates
+        if (result != null && result['addressSelected'] == true && mounted) {
+          print("✅ CartScreen: Address selected, updating cart data");
+
+          // Reload address details from SharedPreferences
+          await _updateLocationFromPrefs();
+
+          // Refresh cart data with new coordinates
+          await _fetchCartData(forceLoading: true);
+
+          // Re-initialize order with new address
+          await _initializeOrder();
+        } else if (result == null && mounted) {
+          // User dismissed without selecting - show warning
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please select a delivery address to continue'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("❌ Error checking address: $e");
+    }
   }
 
   Future<void> _loadAddressDetails() async {

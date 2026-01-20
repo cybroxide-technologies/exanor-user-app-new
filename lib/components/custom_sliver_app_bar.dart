@@ -5,6 +5,7 @@ import 'package:exanor/config/theme_config.dart';
 // import 'package:speech_to_text/speech_to_text.dart' as stt;  // Temporarily disabled
 import 'package:exanor/screens/location_selection_screen.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
+import 'package:exanor/screens/my_profile_screen.dart';
 
 import 'package:exanor/services/api_service.dart';
 import 'package:shimmer/shimmer.dart';
@@ -171,9 +172,15 @@ class CustomSliverAppBar extends StatelessWidget {
                       // Action icons
                       // Action icons
                       GestureDetector(
-                        onTap: () {
-                          // Profile navigation placeholder
-                          print('Profile tapped');
+                        onTap: () async {
+                          // Navigate to Profile screen
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const MyProfileScreen(),
+                            ),
+                          );
+                          // Refresh user data after returning from profile
                           if (onUserDataUpdated != null) {
                             onUserDataUpdated!();
                           }

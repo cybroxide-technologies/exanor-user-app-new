@@ -7,51 +7,56 @@ class AppTheme {
   AppTheme._();
 
   // Flutter blue colors
-  static const Color _flutterBlue = Color(0xFF4460FF);
-  static const Color _flutterBlueDark = Color(0xFF4460FF);
+  // Creative Vibrant Blue Palette
+  static const Color _primaryBlue = Color(0xFF0066FF); // Vivid Digital Blue
+  static const Color _primaryBlueLight = Color(0xFF4C8DFF);
+  static const Color _surfaceLight = Color(
+    0xFFF7F9FC,
+  ); // Cool blue-tinted grey (not harsh white)
+  static const Color _surfaceDark = Color(0xFF0F172A); // Deep slate blue-black
 
   // Light theme color scheme
   static const ColorScheme _lightColorScheme = ColorScheme(
     brightness: Brightness.light,
-    primary: _flutterBlue, // Flutter blue
+    primary: _primaryBlue,
     onPrimary: Colors.white,
-    secondary: Color(0xFF03DAC6), // Teal accent
-    onSecondary: Colors.black,
-    surface: Color(0xFFFAFAFA), // Light grey
-    onSurface: Color(0xFF212121), // Dark grey
-    error: Color(0xFFB00020),
+    secondary: Color(0xFF00C896), // Mint accent for contrast
+    onSecondary: Colors.white,
+    surface: _surfaceLight,
+    onSurface: Color(0xFF172B4D), // Deep Navy text instead of harsh black
+    error: Color(0xFFEF4444),
     onError: Colors.white,
-    background: Colors.white,
-    onBackground: Color(0xFF212121),
-    surfaceVariant: Color(0xFFF5F5F5),
-    onSurfaceVariant: Color(0xFF757575),
-    outline: Color(0xFFBDBDBD),
-    shadow: Color(0xFF000000),
-    inverseSurface: Color(0xFF121212),
-    onInverseSurface: Color(0xFFFFFFFF),
-    inversePrimary: _flutterBlueDark,
+    background: _surfaceLight,
+    onBackground: Color(0xFF172B4D),
+    surfaceVariant: Color(0xFFEDF2F9), // Lighter cool variant
+    onSurfaceVariant: Color(0xFF64748B), // Slate grey
+    outline: Color(0xFFE2E8F0),
+    shadow: Color(0xFF0F172A),
+    inverseSurface: Color(0xFF172B4D),
+    onInverseSurface: Colors.white,
+    inversePrimary: _primaryBlueLight,
   );
 
   // Dark theme color scheme
   static const ColorScheme _darkColorScheme = ColorScheme(
     brightness: Brightness.dark,
-    primary: _flutterBlueDark, // Light Flutter blue
-    onPrimary: Color.fromARGB(255, 171, 171, 171),
-    secondary: Color(0xFF03DAC6), // Teal accent
+    primary: _primaryBlueLight,
+    onPrimary: Color(0xFF0F172A),
+    secondary: Color(0xFF00C896),
     onSecondary: Colors.black,
-    surface: Color(0xFF121212), // Dark grey
-    onSurface: Color(0xFFE0E0E0), // Light grey
-    error: Color(0xFFCF6679),
+    surface: _surfaceDark,
+    onSurface: Color(0xFFF1F5F9),
+    error: Color(0xFFF87171),
     onError: Colors.black,
-    background: Color(0xFF000000),
-    onBackground: Color(0xFFE0E0E0),
-    surfaceVariant: Color(0xFF1E1E1E),
-    onSurfaceVariant: Color(0xFFBDBDBD),
-    outline: Color(0xFF616161),
+    background: _surfaceDark,
+    onBackground: Color(0xFFF1F5F9),
+    surfaceVariant: Color(0xFF1E293B),
+    onSurfaceVariant: Color(0xFF94A3B8),
+    outline: Color(0xFF334155),
     shadow: Color(0xFF000000),
-    inverseSurface: Color(0xFFFAFAFA),
-    onInverseSurface: Color(0xFF121212),
-    inversePrimary: _flutterBlue,
+    inverseSurface: Color(0xFFF1F5F9),
+    onInverseSurface: Color(0xFF0F172A),
+    inversePrimary: _primaryBlue,
   );
 
   // Text theme configuration with Poppins font

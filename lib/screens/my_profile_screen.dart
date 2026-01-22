@@ -6,6 +6,7 @@ import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/screens/edit_profile_screen.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:exanor/services/user_service.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -17,34 +18,81 @@ class MyProfileScreen extends StatefulWidget {
 class _MyProfileScreenState extends State<MyProfileScreen> {
   String _userName = 'Guest User';
   String _userPhone = '';
+  String? _userImage;
   bool _isLoadingUserData = true;
+
+  late ScrollController _scrollController;
+  bool _showStickyHeader = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
     _loadUserData();
   }
 
-  Future<void> _loadUserData() async {
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      // 280 is expandedHeight. We transition when content is mostly scrolled.
+      // 200 is a good threshold leaving some context.
+      bool showSticky = _scrollController.offset > 200;
+      if (showSticky != _showStickyHeader) {
+        setState(() {
+          _showStickyHeader = showSticky;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUserData({bool forceRefresh = false}) async {
     try {
+      if (forceRefresh) {
+        // Use new endpoint to fetch user data
+        await UserService.viewUserData();
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final firstName = prefs.getString('first_name') ?? '';
       final lastName = prefs.getString('last_name') ?? '';
       final phone = prefs.getString('user_phone') ?? '';
+      final image = prefs.getString('user_image');
 
-      setState(() {
-        _userName = '$firstName $lastName'.trim();
-        if (_userName.isEmpty) {
-          _userName = 'Guest User';
-        }
-        _userPhone = phone;
-        _isLoadingUserData = false;
-      });
+      if (mounted) {
+        setState(() {
+          _userName = '$firstName $lastName'.trim();
+          if (_userName.isEmpty) {
+            _userName = 'Guest User';
+          }
+          _userPhone = phone;
+          _userImage = image;
+          _isLoadingUserData = false;
+        });
+      }
     } catch (e) {
       print('Error loading user data: $e');
-      setState(() {
-        _isLoadingUserData = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingUserData = false;
+        });
+
+        if (forceRefresh) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: TranslatedText(
+                'Failed to refresh data: ${e.toString()}',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -207,170 +255,229 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       backgroundColor: theme.colorScheme.surface,
       body: _isLoadingUserData
           ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
-              slivers: [
-                // Modern App Bar with Glassmorphism
-                SliverAppBar(
-                  expandedHeight: 280,
-                  floating: true,
-                  snap: true,
-                  pinned: false,
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  flexibleSpace: FlexibleSpaceBar(
-                    background: _buildFloatingHeader(theme),
-                  ),
-                  leading: IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.3),
-                          width: 1,
+          : RefreshIndicator(
+              onRefresh: () => _loadUserData(forceRefresh: true),
+              child: CustomScrollView(
+                physics:
+                    const AlwaysScrollableScrollPhysics(), // Ensure scroll is possible always
+                controller: _scrollController,
+                slivers: [
+                  // Modern App Bar with Glassmorphism
+                  SliverAppBar(
+                    expandedHeight: 280,
+                    collapsedHeight:
+                        70, // Increased height to bring content down a bit
+                    toolbarHeight: 70,
+                    floating: false,
+                    pinned: true,
+                    backgroundColor:
+                        theme.scaffoldBackgroundColor, // Match body background
+                    elevation: 0,
+                    title: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: _showStickyHeader ? 1.0 : 0.0,
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          top: 8.0,
+                        ), // Slight top padding
+                        child: TranslatedText(
+                          'MY ACCOUNT',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            color: theme.colorScheme.onSurface,
+                          ),
                         ),
                       ),
-                      child: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 18,
-                      ),
                     ),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ),
-
-                // Content
-                SliverToBoxAdapter(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: theme.scaffoldBackgroundColor,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: 20,
-                        right: 20,
-                        bottom: 20,
-                        top: 10,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    centerTitle: true,
+                    flexibleSpace: FlexibleSpaceBar(
+                      background: Stack(
+                        fit: StackFit.expand,
                         children: [
-                          const SizedBox(
-                            height: 24,
-                          ), // Added padding below header
-                          // Quick Access Row
-                          _buildQuickAccessRow(theme),
-                          const SizedBox(height: 32),
-
-                          // Menu Items
-                          _buildSectionTitle('Settings', theme),
-                          const SizedBox(height: 16),
-                          _buildModernMenuItem(
-                            icon: Icons.receipt_long_outlined,
-                            title: 'Order History',
-                            subtitle: 'View your past orders',
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.blue.shade400,
-                                Colors.blue.shade600,
-                              ],
-                            ),
-                            onTap: () {
-                              Navigator.pushNamed(context, '/orders');
-                            },
-                            theme: theme,
-                          ),
-                          const SizedBox(height: 12),
-
-                          _buildSectionTitle('Legal', theme),
-                          const SizedBox(height: 16),
-                          _buildModernMenuItem(
-                            icon: Icons.privacy_tip_outlined,
-                            title: 'Privacy Policy',
-                            subtitle: 'Read our privacy policy',
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.purple.shade400,
-                                Colors.purple.shade600,
-                              ],
-                            ),
-                            onTap: () {
-                              final url =
-                                  FirebaseRemoteConfigService.getPrivacyPolicyUrl();
-                              _launchUrl(url);
-                            },
-                            theme: theme,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildModernMenuItem(
-                            icon: Icons.description_outlined,
-                            title: 'Terms & Conditions',
-                            subtitle: 'Review terms of service',
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.indigo.shade400,
-                                Colors.indigo.shade600,
-                              ],
-                            ),
-                            onTap: () {
-                              final url =
-                                  FirebaseRemoteConfigService.getTermsAndConditionsUrl();
-                              _launchUrl(url);
-                            },
-                            theme: theme,
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // Account Management
-                          _buildSectionTitle('Account Management', theme),
-                          const SizedBox(height: 16),
-                          _buildModernMenuItem(
-                            icon: Icons.delete_outline_rounded,
-                            title: 'Delete Account',
-                            subtitle: 'Remove your account permanently',
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.red.shade400,
-                                Colors.red.shade600,
-                              ],
-                            ),
-                            onTap: () {
-                              final url =
-                                  FirebaseRemoteConfigService.getDeleteAccountUrl();
-                              _launchUrl(url);
-                            },
-                            theme: theme,
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // Logout Button
-                          _buildModernLogoutButton(theme),
-
-                          const SizedBox(height: 24),
-
-                          // App Version
-                          Center(
-                            child: Text(
-                              'Version ${FirebaseRemoteConfigService.getMinAppVersion()}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.4,
-                                ),
-                                letterSpacing: 1,
+                          RepaintBoundary(child: _buildFloatingHeader(theme)),
+                          // Smooth fade to background color
+                          RepaintBoundary(
+                            child: AnimatedOpacity(
+                              duration: const Duration(milliseconds: 200),
+                              opacity: _showStickyHeader ? 1.0 : 0.0,
+                              child: Container(
+                                color: theme.scaffoldBackgroundColor,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 32),
                         ],
                       ),
                     ),
+                    leading: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: _showStickyHeader
+                          ? Padding(
+                              padding: const EdgeInsets.only(
+                                top: 8.0,
+                              ), // Align with title
+                              child: IconButton(
+                                key: const ValueKey('sticky_back'),
+                                icon: Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                                onPressed: () => Navigator.of(context).pop(),
+                              ),
+                            )
+                          : IconButton(
+                              key: const ValueKey('glass_back'),
+                              icon: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                              onPressed: () => Navigator.of(context).pop(),
+                            ),
+                    ),
                   ),
-                ),
-              ],
+
+                  // Content
+                  SliverToBoxAdapter(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: theme.scaffoldBackgroundColor,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          left: 20,
+                          right: 20,
+                          bottom: 20,
+                          top: 10,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(
+                              height: 24,
+                            ), // Added padding below header
+                            // Quick Access Row
+                            _buildQuickAccessRow(theme),
+                            const SizedBox(height: 32),
+
+                            // Menu Items
+                            _buildSectionTitle('Settings', theme),
+                            const SizedBox(height: 16),
+                            _buildModernMenuItem(
+                              icon: Icons.receipt_long_outlined,
+                              title: 'Order History',
+                              subtitle: 'View your past orders',
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.blue.shade400,
+                                  Colors.blue.shade600,
+                                ],
+                              ),
+                              onTap: () {
+                                Navigator.pushNamed(context, '/orders');
+                              },
+                              theme: theme,
+                            ),
+                            const SizedBox(height: 12),
+
+                            _buildSectionTitle('Legal', theme),
+                            const SizedBox(height: 16),
+                            _buildModernMenuItem(
+                              icon: Icons.privacy_tip_outlined,
+                              title: 'Privacy Policy',
+                              subtitle: 'Read our privacy policy',
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.purple.shade400,
+                                  Colors.purple.shade600,
+                                ],
+                              ),
+                              onTap: () {
+                                final url =
+                                    FirebaseRemoteConfigService.getPrivacyPolicyUrl();
+                                _launchUrl(url);
+                              },
+                              theme: theme,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildModernMenuItem(
+                              icon: Icons.description_outlined,
+                              title: 'Terms & Conditions',
+                              subtitle: 'Review terms of service',
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.indigo.shade400,
+                                  Colors.indigo.shade600,
+                                ],
+                              ),
+                              onTap: () {
+                                final url =
+                                    FirebaseRemoteConfigService.getTermsAndConditionsUrl();
+                                _launchUrl(url);
+                              },
+                              theme: theme,
+                            ),
+
+                            const SizedBox(height: 32),
+
+                            // Account Management
+                            _buildSectionTitle('Account Management', theme),
+                            const SizedBox(height: 16),
+                            _buildModernMenuItem(
+                              icon: Icons.delete_outline_rounded,
+                              title: 'Delete Account',
+                              subtitle: 'Remove your account permanently',
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.red.shade400,
+                                  Colors.red.shade600,
+                                ],
+                              ),
+                              onTap: () {
+                                final url =
+                                    FirebaseRemoteConfigService.getDeleteAccountUrl();
+                                _launchUrl(url);
+                              },
+                              theme: theme,
+                            ),
+
+                            const SizedBox(height: 32),
+
+                            // Logout Button
+                            _buildModernLogoutButton(theme),
+
+                            const SizedBox(height: 24),
+
+                            // App Version
+                            Center(
+                              child: TranslatedText(
+                                'Version ${FirebaseRemoteConfigService.getMinAppVersion()}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.4),
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }
@@ -420,8 +527,12 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                               offset: const Offset(0, 4),
                             ),
                           ],
-                          image: const DecorationImage(
-                            image: NetworkImage('https://i.pravatar.cc/300'),
+                          image: DecorationImage(
+                            image: NetworkImage(
+                              _userImage != null && _userImage!.isNotEmpty
+                                  ? _userImage!
+                                  : 'https://i.pravatar.cc/300',
+                            ),
                             fit: BoxFit.cover,
                           ),
                           color: const Color(0xFF1E1E1E),
@@ -436,7 +547,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            TranslatedText(
                               _userName,
                               style: const TextStyle(
                                 color: Colors.white,
@@ -466,7 +577,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                                     color: Colors.white.withOpacity(0.7),
                                   ),
                                   const SizedBox(width: 4),
-                                  Text(
+                                  TranslatedText(
                                     _userPhone,
                                     style: TextStyle(
                                       color: Colors.white.withOpacity(0.7),
@@ -494,49 +605,60 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _buildQuickAccessButton(
-          icon: Icons.edit_outlined,
-          label: 'Edit Profile',
-          color: theme.colorScheme.primary,
-          onTap: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const EditProfileScreen(),
-              ),
-            );
-            _loadUserData();
-          },
+        Expanded(
+          child: _buildQuickAccessButton(
+            icon: Icons.edit_outlined,
+            label: 'Edit Profile',
+            color: theme.colorScheme.primary,
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EditProfileScreen(),
+                ),
+              );
+              _loadUserData();
+            },
+          ),
         ),
-        _buildQuickAccessButton(
-          icon: Icons.location_on_outlined,
-          label: 'Addresses',
-          color: Colors.green,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const SavedAddressesScreen(),
-              ),
-            );
-          },
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildQuickAccessButton(
+            icon: Icons.location_on_outlined,
+            label: 'Addresses',
+            color: Colors.green,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SavedAddressesScreen(),
+                ),
+              );
+            },
+          ),
         ),
-        _buildQuickAccessButton(
-          icon: Icons.info_outline_rounded,
-          label: 'About',
-          color: Colors.blue,
-          onTap: () {
-            final url = FirebaseRemoteConfigService.getAboutUsUrl();
-            _launchUrl(url);
-          },
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildQuickAccessButton(
+            icon: Icons.info_outline_rounded,
+            label: 'About',
+            color: Colors.blue,
+            onTap: () {
+              final url = FirebaseRemoteConfigService.getAboutUsUrl();
+              _launchUrl(url);
+            },
+          ),
         ),
-        _buildQuickAccessButton(
-          icon: Icons.headset_mic_rounded,
-          label: 'Support',
-          color: Colors.orange,
-          onTap: () {
-            _launchUrl('https://chat.exanor.com');
-          },
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildQuickAccessButton(
+            icon: Icons.headset_mic_rounded,
+            label: 'Support',
+            color: Colors.orange,
+            onTap: () {
+              _launchUrl('https://chat.exanor.com');
+            },
+          ),
         ),
       ],
     );
@@ -553,6 +675,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       borderRadius: BorderRadius.circular(16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.all(16),
@@ -564,12 +687,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
             child: Icon(icon, color: color, size: 28),
           ),
           const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: TranslatedText(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
           ),
         ],
@@ -578,7 +707,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
   }
 
   Widget _buildSectionTitle(String title, ThemeData theme) {
-    return Text(
+    return TranslatedText(
       title,
       style: theme.textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.bold,
@@ -620,14 +749,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  TranslatedText(
                     title,
                     style: theme.textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
+                  TranslatedText(
                     subtitle,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -671,7 +800,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
           children: [
             Icon(Icons.logout_rounded, color: Colors.white),
             SizedBox(width: 12),
-            Text(
+            TranslatedText(
               'Logout',
               style: TextStyle(
                 color: Colors.white,

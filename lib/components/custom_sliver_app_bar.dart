@@ -1,20 +1,15 @@
-import 'dart:io';
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:exanor/config/theme_config.dart';
-// import 'package:speech_to_text/speech_to_text.dart' as stt;  // Temporarily disabled
-import 'package:exanor/screens/location_selection_screen.dart';
+import 'package:exanor/components/voice_search_sheet.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:exanor/screens/my_profile_screen.dart';
 
 import 'package:exanor/services/api_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:exanor/components/translation_widget.dart';
-import 'package:exanor/services/enhanced_translation_service.dart';
-import 'package:exanor/components/custom_cached_network_image.dart';
-import 'package:exanor/services/interstitial_ads_service.dart';
 import 'package:exanor/components/language_selector.dart';
+
 import 'package:exanor/screens/global_search_screen.dart';
+import 'package:exanor/components/home_screen_skeleton.dart';
 
 class CustomSliverAppBar extends StatelessWidget {
   final String? addressTitle;
@@ -84,175 +79,182 @@ class CustomSliverAppBar extends StatelessWidget {
     final theme = Theme.of(context);
 
     return SliverAppBar(
-      expandedHeight: 10.0,
+      expandedHeight: 56.0,
+      toolbarHeight: 56.0,
       floating: false,
       pinned: false,
       elevation: 0,
       backgroundColor: theme.colorScheme.surface,
       automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          color: theme.colorScheme.surface,
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(
-                left: 16.0,
-                right: 16.0,
-                top: 8.0,
-                bottom: 4.0,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top row with location and actions
-                  Row(
-                    children: [
-                      // Location icon and text
-                      Icon(
-                        Icons.location_on,
-                        color: theme.colorScheme.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () async {
-                            // Navigate to SavedAddressesScreen
-                            final result =
-                                await Navigator.push<Map<String, dynamic>>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const SavedAddressesScreen(),
-                                  ),
-                                );
+        background: RepaintBoundary(
+          child: Container(
+            color: theme.colorScheme.surface,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  left: 16.0,
+                  right: 16.0,
+                  top: 8.0,
+                  bottom: 0.0,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top row with location and actions
+                    Row(
+                      children: [
+                        // Location icon and text
+                        Icon(
+                          Icons.location_on,
+                          color: theme.colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              // Navigate to SavedAddressesScreen
+                              final result =
+                                  await Navigator.push<Map<String, dynamic>>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const SavedAddressesScreen(),
+                                    ),
+                                  );
 
-                            // If address was selected, call the callback to refresh
-                            if (result != null &&
-                                result['addressSelected'] == true &&
-                                onAddressUpdated != null) {
-                              onAddressUpdated!();
+                              // If address was selected, call the callback to refresh
+                              if (result != null &&
+                                  result['addressSelected'] == true &&
+                                  onAddressUpdated != null) {
+                                onAddressUpdated!();
+                              }
+                            },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    TranslatedText(
+                                      addressTitle ?? 'Set Location',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.keyboard_arrow_down,
+                                      color: theme.colorScheme.onSurface,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
+                                TranslatedText(
+                                  _buildAddressExcerpt(),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.7),
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Action icons
+                        // Action icons
+                        GestureDetector(
+                          onTap: () async {
+                            // Navigate to Profile screen
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const MyProfileScreen(),
+                              ),
+                            );
+                            // Refresh user data after returning from profile
+                            if (onUserDataUpdated != null) {
+                              onUserDataUpdated!();
                             }
                           },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  TranslatedText(
-                                    addressTitle ?? 'Set Location',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: theme.colorScheme.onSurface,
-                                    ),
+                          child: isLoadingUserData
+                              ? Shimmer.fromColors(
+                                  baseColor: Colors.grey[300]!,
+                                  highlightColor: Colors.grey[100]!,
+                                  child: CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: Colors.grey[300],
                                   ),
-                                  Icon(
-                                    Icons.keyboard_arrow_down,
-                                    color: theme.colorScheme.onSurface,
-                                    size: 20,
-                                  ),
-                                ],
-                              ),
-                              TranslatedText(
-                                _buildAddressExcerpt(),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.7),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Action icons
-                      // Action icons
-                      GestureDetector(
-                        onTap: () async {
-                          // Navigate to Profile screen
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const MyProfileScreen(),
-                            ),
-                          );
-                          // Refresh user data after returning from profile
-                          if (onUserDataUpdated != null) {
-                            onUserDataUpdated!();
-                          }
-                        },
-                        child: isLoadingUserData
-                            ? Shimmer.fromColors(
-                                baseColor: Colors.grey[300]!,
-                                highlightColor: Colors.grey[100]!,
-                                child: CircleAvatar(
+                                )
+                              : CircleAvatar(
                                   radius: 20,
-                                  backgroundColor: Colors.grey[300],
+                                  backgroundColor: Colors.orange,
+                                  backgroundImage:
+                                      userImgUrl != null &&
+                                          userImgUrl!.isNotEmpty
+                                      ? NetworkImage(userImgUrl!)
+                                      : null,
+                                  child:
+                                      userImgUrl == null || userImgUrl!.isEmpty
+                                      ? TranslatedText(
+                                          userName?.isNotEmpty == true
+                                              ? userName!
+                                                    .substring(0, 1)
+                                                    .toUpperCase()
+                                              : 'U',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        )
+                                      : null,
                                 ),
-                              )
-                            : CircleAvatar(
-                                radius: 20,
-                                backgroundColor: Colors.orange,
-                                backgroundImage:
-                                    userImgUrl != null && userImgUrl!.isNotEmpty
-                                    ? NetworkImage(userImgUrl!)
-                                    : null,
-                                child: userImgUrl == null || userImgUrl!.isEmpty
-                                    ? TranslatedText(
-                                        userName?.isNotEmpty == true
-                                            ? userName!
-                                                  .substring(0, 1)
-                                                  .toUpperCase()
-                                            : 'U',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      )
-                                    : null,
+                        ),
+                        // Language Selector
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () {
+                            // Show language selector
+                            showLanguageSelector(context);
+                          },
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: theme.colorScheme.surface,
+                              border: Border.all(
+                                color: theme.colorScheme.primary.withOpacity(
+                                  0.3,
+                                ),
+                                width: 1,
                               ),
-                      ),
-                      // Language Selector
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: () {
-                          // Show language selector
-                          showLanguageSelector(context);
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.colorScheme.surface,
-                            border: Border.all(
-                              color: theme.colorScheme.primary.withOpacity(0.3),
-                              width: 1,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.colorScheme.shadow.withOpacity(
+                                    0.1,
+                                  ),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: theme.colorScheme.shadow.withOpacity(
-                                  0.1,
-                                ),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.translate,
-                            color: theme.colorScheme.primary,
-                            size: 20,
+                            child: Icon(
+                              Icons.translate,
+                              color: theme.colorScheme.primary,
+                              size: 20,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -281,7 +283,7 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
   ) {
     return Container(
       color: Theme.of(context).colorScheme.surface,
-      padding: EdgeInsets.only(top: topPadding),
+      padding: const EdgeInsets.only(top: 22.0),
       child: StoreCategoriesWidget(
         onCategorySelected: onCategorySelected,
         selectedCategoryId: selectedCategoryId,
@@ -290,10 +292,10 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  double get maxExtent => 200.0 + topPadding;
+  double get maxExtent => 200.0; // Increased to protect categories layout
 
   @override
-  double get minExtent => 200.0 + topPadding;
+  double get minExtent => 190.0;
 
   @override
   bool shouldRebuild(covariant StoreCategoriesDelegate oldDelegate) {
@@ -374,81 +376,106 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
         children: [
           // Search Bar
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const GlobalSearchScreen(),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: isDarkMode ? Colors.grey[900] : Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withOpacity(0.1),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 16),
-                          Icon(
-                            Icons.search,
-                            color: theme.colorScheme.primary,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          TranslatedText(
-                            'Search "ice cream"',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const GlobalSearchScreen(),
+                  ),
+                );
+              },
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.shadowColor.withOpacity(0.08),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: isDarkMode
+                        ? Colors.white.withOpacity(0.1)
+                        : theme.colorScheme.outline.withOpacity(0.1),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: 20),
+                    Icon(
+                      Icons.search,
+                      color: isDarkMode ? Colors.grey[400] : Colors.black87,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    TranslatedText(
+                      'Search "Exanor"', // Or "Search"
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: isDarkMode
+                            ? Colors.grey[400]
+                            : Colors.grey.shade600,
+                        fontSize: 16,
                       ),
                     ),
-                  ),
+                    const Spacer(),
+                    // Mic Icon
+                    GestureDetector(
+                      onTap: () async {
+                        final result = await showModalBottomSheet<String>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => const VoiceSearchSheet(),
+                        );
+
+                        if (result != null && result.isNotEmpty) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  GlobalSearchScreen(initialQuery: result),
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        height: 40,
+                        width: 40,
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isDarkMode
+                              ? theme.colorScheme.primary.withOpacity(0.2)
+                              : const Color(0xFFFFF0EC), // Light salmon/orange
+                        ),
+                        child: Icon(
+                          Icons.mic_rounded,
+                          color: theme.colorScheme.primary,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                // Mic Icon
-                Container(
-                  height: 48,
-                  width: 48,
-                  decoration: BoxDecoration(
-                    color: isDarkMode ? Colors.grey[900] : Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.mic, color: theme.colorScheme.primary),
-                ),
-              ],
+              ),
             ),
           ),
 
           // Categories List
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const CategorySkeleton()
                 : ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: _categories.length,
                     separatorBuilder: (context, index) =>
-                        const SizedBox(width: 20),
+                        const SizedBox(width: 12),
                     itemBuilder: (context, index) {
                       final category = _categories[index];
                       final categoryId = category['id'];
@@ -461,63 +488,75 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                         onTap: () => widget.onCategorySelected(
                           categoryId == 'all' ? '' : categoryId,
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Image Container
-                            Container(
-                              height: 65,
-                              width: 65,
-                              decoration: BoxDecoration(
-                                color: isDarkMode
-                                    ? Colors.grey[800]
-                                    : Colors.grey[100],
-                                shape: BoxShape.circle,
-                                image: DecorationImage(
-                                  image: NetworkImage(
-                                    category['category_icon'] ?? '',
-                                  ),
-                                  fit: BoxFit.cover,
-                                  onError: (exception, stackTrace) {},
-                                ),
-                              ),
-                              child:
-                                  (category['category_icon'] == null ||
-                                      category['category_icon'] == '')
-                                  ? Icon(
-                                      Icons.category,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(height: 8),
-                            // Text
-                            TranslatedText(
-                              category['category_name'] ?? '',
-                              style: TextStyle(
-                                color: isSelected
-                                    ? theme.colorScheme.onSurface
-                                    : theme.colorScheme.onSurfaceVariant,
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // Selection Indicator
-                            if (isSelected)
+                        child: SizedBox(
+                          width: 85, // Increased width for bigger items
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                               Container(
-                                height: 3,
-                                width: 25,
+                                height: 64, // Bigger bubble 64x64
+                                width: 64,
+                                padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  borderRadius: BorderRadius.circular(1.5),
+                                  color: isDarkMode
+                                      ? const Color(0xFF1E1E1E)
+                                      : Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: isSelected
+                                      ? Border.all(
+                                          color: theme.colorScheme.primary,
+                                          width: 2,
+                                        )
+                                      : Border.all(
+                                          color: isDarkMode
+                                              ? Colors.white.withOpacity(0.1)
+                                              : Colors.transparent,
+                                          width: 1,
+                                        ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.08),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                      spreadRadius: 0,
+                                    ),
+                                  ],
                                 ),
-                              )
-                            else
-                              const SizedBox(height: 3),
-                          ],
+                                child: ClipOval(
+                                  child: Image.network(
+                                    category['category_icon'] ?? '',
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (c, e, s) => Icon(
+                                      Icons.category_outlined,
+                                      color: isSelected
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.onSurfaceVariant,
+                                      size: 28, // Bigger fallback icon
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TranslatedText(
+                                category['category_name'] ?? '',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? theme.colorScheme.primary
+                                      : theme.colorScheme.onSurface,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  fontSize: 12, // Slightly bigger text
+                                  letterSpacing: 0.2,
+                                  height:
+                                      1.1, // Tighter line height for wrapping
+                                ),
+                                maxLines: 2, // Allow 2 lines if needed
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },

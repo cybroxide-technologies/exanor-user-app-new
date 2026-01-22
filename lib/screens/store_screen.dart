@@ -906,28 +906,50 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   Widget _buildSkeletalStoreLoader(ThemeData theme) {
+    bool isDark = theme.brightness == Brightness.dark;
+    final baseColor = isDark
+        ? const Color(0xFF2C2C2C)
+        : const Color(0xFFE0E0E0);
+    final highlightColor = isDark
+        ? const Color(0xFF3D3D3D)
+        : const Color(0xFFF5F5F5);
+
     return Shimmer.fromColors(
-      baseColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
-      highlightColor: theme.colorScheme.surface,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
+      period: const Duration(milliseconds: 1500),
       child: Column(
         children: [
           // Banner skeleton
-          Expanded(flex: 6, child: Container(color: Colors.white)),
+          Expanded(flex: 6, child: Container(color: baseColor)),
           // Info section skeleton
           Expanded(
             flex: 4,
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // Logo skeleton
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 56,
+                    height: 56,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: baseColor,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: theme.colorScheme.surface,
+                        width: 2,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -938,21 +960,43 @@ class _StoreScreenState extends State<StoreScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          height: 20,
-                          width: double.infinity,
+                          height: 18,
+                          width: 180,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: baseColor,
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
                         const SizedBox(height: 8),
                         Container(
-                          height: 14,
-                          width: 150,
+                          height: 12,
+                          width: 100,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: baseColor,
                             borderRadius: BorderRadius.circular(4),
                           ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: baseColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 40,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: baseColor,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -967,40 +1011,78 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   Widget _buildSkeletalProductsLoader(ThemeData theme) {
+    bool isDark = theme.brightness == Brightness.dark;
+    final baseColor = isDark
+        ? const Color(0xFF2C2C2C)
+        : const Color(0xFFE0E0E0);
+    final highlightColor = isDark
+        ? const Color(0xFF3D3D3D)
+        : const Color(0xFFF5F5F5);
+
     return Shimmer.fromColors(
-      baseColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
-      highlightColor: theme.colorScheme.surface,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
+      period: const Duration(milliseconds: 1500),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: 5,
+        itemCount: 6,
         itemBuilder: (context, index) {
           return Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: theme.colorScheme.outline.withOpacity(0.05),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        height: 20,
+                        height: 18,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.grey[300],
+                          color: baseColor,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                       const SizedBox(height: 8),
                       Container(
-                        height: 16,
-                        width: 100,
+                        height: 14,
+                        width: 80,
                         decoration: BoxDecoration(
-                          color: Colors.grey[300],
+                          color: baseColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 12,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: baseColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        height: 12,
+                        width: 150,
+                        decoration: BoxDecoration(
+                          color: baseColor,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -1012,8 +1094,8 @@ class _StoreScreenState extends State<StoreScreen> {
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
+                    color: baseColor,
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
               ],

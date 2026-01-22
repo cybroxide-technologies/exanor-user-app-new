@@ -6,6 +6,7 @@ import 'package:exanor/services/api_service.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:exanor/models/store_model.dart';
 import 'package:exanor/models/product_model.dart';
 
 import 'package:exanor/components/custom_cached_network_image.dart';
@@ -59,6 +60,11 @@ class _CartScreenState extends State<CartScreen> {
   bool _isOrderPlaceable = false;
   bool _isInitializingOrder = false;
   String _orderInitMessage = "";
+
+  // Coupons State
+  List<Coupon> _storeCoupons = [];
+  bool _isLoadingCoupons = false;
+  String? _selectedCouponCode;
 
   // Countdown Timer State
   bool _isCountingDown = false;
@@ -215,6 +221,7 @@ class _CartScreenState extends State<CartScreen> {
       _fetchOrderMethods(),
       _fetchPaymentMethods(),
       _loadAddressDetails(),
+      _fetchStoreCoupons(),
     ]);
 
     // Then fetch cart data
@@ -258,7 +265,7 @@ class _CartScreenState extends State<CartScreen> {
 
     try {
       final requestBody = {
-        "coupon_code": "", // TODO: Add coupon support if needed
+        "coupon_code": _selectedCouponCode ?? "",
         "lat": _currentLat,
         "lng": _currentLng,
         "order_method_id": _selectedOrderMethodId,
@@ -384,7 +391,7 @@ class _CartScreenState extends State<CartScreen> {
     }
     try {
       final requestBody = {
-        "coupon_code": "",
+        "coupon_code": _selectedCouponCode ?? "",
         "store_id": widget.storeId,
         "order_method_id": _selectedOrderMethodId ?? "",
         "user_address_id": _currentAddressId,
@@ -757,6 +764,57 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
+  Future<void> _fetchStoreCoupons() async {
+    if (mounted) setState(() => _isLoadingCoupons = true);
+    try {
+      // Use get-stores to fetch store details including coupons
+      // Since we have storeId, we can filter by it or just use the same call as StoreScreen
+      // However, /get-stores/ usually returns a list. We need to find our store.
+      // StoreScreen uses: user_address_id, store_id, page=1.
+
+      // Wait for address to be loaded if possible, otherwise use widget.userAddressId
+      final addressId = _currentAddressId.isNotEmpty
+          ? _currentAddressId
+          : widget.userAddressId;
+
+      final requestBody = {
+        "user_address_id": addressId,
+        "store_id": widget.storeId,
+        "page": 1,
+      };
+
+      final response = await ApiService.post(
+        '/get-stores/',
+        body: requestBody,
+        useBearerToken: true,
+      );
+
+      if (response['data'] != null && response['data']['status'] == 200) {
+        final responseData = response['data'];
+        final storesList = (responseData['response'] as List)
+            .map((item) => Store.fromJson(item))
+            .toList();
+
+        if (storesList.isNotEmpty) {
+          final store = storesList.first;
+          if (mounted) {
+            setState(() {
+              _storeCoupons = store.coupons;
+              _isLoadingCoupons = false;
+            });
+          }
+        } else {
+          if (mounted) setState(() => _isLoadingCoupons = false);
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingCoupons = false);
+      }
+    } catch (e) {
+      print("Error fetching coupons: $e");
+      if (mounted) setState(() => _isLoadingCoupons = false);
+    }
+  }
+
   void _showPaymentMethodSelector() {
     showModalBottomSheet(
       context: context,
@@ -900,7 +958,7 @@ class _CartScreenState extends State<CartScreen> {
       }
 
       final requestBody = {
-        "coupon_code": "", // Empty string as per requirement
+        "coupon_code": _selectedCouponCode ?? "",
         "lat": _currentLat,
         "lng": _currentLng,
         "order_method_id": _selectedOrderMethodId,
@@ -1392,6 +1450,215 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  void _showCouponsBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TranslatedText(
+                        "Available Coupons",
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(),
+
+              Expanded(
+                child: _storeCoupons.isEmpty
+                    ? Center(
+                        child: TranslatedText(
+                          "No coupons available",
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _storeCoupons.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          final coupon = _storeCoupons[index];
+                          final isSelected =
+                              _selectedCouponCode == coupon.couponCode;
+
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: theme.cardColor,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.green
+                                    : theme.dividerColor,
+                                width: isSelected ? 2 : 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.shadowColor.withOpacity(0.05),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(16),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedCouponCode = coupon.couponCode;
+                                  });
+                                  Navigator.pop(context);
+
+                                  // Re-fetch cart data with new coupon
+                                  _fetchCartData(forceLoading: true);
+                                  _initializeOrder();
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: TranslatedText(
+                                        'Coupon "${coupon.couponCode}" applied!',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    children: [
+                                      // Coupon Icon / Image
+                                      Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.percent_rounded,
+                                          color: Colors.orange,
+                                          size: 28,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              coupon.couponCode.toUpperCase(),
+                                              style: theme.textTheme.titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                    letterSpacing: 1.0,
+                                                  ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              coupon.description,
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
+                                                    color: theme
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color
+                                                        ?.withOpacity(0.7),
+                                                  ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    theme.brightness ==
+                                                        Brightness.dark
+                                                    ? Colors.grey[800]
+                                                    : Colors.grey[200],
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                "Min Order: ₹${coupon.minimumAmount}",
+                                                style: theme.textTheme.bodySmall
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                          size: 24,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1418,6 +1685,22 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     final items = _cartData!['items_available'] as List? ?? [];
+
+    double totalSavings = 0.0;
+    try {
+      if (_cartData!['cart_total'] != null) {
+        for (var e in (_cartData!['cart_total'] as List)) {
+          if ((e['value'] as num) < 0) totalSavings += (e['value'] as num);
+        }
+      }
+      if (_cartData!['platform_fees'] != null) {
+        for (var e in (_cartData!['platform_fees'] as List)) {
+          if ((e['value'] as num) < 0) totalSavings += (e['value'] as num);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error calculating savings: $e');
+    }
     // If items_available is empty, maybe check product_in_cart?
     // User sample has items in items_available.
 
@@ -1605,6 +1888,15 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ),
 
+              // Add method to show coupon sheet
+              // Placement here is invalid, it must be outside build or inside _showCouponsBottomSheet definition
+
+              // Since I am inside build method's list, I can't define functions here.
+              // I will add the function at the end of the class.
+
+              // Continuing inside Column children...
+              /* ... */
+
               // Product Suggestions
               if (_isLoadingSuggestions)
                 const Padding(
@@ -1684,25 +1976,107 @@ class _CartScreenState extends State<CartScreen> {
                 ),
 
               // Coupons
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: theme.cardColor, // Use theme card color
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: theme.dividerColor),
-                ),
-                child: ListTile(
-                  leading: const Icon(Icons.percent, color: Colors.blue),
-                  title: const TranslatedText(
-                    "View all coupons",
-                    style: TextStyle(fontWeight: FontWeight.bold),
+              if (!_isLoadingCoupons && _storeCoupons.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: theme.dividerColor),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.shadowColor.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onTap: () {
-                    // Navigate to coupons
-                  },
+                  child: Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(16),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: _showCouponsBottomSheet,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _selectedCouponCode != null
+                                    ? Colors.green.withOpacity(0.1)
+                                    : Colors.blue.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.local_offer_rounded,
+                                color: _selectedCouponCode != null
+                                    ? Colors.green
+                                    : Colors.blue,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TranslatedText(
+                                    _selectedCouponCode != null
+                                        ? "Coupon Applied"
+                                        : "Apply Coupon",
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: _selectedCouponCode != null
+                                              ? Colors.green
+                                              : theme
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.color,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  TranslatedText(
+                                    _selectedCouponCode != null
+                                        ? "Code: $_selectedCouponCode"
+                                        : "Save more with coupons",
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: theme.textTheme.bodyMedium?.color
+                                          ?.withOpacity(0.7),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (_selectedCouponCode != null)
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.close,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedCouponCode = null;
+                                  });
+                                  // Update cart without coupon
+                                  _fetchCartData(forceLoading: true);
+                                  _initializeOrder();
+                                },
+                              )
+                            else
+                              const Icon(
+                                Icons.arrow_forward_ios_rounded,
+                                size: 16,
+                                color: Colors.grey,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
               const SizedBox(height: 24),
 
               // Location Details Card
@@ -1814,10 +2188,11 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Item Total
+                    // Item Total from cart_total
                     ...(_cartData!['cart_total'] as List).map<Widget>((e) {
-                      if ((e['value'] as num) == 0)
-                        return const SizedBox.shrink();
+                      final val = (e['value'] as num);
+                      if (val == 0) return const SizedBox.shrink();
+                      final isDiscount = val < 0;
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
@@ -1825,15 +2200,111 @@ class _CartScreenState extends State<CartScreen> {
                           children: [
                             TranslatedText(
                               e['title'],
-                              style: TextStyle(color: Colors.grey[700]),
+                              style: TextStyle(
+                                color: isDiscount
+                                    ? Colors.green[700]
+                                    : Colors.grey[700],
+                              ),
                             ),
                             TranslatedText(
-                              '₹${(e['value'] as num).toStringAsFixed(2)}',
+                              '₹${val.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: isDiscount ? Colors.green[700] : null,
+                              ),
                             ),
                           ],
                         ),
                       );
                     }).toList(),
+
+                    // Platform Fees (Coupons, etc)
+                    if (_cartData!['platform_fees'] != null)
+                      ...(_cartData!['platform_fees'] as List).map<Widget>((e) {
+                        final val = (e['value'] as num);
+                        // Show even if 0 if it's a coupon, or strictly non-zero?
+                        // User complained about not seeing details. Let's show it if it's explicitly explicitly returned.
+                        // But usually 0 value lines are hidden.
+                        // However, for coupons, users check for confirmation.
+                        // Let's hide if 0 UNLESS it contains "Coupon" in title?
+                        // For safety, let's just hide 0.0 like before, BUT if the user's issue is specifically that they see -0.0 and it's hidden,
+                        // then we should show it.
+                        // Let's try showing everything from platform_fees for now, as usually these are explicit fees/discounts.
+                        // Actually, I'll filter 0.
+                        if (val == 0 &&
+                            !(e['title'].toString().toLowerCase().contains(
+                              'coupon',
+                            ))) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final isDiscount = val < 0;
+                        // Determine display string.
+                        // If it's a discount (negative), show as -₹X.XX
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              TranslatedText(
+                                e['title'],
+                                style: TextStyle(
+                                  color: isDiscount
+                                      ? Colors.green[700]
+                                      : Colors.grey[700],
+                                ),
+                              ),
+                              TranslatedText(
+                                '₹${val.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  color: isDiscount ? Colors.green[700] : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+
+                    if (totalSavings < 0) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                        child: Divider(),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const TranslatedText(
+                              "Total Savings",
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            TranslatedText(
+                              "₹${totalSavings.abs().toStringAsFixed(2)}",
+                              style: const TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
 
                     const Divider(),
                     const SizedBox(height: 8),

@@ -1,11 +1,12 @@
 import 'package:exanor/components/translation_widget.dart';
+import 'package:exanor/components/home_screen_skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'; // Added for ScrollDirection
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:exanor/models/store_model.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/components/custom_sliver_app_bar.dart';
-import 'package:exanor/components/liquid_glass_bottom_nav.dart';
+import 'package:exanor/components/professional_bottom_nav.dart';
 import 'package:exanor/screens/store_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -253,16 +254,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   // 2. Content Body
                   if (_isLoading)
-                    const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()),
-                    )
+                    const HomeScreenSkeleton()
                   else
                     SliverPadding(
                       padding: const EdgeInsets.only(
                         left: 16,
                         right: 16,
-                        top: 16,
-                        bottom: 90, // Reduced from 120 since nav bar is smaller
+                        top: 4, // Reduced from 16
+                        bottom: 80,
                       ),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate(
@@ -281,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             }
 
                             return Padding(
-                              padding: const EdgeInsets.only(bottom: 16.0),
+                              padding: const EdgeInsets.only(bottom: 20.0),
                               child: _buildStoreCard(_stores[index], theme),
                             );
                           },
@@ -295,24 +294,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
             // Animated Bottom Navigation
             AnimatedPositioned(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
+              duration: const Duration(milliseconds: 500),
+              curve: Curves.easeOutQuart,
               left: 0,
               right: 0,
-              bottom: _isBottomNavVisible ? 0 : -100, // Move off screen
+              bottom: _isBottomNavVisible
+                  ? 0
+                  : -200, // Move completely off-screen
               child: SafeArea(
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: _isBottomNavVisible ? 1.0 : 0.0,
-                  curve: Curves.easeInOut,
-                  child: LiquidGlassBottomNav(
-                    currentIndex: _bottomNavIndex,
-                    onTap: (index) {
-                      setState(() {
-                        _bottomNavIndex = index;
-                      });
-                    },
-                  ),
+                child: ProfessionalBottomNav(
+                  currentIndex: _bottomNavIndex,
+                  onTap: (index) {
+                    setState(() {
+                      _bottomNavIndex = index;
+                    });
+                  },
                 ),
               ),
             ),
@@ -323,215 +319,371 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildStoreCard(Store store, ThemeData theme) {
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => StoreScreen(storeId: store.id),
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
           ),
-        );
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: theme.colorScheme.outline.withOpacity(0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Banner Image
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => StoreScreen(storeId: store.id),
               ),
-              child: Stack(
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Image Section with Prominent Overlay
+              Stack(
                 children: [
-                  Image.network(
-                    store.storeBannerImgUrl,
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 140,
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        child: const Center(
-                          child: Icon(Icons.image_not_supported),
-                        ),
-                      );
-                    },
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                    child: AspectRatio(
+                      aspectRatio: 21 / 10, // Slightly improved aspect ratio
+                      child: Image.network(
+                        store.storeBannerImgUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_not_supported,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                  if (store.isFeatured)
+                  // Gradient Overlay for Text Visibility
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(20),
+                        ),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.6),
+                          ],
+                          stops: const [0.6, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Sponsored Tag
+                  if (store.isSponsored)
                     Positioned(
                       top: 12,
-                      left: 12,
+                      right: 12,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: const Text(
+                          'Ad',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  // featured Tag
+                  if (store.isFeatured)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
                           color: theme.colorScheme.primary,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: TranslatedText(
-                          'Featured',
-                          style: theme.textTheme.labelSmall?.copyWith(
+                        child: const Text(
+                          'FEATURED',
+                          style: TextStyle(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
 
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Store Logo
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: theme.colorScheme.outline.withOpacity(0.2),
+                  // Time & Distance Pill (Bottom Right of Image)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
                       ),
-                      image: DecorationImage(
-                        image: NetworkImage(store.storeLogoImgUrl),
-                        fit: BoxFit.cover,
-                        onError:
-                            (exception, stackTrace) {}, // Handled by default
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time_filled_rounded,
+                            size: 14,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            store.fulfillmentSpeed,
+                            style: const TextStyle(
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                ],
+              ),
 
-                  const SizedBox(width: 12),
-
-                  // Details
-                  Expanded(
-                    child: Column(
+              // 2. Content Info
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TranslatedText(
-                          store.storeName,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        TranslatedText(
-                          '${store.category} • ${store.area}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.timer_outlined,
-                              size: 14,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 4),
-                            TranslatedText(
-                              store.fulfillmentSpeed,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-
-                            if (store.averageRating > 0) ...[
-                              const SizedBox(width: 12),
-                              Icon(
-                                Icons.star_rounded,
-                                size: 16,
-                                color: Colors.amber,
-                              ),
-                              const SizedBox(width: 2),
+                        // Name and Categories
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               TranslatedText(
-                                store.averageRating.toStringAsFixed(1),
-                                style: theme.textTheme.labelSmall?.copyWith(
+                                store.storeName,
+                                style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                  height: 1.2,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              TranslatedText(
-                                ' (${store.ratingCount})',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.5),
-                                ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[700],
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.star,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    store.averageRating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    width: 3,
+                                    height: 3,
+                                    decoration: BoxDecoration(
+                                      color: theme.colorScheme.onSurface
+                                          .withOpacity(0.3),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '${store.category} • ${store.area}',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme.colorScheme.onSurface
+                                                .withOpacity(0.6),
+                                            fontSize: 12,
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
-                          ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
 
-            // Bottom Offer Section (if available)
-            if (store.bottomOfferTitle.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.05),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(16),
-                  ),
-                  border: Border(
-                    top: BorderSide(
-                      color: theme.colorScheme.outline.withOpacity(0.1),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.discount_outlined,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TranslatedText(
-                        store.bottomOfferTitle,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 12),
+
+                    // 3. Offers Section (Compact & Premium)
+                    if (store.coupons.isNotEmpty &&
+                        store.coupons.any((c) => c.amount > 0)) ...[
+                      Container(
+                        height: 1,
+                        width: double.infinity,
+                        color: theme.colorScheme.outline.withOpacity(0.1),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.discount_rounded,
+                            size: 18,
+                            color: theme.colorScheme.secondary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Builder(
+                              builder: (context) {
+                                final validCoupons = store.coupons
+                                    .where((c) => c.amount > 0)
+                                    .toList();
+                                if (validCoupons.isEmpty)
+                                  return const SizedBox();
+                                final coupon =
+                                    validCoupons.first; // Show main offer
+
+                                final isPercent = coupon.isPercentDiscountType;
+                                final amount = coupon.amount.toInt();
+                                final offerText = isPercent
+                                    ? '$amount% OFF'
+                                    : 'Save ₹$amount';
+
+                                String subText = "";
+                                if (isPercent &&
+                                    coupon.maximumDiscountAmountLimit > 0) {
+                                  subText =
+                                      "up to ₹${coupon.maximumDiscountAmountLimit.toInt()}";
+                                } else if (coupon.minimumAmount > 0) {
+                                  subText =
+                                      "on orders above ₹${coupon.minimumAmount.toInt()}";
+                                }
+
+                                return RichText(
+                                  text: TextSpan(
+                                    style: TextStyle(
+                                      fontFamily: theme
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.fontFamily,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Colors.black87,
+                                      fontSize: 12,
+                                    ),
+                                    children: [
+                                      TextSpan(
+                                        text: offerText,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          color: theme.colorScheme.secondary,
+                                        ),
+                                      ),
+                                      if (subText.isNotEmpty)
+                                        TextSpan(text: " $subText"),
+                                    ],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else if (store.bottomOfferTitle.isNotEmpty) ...[
+                      Container(
+                        height: 1,
+                        width: double.infinity,
+                        color: theme.colorScheme.outline.withOpacity(0.1),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.stars_rounded,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              store.bottomOfferTitle,
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ),
     );

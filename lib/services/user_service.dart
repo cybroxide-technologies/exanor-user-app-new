@@ -1,5 +1,6 @@
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/models.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class UserService {
   // Cache all users to implement pagination
@@ -156,5 +157,102 @@ class UserService {
   /// Clear cached users (useful for refresh)
   static void clearCache() {
     _cachedUsers = null;
+  }
+
+  /// Update current user profile
+  ///
+  /// Sends a PUT request to update-user-data/ with the provided fields.
+  /// Returns the full response map which includes status, response message, tokens, and user_data.
+  static Future<Map<String, dynamic>> updateUserProfile({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String gender,
+  }) async {
+    try {
+      final response = await ApiService.put(
+        '/update-user-data/',
+        body: {
+          'data': {
+            'first_name': firstName,
+            'last_name': lastName,
+            'email': email,
+            'gender': gender,
+            // "date_of_birth_time_since_epoch": "" // Optional as per requirement
+          },
+        },
+        useBearerToken: true,
+      );
+
+      if (response['data'] != null &&
+          response['data'] is Map<String, dynamic>) {
+        return response['data'] as Map<String, dynamic>;
+      } else {
+        throw ApiException(
+          'Invalid response format from server: ${response['statusCode']}',
+        );
+      }
+    } catch (e) {
+      if (e is ApiException) {
+        rethrow;
+      } else {
+        throw ApiException('Failed to update profile: ${e.toString()}');
+      }
+    }
+  }
+
+  /// Fetch user profile from API and update local storage using POST /view-user-data/
+  static Future<void> viewUserData() async {
+    try {
+      final response = await ApiService.post(
+        '/view-user-data/',
+        body: {}, // Empty body as per sample request
+        useBearerToken: true,
+      );
+
+      if (response['data'] != null &&
+          response['data']['response'] is List &&
+          (response['data']['response'] as List).isNotEmpty) {
+        final userData =
+            (response['data']['response'] as List).first
+                as Map<String, dynamic>;
+        final prefs = await SharedPreferences.getInstance();
+
+        await prefs.setString('first_name', userData['first_name'] ?? '');
+        await prefs.setString('last_name', userData['last_name'] ?? '');
+        await prefs.setString('user_email', userData['email'] ?? '');
+        await prefs.setString('user_id', userData['id']?.toString() ?? '');
+
+        if (userData['img_url'] != null) {
+          await prefs.setString('user_image', userData['img_url']);
+        }
+
+        if (userData['phone_number'] != null) {
+          await prefs.setString(
+            'user_phone',
+            userData['phone_number'].toString(),
+          );
+        }
+
+        if (userData['gender'] != null) {
+          await prefs.setString('user_gender', userData['gender'].toString());
+        }
+
+        if (userData['date_of_birth'] != null) {
+          await prefs.setString(
+            'date_of_birth',
+            userData['date_of_birth'].toString(),
+          );
+        }
+      } else {
+        throw ApiException('Invalid response format or empty user data');
+      }
+    } catch (e) {
+      if (e is ApiException) {
+        rethrow;
+      } else {
+        throw ApiException('Failed to fetch user data: ${e.toString()}');
+      }
+    }
   }
 }

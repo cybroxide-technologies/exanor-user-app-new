@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:exanor/components/otp_input_section.dart';
 import 'package:exanor/screens/HomeScreen.dart';
+import 'package:exanor/screens/account_completion_screen.dart';
 import 'package:exanor/screens/location_selection_screen.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -295,49 +296,112 @@ class _SimpleOTPVerificationScreenState
           final status = responseData['status'];
           final message = responseData['message'] as String?;
 
-          print('📊 Response Status: $status');
+          print('📊 Response Status: $status (Type: ${status.runtimeType})');
           print('📝 Response Message: $message');
 
-          if (status == 200 && message == 'Login successful') {
-            print('✅ Login successful - checking existing data...');
+          // Handle status as both int and String (API might return either)
+          final statusCode = status is int
+              ? status
+              : int.tryParse(status.toString());
+          print('🔢 Parsed Status Code: $statusCode');
 
-            final prefs = await SharedPreferences.getInstance();
-            // Check if user has previously stored data (using user_id as proxy)
-            final bool hasExistingData = prefs.containsKey('user_id');
-            print('📂 Existing user data found: $hasExistingData');
+          if (statusCode == 200) {
+            print('✅ Authentication successful - storing tokens and user data');
 
-            // Store/Update access token
+            // Store access token
             if (responseData['access_token'] != null) {
               await _storeToken('access_token', responseData['access_token']);
             }
 
-            // Store/Update CSRF token
+            // Store CSRF token
             if (responseData['csrf_token'] != null) {
               await _storeToken('csrf_token', responseData['csrf_token']);
             }
 
-            // Store/Update user data
+            // Store user data
             if (responseData['user_data'] != null) {
               await _storeUserData(responseData['user_data']);
             }
 
-            if (hasExistingData) {
-              print('🎉 Existing user - navigating to HomeScreen');
+            print('🎉 All data stored successfully');
+
+            // Check if this is a new user or existing user
+            if (message == 'Login successful') {
+              // Registered user - navigate to HomeScreen
+              print('🏠 Existing user - navigating to HomeScreen');
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const HomeScreen()),
                 (route) => false,
               );
-            } else {
+            } else if (message == 'User created') {
+              // New user - check if profile needs completion
+              final userData = responseData['user_data'];
+              final firstName = userData['first_name'] as String?;
+              final lastName = userData['last_name'] as String?;
+              final gender = userData['gender'] as String?;
+              final dateOfBirth = userData['date_of_birth'] as String?;
+
+              // Debug logging
+              print('👤 User Data Received:');
+              print('   - First Name: "$firstName"');
+              print('   - Last Name: "$lastName"');
+              print('   - Gender: "$gender"');
+              print('   - Date of Birth: "$dateOfBirth"');
+
+              // Check if the user has default/undefined values
+              final needsProfileCompletion =
+                  firstName == 'unnamed' ||
+                  lastName == 'user' ||
+                  gender == 'undefined' ||
+                  dateOfBirth == null ||
+                  dateOfBirth.isEmpty ||
+                  firstName == null ||
+                  lastName == null ||
+                  gender == null;
+
+              print('🔍 Profile Completion Check:');
+              print('   - firstName == "unnamed": ${firstName == 'unnamed'}');
+              print('   - lastName == "user": ${lastName == 'user'}');
+              print('   - gender == "undefined": ${gender == 'undefined'}');
+              print('   - dateOfBirth == null: ${dateOfBirth == null}');
               print(
-                '🆕 New user setup - navigating to LocationSelectionScreen',
+                '   - dateOfBirth.isEmpty: ${dateOfBirth?.isEmpty ?? true}',
               );
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const LocationSelectionScreen(),
-                ),
-                (route) => false,
+              print('   - firstName == null: ${firstName == null}');
+              print('   - lastName == null: ${lastName == null}');
+              print('   - gender == null: ${gender == null}');
+              print('   - Needs Completion: $needsProfileCompletion');
+
+              if (needsProfileCompletion) {
+                // Navigate to AccountCompletionScreen
+                print('📝 ✅ NAVIGATING TO AccountCompletionScreen');
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AccountCompletionScreen(
+                      accessToken: responseData['access_token'],
+                      csrfToken: responseData['csrf_token'],
+                      userData: userData,
+                    ),
+                  ),
+                  (route) => false,
+                );
+              } else {
+                // Profile already complete, go to home
+                print(
+                  '🏠 New user with complete profile - navigating to HomeScreen',
+                );
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HomeScreen()),
+                  (route) => false,
+                );
+              }
+            } else {
+              print('❌ Unknown message: $message');
+              _showErrorSnackBar(
+                message ?? 'Verification failed. Please try again.',
               );
             }
           } else {
@@ -401,6 +465,9 @@ class _SimpleOTPVerificationScreenState
       if (userData['gender'] != null) {
         await prefs.setString('gender', userData['gender']);
       }
+      if (userData['date_of_birth'] != null) {
+        await prefs.setString('date_of_birth', userData['date_of_birth']);
+      }
       if (userData['address_line_1'] != null) {
         await prefs.setString('address_line_1', userData['address_line_1']);
       }
@@ -428,6 +495,7 @@ class _SimpleOTPVerificationScreenState
       print('👤 Name: ${userData['first_name']} ${userData['last_name']}');
       print('📞 Phone: ${userData['phone_number']}');
       print('📧 Email: ${userData['email']}');
+      print('🎂 Date of Birth: ${userData['date_of_birth']}');
       print('📍 Location: ${userData['city']}, ${userData['state']}');
     } catch (e) {
       print('❌ Error storing user data: $e');

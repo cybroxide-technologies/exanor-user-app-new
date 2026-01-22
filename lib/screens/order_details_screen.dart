@@ -24,6 +24,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   bool _isLoadingOrder = true;
   bool _isLoadingProducts = true;
   bool _isLoadingStatuses = true;
+  bool _isPriceBreakdownExpanded = false; // Track price breakdown expansion
   Map<String, dynamic>? _orderData;
   List<dynamic> _products = [];
   List<dynamic> _orderStatuses = [];
@@ -159,6 +160,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           });
         }
         print("✅ Order products fetched: ${_products.length} items");
+        // Debug: Print each product's quantity and item_total
+        for (var product in _products) {
+          print("📦 Product: ${product['product_name']}");
+          print("   Quantity: ${product['quantity']}");
+          print("   Item Total from backend: ${product['item_total']}");
+        }
       } else {
         setState(() {
           _isLoadingProducts = false;
@@ -447,8 +454,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   Widget _buildProductItem(ThemeData theme, Map<String, dynamic> product) {
     final quantity = product['quantity'] ?? 0;
-    final itemTotal =
-        double.tryParse(product['item_total']?.toString() ?? '0') ?? 0.0;
+    // Use amount_including_tax from backend (per-unit price, not total)
+    // Backend sends: amount_including_tax = price per unit, item_total = quantity × price
+    final amountIncludingTax =
+        double.tryParse(product['amount_including_tax']?.toString() ?? '0') ??
+        0.0;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -470,27 +480,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TranslatedText(
-                product['product_name'] ?? 'Unknown Product',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              TranslatedText(
-                '₹${itemTotal.toStringAsFixed(2)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
-                ),
-              ),
-            ],
+          child: TranslatedText(
+            product['product_name'] ?? 'Unknown Product',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
+        // Display per-unit price (amount_including_tax), not total
         TranslatedText(
-          '₹${itemTotal.toStringAsFixed(2)}',
+          '₹${amountIncludingTax.toStringAsFixed(2)}',
           style: theme.textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.bold,
             color: theme.colorScheme.primary,
@@ -597,55 +596,70 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final platformFees = _orderData!['platform_fees'] as List? ?? [];
     final grandTotal = _orderData!['grand_total'] ?? 0.0;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TranslatedText(
-            'Price Breakdown',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _isPriceBreakdownExpanded = !_isPriceBreakdownExpanded;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _isPriceBreakdownExpanded
+                ? theme.colorScheme.primary.withOpacity(0.3)
+                : theme.dividerColor.withOpacity(0.1),
           ),
-          const SizedBox(height: 16),
-
-          // Cart Total Items
-          ...cartTotal.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TranslatedText(
-                    item['title'] ?? '',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Grand Total (Always Visible)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TranslatedText(
+                  'Grand Total',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Row(
+                  children: [
+                    TranslatedText(
+                      '₹${grandTotal.toStringAsFixed(2)}',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
-                  ),
-                  TranslatedText(
-                    '₹${(item['value'] ?? 0.0).toStringAsFixed(2)}',
-                    style: theme.textTheme.bodyMedium,
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 8),
+                    AnimatedRotation(
+                      turns: _isPriceBreakdownExpanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 300),
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: theme.colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
 
-          // Platform Fees
-          if (platformFees.isNotEmpty) ...[
-            const Divider(height: 24),
-            ...platformFees.map((item) {
-              // Only show numeric platform fees
-              if (item['value'] is num ||
-                  (item['value'] is String &&
-                      double.tryParse(item['value']) != null)) {
-                return Padding(
+            // Expandable Breakdown Details
+            if (_isPriceBreakdownExpanded) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 1),
+              const SizedBox(height: 16),
+
+              // Cart Total Items
+              ...cartTotal.map(
+                (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -657,39 +671,49 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                         ),
                       ),
                       TranslatedText(
-                        '₹${(double.tryParse(item['value'].toString()) ?? 0.0).toStringAsFixed(2)}',
+                        '₹${(item['value'] ?? 0.0).toStringAsFixed(2)}',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],
                   ),
-                );
-              }
-              return const SizedBox.shrink();
-            }),
-          ],
-
-          const Divider(height: 24),
-
-          // Grand Total
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TranslatedText(
-                'Grand Total',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
                 ),
               ),
-              TranslatedText(
-                '₹${grandTotal.toStringAsFixed(2)}',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
+
+              // Platform Fees (CGST, SGST, IGST, CESS, etc.)
+              if (platformFees.isNotEmpty) ...[
+                const Divider(height: 24),
+                ...platformFees.map((item) {
+                  // Only show numeric platform fees
+                  if (item['value'] is num ||
+                      (item['value'] is String &&
+                          double.tryParse(item['value']) != null)) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          TranslatedText(
+                            item['title'] ?? '',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.7,
+                              ),
+                            ),
+                          ),
+                          TranslatedText(
+                            '₹${(double.tryParse(item['value'].toString()) ?? 0.0).toStringAsFixed(2)}',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                }),
+              ],
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

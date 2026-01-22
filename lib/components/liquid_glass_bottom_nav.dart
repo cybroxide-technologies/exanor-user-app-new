@@ -240,6 +240,18 @@ class BottomNavTab {
         'lock': Icons.lock,
         'lock_open_outlined': Icons.lock_open_outlined,
         'lock_open': Icons.lock_open,
+
+        // Order/Receipt icons
+        'receipt_long_outlined': Icons.receipt_long_outlined,
+        'receipt_long': Icons.receipt_long,
+        'receipt_outlined': Icons.receipt_outlined,
+        'receipt': Icons.receipt,
+        'history': Icons.history,
+        'history_outlined': Icons.history_outlined,
+        'checklist_rtl_outlined': Icons.checklist_rtl_outlined,
+        'checklist_rtl': Icons.checklist_rtl,
+        'shopping_bag_outlined': Icons.shopping_bag_outlined,
+        'shopping_bag': Icons.shopping_bag,
       };
 
       return iconMap[processedName] ?? Icons.help_outline;

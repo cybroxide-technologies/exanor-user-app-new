@@ -201,12 +201,27 @@ void main() async {
   });
 
   // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  developer.log('✅ Firebase Core initialized successfully', name: 'Main');
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    developer.log('✅ Firebase Core initialized successfully', name: 'Main');
+  } catch (e) {
+    developer.log('❌ Firebase Core initialization failed: $e', name: 'Main');
+    // We cannot proceed without Firebase for many features, but we should try to keep the app alive
+    // potentially showing an error screen later
+  }
 
   // Set up Firebase Messaging background handler
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  developer.log('✅ Firebase Messaging background handler set', name: 'Main');
+  try {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    developer.log('✅ Firebase Messaging background handler set', name: 'Main');
+  } catch (e) {
+    developer.log(
+      '❌ Firebase Messaging handler setup failed: $e',
+      name: 'Main',
+    );
+  }
 
   // NOW we can safely start performance tracing after Firebase is initialized
   developer.log('📊 Starting app startup performance trace...', name: 'Main');
@@ -305,20 +320,28 @@ void main() async {
       });
 
   // Initialize Mobile Ads SDK (run in parallel)
-  final adsFuture = _initializeMobileAds()
-      .then((_) {
-        developer.log(
-          '✅ Mobile Ads SDK initialized successfully',
-          name: 'Main',
-        );
-      })
-      .catchError((e) {
-        developer.log(
-          '❌ Mobile Ads SDK initialization failed: $e',
-          name: 'Main',
-        );
-        developer.log('📝 Will continue without ads', name: 'Main');
-      });
+  // Skip in debug mode to prevent video decoder crashes on some devices
+  final adsFuture = kDebugMode
+      ? Future<void>(() {
+          developer.log(
+            '🐛 Debug mode: Skipping Mobile Ads SDK initialization',
+            name: 'Main',
+          );
+        })
+      : _initializeMobileAds()
+            .then((_) {
+              developer.log(
+                '✅ Mobile Ads SDK initialized successfully',
+                name: 'Main',
+              );
+            })
+            .catchError((e) {
+              developer.log(
+                '❌ Mobile Ads SDK initialization failed: $e',
+                name: 'Main',
+              );
+              developer.log('📝 Will continue without ads', name: 'Main');
+            });
 
   // Initialize Analytics Service (run in parallel)
   final analyticsFuture =

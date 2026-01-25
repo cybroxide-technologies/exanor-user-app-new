@@ -1,8 +1,11 @@
+import 'dart:ui' as ui;
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/screens/order_details_screen.dart';
 import 'package:exanor/services/api_service.dart';
+import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:exanor/components/voice_search_sheet.dart';
 
 class OrdersListScreen extends StatefulWidget {
   final String? storeId;
@@ -14,14 +17,27 @@ class OrdersListScreen extends StatefulWidget {
 }
 
 class _OrdersListScreenState extends State<OrdersListScreen> {
+  // Tab State
+  int _selectedTabIndex = 0; // 0: Processing, 1: Delivered, 2: Cancelled
+  final List<String> _tabs = ['Processing', 'Delivered', 'Cancelled'];
+
+  // Scroll & Data State
   final ScrollController _scrollController = ScrollController();
-  List<dynamic> _orders = [];
+  List<dynamic> _allOrders = []; // Store all fetched orders
+  List<dynamic> _filteredOrders = []; // Store filtered orders
   bool _isLoading = true;
   bool _isLoadingMore = false;
   bool _hasNextPage = false;
   int _currentPage = 1;
   String? _effectiveStoreId;
   String? _errorMessage;
+
+  // Search State
+  bool _isSearchExpanded = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  // Header State
+  bool _isScrolled = false;
 
   @override
   void initState() {
@@ -35,24 +51,33 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   void _init() {
-    // Try to get storeId from arguments if not provided in widget
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     _effectiveStoreId = widget.storeId ?? args?['storeId'];
-
     _fetchOrders();
   }
 
   void _onScroll() {
+    // Pagination Logic
     if (_scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent * 0.9 &&
         !_isLoadingMore &&
         _hasNextPage) {
       _fetchOrders(isLoadMore: true);
+    }
+
+    // Header Logic
+    final isScrolled =
+        _scrollController.hasClients && _scrollController.offset > 10;
+    if (isScrolled != _isScrolled) {
+      setState(() {
+        _isScrolled = isScrolled;
+      });
     }
   }
 
@@ -83,12 +108,14 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         if (mounted) {
           setState(() {
             if (isLoadMore) {
-              _orders.addAll(newOrders);
+              _allOrders.addAll(newOrders);
               _currentPage++;
             } else {
-              _orders = newOrders;
+              _allOrders = newOrders;
               _currentPage = 1;
             }
+
+            _applyFilter(); // Update visible list
 
             if (pagination != null) {
               _hasNextPage = pagination['has_next'] ?? false;
@@ -118,17 +145,76 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     }
   }
 
+  void _applyFilter() {
+    setState(() {
+      if (_allOrders.isEmpty) {
+        _filteredOrders = [];
+        return;
+      }
+
+      final query = _searchController.text.toLowerCase();
+
+      _filteredOrders = _allOrders.where((order) {
+        // Status Filter
+        final status = (order['status'] ?? '').toString().toLowerCase();
+        bool statusMatch = false;
+        switch (_selectedTabIndex) {
+          case 0: // Processing
+            statusMatch =
+                status != 'order_completed' &&
+                status != 'delivered' &&
+                status != 'order_cancelled' &&
+                status != 'order_returned';
+            break;
+          case 1: // Delivered
+            statusMatch = status == 'order_completed' || status == 'delivered';
+            break;
+          case 2: // Cancelled
+            statusMatch =
+                status == 'order_cancelled' || status == 'order_returned';
+            break;
+        }
+
+        // Search Filter
+        bool searchMatch = true;
+        if (query.isNotEmpty) {
+          final id = (order['id'] ?? '').toString().toLowerCase();
+          final products = (order['product_names'] ?? '')
+              .toString()
+              .toLowerCase();
+          final store = (order['store_name'] ?? '').toString().toLowerCase();
+          searchMatch =
+              id.contains(query) ||
+              products.contains(query) ||
+              store.contains(query);
+        }
+
+        return statusMatch && searchMatch;
+      }).toList();
+    });
+  }
+
+  void _onTabSelected(int index) {
+    setState(() {
+      _selectedTabIndex = index;
+      _applyFilter();
+    });
+  }
+
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'order_placed':
+      case 'processing':
         return Colors.blue;
       case 'order_confirmed':
         return Colors.orange;
       case 'order_preparing':
         return Colors.amber;
       case 'order_ready':
+      case 'out_for_delivery':
         return Colors.cyan;
       case 'order_completed':
+      case 'delivered':
         return Colors.green;
       case 'order_cancelled':
         return Colors.red;
@@ -144,337 +230,836 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     return '₹${double.tryParse(amount.toString())?.toStringAsFixed(2) ?? '0.00'}';
   }
 
-  String _formatDate(String? timestamp) {
-    if (timestamp == null) return '';
-    try {
-      final date = DateTime.parse(timestamp);
-      return DateFormat('MMM d, y • h:mm a').format(date);
-    } catch (e) {
-      return timestamp;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Define gradient locally to use in the scrollable header part
+    final bgGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: isDark
+          ? [
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+              ),
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+              ),
+            ]
+          : [
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientLightStart(),
+              ),
+              Colors.white,
+            ],
+      stops: const [0.0, 1.0], // Extended to bottom of container
+    );
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const TranslatedText(
-          'My Orders',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        elevation: 0,
-        backgroundColor: theme.colorScheme.surface,
-        foregroundColor: theme.colorScheme.onSurface,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // 1. Scrollable Content
+          _isLoading
+              ? _buildShimmerList(theme, bgGradient)
+              : _buildOrderList(theme, isDark, bgGradient),
+
+          // 2. Fixed Header (Pinned at top)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildHeader(theme, isDark),
+          ),
+        ],
       ),
-      body: _buildBody(theme),
     );
   }
 
-  Widget _buildBody(ThemeData theme) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+  Widget _buildOrderList(ThemeData theme, bool isDark, Gradient bgGradient) {
+    // Header = StatusBar + TopBar(60) + Tabs(60) + Padding
+    final topPadding = MediaQuery.of(context).padding.top;
+    final headerContentHeight = 130.0;
+    final totalHeaderHeight = topPadding + headerContentHeight;
+
+    if (_filteredOrders.isEmpty) {
+      return ListView(
+        padding: EdgeInsets.zero,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: totalHeaderHeight + 20),
+          if (_allOrders.isNotEmpty)
+            _buildEmptyFilterState(theme)
+          else
+            _buildEmptyState(theme),
+        ],
+      );
     }
 
-    if (_errorMessage != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: theme.colorScheme.error),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: TranslatedText(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge,
-              ),
+    return ListView.separated(
+      controller: _scrollController,
+      padding: EdgeInsets.only(top: totalHeaderHeight + 10, bottom: 30),
+      itemCount: _filteredOrders.length + (_isLoadingMore ? 1 : 0),
+      separatorBuilder: (context, index) => const SizedBox(height: 20),
+      itemBuilder: (context, index) {
+        if (index == _filteredOrders.length) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: CircularProgressIndicator(),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => _fetchOrders(),
-              child: const TranslatedText('Retry'),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: _buildPremiumOrderCard(theme, _filteredOrders[index], isDark),
+        );
+      },
+    );
+  }
+
+  Widget _buildPremiumOrderCard(ThemeData theme, dynamic order, bool isDark) {
+    final status = order['status'] ?? 'Unknown';
+    final statusTitle = order['order_status_title'] ?? status;
+    final isDelivered =
+        status.toLowerCase() == 'order_completed' ||
+        status.toLowerCase() == 'delivered';
+
+    String? imageUrl;
+    if (order['product_details'] != null &&
+        (order['product_details'] as List).isNotEmpty) {
+      imageUrl = order['product_details'][0]['image_url'];
+    }
+
+    // Da Vinci Button: Glass + Gradient + Gloss Overlay
+    Widget buildArtisticButton({
+      required VoidCallback onTap,
+      required String label,
+      required IconData icon,
+      required List<Color> baseColors,
+      required Color glowColor,
+    }) {
+      return Container(
+        height: 52, // Slightly more compact
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14), // Reduced curve
+          boxShadow: [
+            BoxShadow(
+              color: glowColor.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Stack(
+            children: [
+              // 1. Base Gradient
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: baseColors,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+              // 2. Glass Overlay
+              BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withOpacity(0.2),
+                        Colors.white.withOpacity(0.0),
+                        Colors.black.withOpacity(0.05),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              // 3. Inner Border
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+              ),
+              // 4. Content
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onTap,
+                  splashColor: Colors.white.withOpacity(0.2),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, color: Colors.white, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black26,
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    if (_orders.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.receipt_long_rounded,
-              size: 64,
-              color: theme.colorScheme.onSurface.withOpacity(0.2),
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(20), // Reduced from 32
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.5)
+                : const Color(0xFF2C3E50).withOpacity(0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+            spreadRadius: -4,
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          // Upper Visuals
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image Window
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16), // Reduced from 24
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  image: imageUrl != null
+                      ? DecorationImage(
+                          image: NetworkImage(imageUrl),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                  color: theme.colorScheme.surfaceContainerHighest,
+                ),
+                child: imageUrl == null
+                    ? Icon(
+                        Icons.restaurant_menu_rounded,
+                        color: theme.colorScheme.onSurface.withOpacity(0.15),
+                        size: 36,
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 16),
+
+              // Typographic Details - Symmetric Layout
+              Expanded(
+                child: SizedBox(
+                  height: 88, // Match image height for symmetry
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment:
+                        MainAxisAlignment.spaceBetween, // Pin top/bottom
+                    children: [
+                      // Product Name (Top)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          order['product_names'] ?? 'Gourmet Order',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w600, // Reduced from w800
+                            fontSize: 17,
+                            height: 1.2,
+                            letterSpacing: -0.3,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      // Price & Status (Bottom)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Wrap(
+                          spacing: 10,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              _formatCurrency(order['grand_total']),
+                              style: TextStyle(
+                                fontFamily:
+                                    theme.textTheme.bodyLarge?.fontFamily,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 12,
+                              color: theme.dividerColor,
+                            ),
+                            Text(
+                              statusTitle.toUpperCase(),
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.6,
+                                ),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // Action Button
+          if (isDelivered)
+            buildArtisticButton(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OrderDetailsScreen(
+                      orderId: order['id'],
+                      storeId: order['store_id'] ?? _effectiveStoreId ?? '',
+                    ),
+                  ),
+                );
+              },
+              label: "Rate Experience",
+              icon: Icons.star_rate_rounded,
+              baseColors: const [Color(0xFFFF8C00), Color(0xFFFF4500)],
+              glowColor: const Color(0xFFFF4500),
+            )
+          else
+            buildArtisticButton(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => OrderDetailsScreen(
+                      orderId: order['id'],
+                      storeId: order['store_id'] ?? _effectiveStoreId ?? '',
+                    ),
+                  ),
+                );
+              },
+              label: "Track Live Order",
+              icon: Icons.near_me_rounded,
+              baseColors: const [Color(0xFF2E86DE), Color(0xFF54A0FF)],
+              glowColor: const Color(0xFF2E86DE),
             ),
-            const SizedBox(height: 16),
-            TranslatedText(
-              'No orders found',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.shopping_bag_outlined,
+            size: 80,
+            color: theme.disabledColor,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "No Orders Yet",
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyFilterState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.filter_list_off, size: 60, color: theme.disabledColor),
+          const SizedBox(height: 16),
+          Text(
+            "No ${_tabs[_selectedTabIndex]} Orders",
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerList(ThemeData theme, Gradient bgGradient) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final headerContentHeight = 130.0;
+    final totalHeaderHeight = topPadding + headerContentHeight;
+
+    return ListView.separated(
+      padding: EdgeInsets.only(top: totalHeaderHeight + 10, bottom: 30),
+      itemCount: 5,
+      separatorBuilder: (_, index) => const SizedBox(height: 20),
+      itemBuilder: (_, index) {
+        return Shimmer.fromColors(
+          baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+          highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme, bool isDark) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    // Animate opacity/blur based on scroll
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      tween: Tween<double>(begin: 0.0, end: _isScrolled ? 1.0 : 0.0),
+      builder: (context, value, child) {
+        final double blurSigma = value * 15.0;
+        // Gradient is always visible (0.95) and becomes slightly more opaque when scrolled (1.0)
+        final double opacity = 0.95 + (value * 0.05);
+
+        final startColor = isDark
+            ? _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+              )
+            : _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientLightStart(),
+              );
+        final endColor = isDark
+            ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkEnd())
+            : Colors.white;
+
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(20),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                  spreadRadius: 3,
+                ),
+              ],
+            ),
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                child: Container(
+                  height:
+                      topPadding +
+                      130, // Fixed height for pinned header including tabs
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        startColor.withOpacity(opacity),
+                        endColor.withOpacity(opacity),
+                      ],
+                    ),
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(20), // Subtler curve
+                    ),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: theme.dividerColor.withOpacity(value * 0.1),
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Top Bar
+                        SizedBox(
+                          height: 60,
+                          child: Stack(
+                            children: [
+                              // Center Title
+                              AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: _isSearchExpanded ? 0.0 : 1.0,
+                                child: Center(
+                                  child: TranslatedText(
+                                    "My Orders",
+                                    style: TextStyle(
+                                      fontSize: 24, // Increased size
+                                      fontWeight: FontWeight.w900, // Extra Bold
+                                      color: theme.colorScheme.onSurface,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              // Left Back Button (Hidden when search expanded)
+                              AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: _isSearchExpanded ? 0.0 : 1.0,
+                                child: IgnorePointer(
+                                  ignoring: _isSearchExpanded,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 20),
+                                      child: _buildBackButton(theme, isDark),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              // Right Search
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(right: 20),
+                                  child: _buildSearchButton(theme, isDark),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Tabs
+                        const SizedBox(height: 10),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: _buildSlidingTabs(theme, isDark),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        );
+      },
+    );
+  }
 
-    return RefreshIndicator(
-      onRefresh: () => _fetchOrders(),
-      child: ListView.separated(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: _orders.length + (_isLoadingMore ? 1 : 0),
-        separatorBuilder: (context, index) => const SizedBox(height: 16),
-        itemBuilder: (context, index) {
-          if (index == _orders.length) {
-            return const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-
-          final order = _orders[index];
-          return _buildOrderCard(theme, order, index);
+  Widget _buildExpandedSearchBar(ThemeData theme) {
+    return Container(
+      key: const ValueKey('expanded'),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: MediaQuery.of(context).size.width - 40,
+                maxWidth: MediaQuery.of(context).size.width - 40,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isSearchExpanded = false;
+                        _searchController.clear();
+                        _applyFilter();
+                      });
+                    },
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        hintText: "Search orders...",
+                        hintStyle: TextStyle(
+                          fontSize: 14,
+                          color: theme.hintColor.withOpacity(0.6),
+                        ),
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 0,
+                          vertical: 0,
+                        ),
+                      ),
+                      onChanged: (val) => _applyFilter(),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () async {
+                      final result = await showModalBottomSheet<String>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => const VoiceSearchSheet(),
+                      );
+                      if (result != null && result.isNotEmpty) {
+                        _searchController.text = result;
+                        _applyFilter();
+                      }
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.mic_rounded,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
         },
       ),
     );
   }
 
-  Widget _buildOrderCard(ThemeData theme, dynamic order, int index) {
-    final statusColor = _getStatusColor(order['status'] ?? '');
-    final isDark = theme.brightness == Brightness.dark;
-    final storeName = order['store_name'] ?? 'Unknown Store';
-    final storeInitial = storeName.isNotEmpty
-        ? storeName[0].toUpperCase()
-        : '?';
+  Color _hexToColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (e) {
+      return Colors.transparent;
+    }
+  }
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 400 + (index * 100)),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 20 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withOpacity(isDark ? 0.3 : 0.05),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+  Widget _buildBackButton(ThemeData theme, bool isDark) {
+    return Container(
+      width: 48, // Increased size
+      height: 48,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.1)
+            : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16), // Squircle
+        border: Border.all(
+          color: theme.colorScheme.onSurface.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: InkWell(
+            onTap: () => Navigator.pop(context),
+            child: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 22, // Increased icon size
+              color: theme.colorScheme.onSurface,
             ),
-          ],
-          border: Border.all(
-            color: theme.dividerColor.withOpacity(0.1),
-            width: 1,
           ),
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => OrderDetailsScreen(
-                    orderId: order['id'],
-                    storeId: order['store_id'] ?? _effectiveStoreId ?? '',
+      ),
+    );
+  }
+
+  Widget _buildSearchButton(ThemeData theme, bool isDark) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
+      width: _isSearchExpanded
+          ? MediaQuery.of(context).size.width - 40
+          : 48, // Increased collapsed size
+      height: 48,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.1)
+            : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16), // Squircle
+        border: Border.all(
+          color: theme.colorScheme.onSurface.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _isSearchExpanded
+                ? _buildExpandedSearchBar(theme)
+                : IconButton(
+                    key: const ValueKey('collapsed'),
+                    icon: Icon(
+                      Icons.search_rounded,
+                      color: theme.colorScheme.onSurface,
+                      size: 26,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isSearchExpanded = true;
+                      });
+                    },
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlidingTabs(ThemeData theme, bool isDark) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.black.withOpacity(0.2)
+            : Colors.white.withOpacity(0.3), // More visible glass effect
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.1)
+              : Colors.white.withOpacity(0.5),
+          width: 1.0,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final tabWidth = constraints.maxWidth / _tabs.length;
+          return Stack(
+            children: [
+              // Sliding Pills Indicator
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves
+                    .easeInOutCubic, // Smooth transition without overshoot
+                left: _selectedTabIndex * tabWidth,
+                top: 4,
+                bottom: 4,
+                width: tabWidth,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Store Header
-                  Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              theme.colorScheme.primary.withOpacity(0.1),
-                              theme.colorScheme.primary.withOpacity(0.2),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Center(
-                          child: Text(
-                            storeInitial,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            TranslatedText(
-                              storeName,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            TranslatedText(
-                              _formatDate(order['timestamp']),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 16,
-                        color: theme.colorScheme.onSurface.withOpacity(0.3),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-                  Divider(
-                    height: 1,
-                    color: theme.dividerColor.withOpacity(0.1),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Order Summary
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            TranslatedText(
-                              'Order #${order['order_number'] ?? 'N/A'}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.5,
-                                ),
-                                fontFamily: 'monospace',
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TranslatedText(
-                              order['product_names'] ?? 'No items',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.8,
-                                ),
-                                height: 1.5,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if ((order['total_items'] ?? 0) > 1) ...[
-                              const SizedBox(height: 4),
-                              TranslatedText(
-                                '+ ${(order['total_items'] ?? 1) - 1} more items',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Footer: Status & Price
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Status Pill
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: statusColor.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: statusColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            TranslatedText(
-                              order['order_status_title'] ??
-                                  order['status'] ??
-                                  'Unknown',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: statusColor,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Price
-                      TranslatedText(
-                        _formatCurrency(order['grand_total']),
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ),
-            ),
-          ),
-        ),
+
+              // Tab Text
+              Row(
+                children: List.generate(_tabs.length, (index) {
+                  final isSelected = _selectedTabIndex == index;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => _onTabSelected(index),
+                      child: Container(
+                        color: Colors.transparent, // Hit test
+                        alignment: Alignment.center,
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontFamily: theme.textTheme.bodyMedium?.fontFamily,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? theme.colorScheme.onSurface
+                                : theme.colorScheme.onSurface.withOpacity(0.6),
+                            fontSize: 13,
+                          ),
+                          child: TranslatedText(_tabs[index]),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

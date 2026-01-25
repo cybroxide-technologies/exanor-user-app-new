@@ -1071,13 +1071,8 @@ class _LiquidGlassBottomNavState extends State<LiquidGlassBottomNav>
           const SizedBox(width: 12),
 
           // QR Scanner FAB (1/5 width)
-          Expanded(
-            flex: 1,
-            child: Center(
-              // Center to keep it circular within the flex space
-              child: _buildQrFab(isDarkMode),
-            ),
-          ),
+          // QR Scanner FAB (Fixed width)
+          _buildQrFab(isDarkMode),
         ],
       ),
     );

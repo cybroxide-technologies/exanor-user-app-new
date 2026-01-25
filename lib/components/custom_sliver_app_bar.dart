@@ -3,11 +3,14 @@ import 'package:exanor/components/voice_search_sheet.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:exanor/screens/my_profile_screen.dart';
 
+import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/services/api_service.dart';
+
 import 'package:shimmer/shimmer.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/components/language_selector.dart';
 
+import 'dart:ui';
 import 'package:exanor/screens/global_search_screen.dart';
 import 'package:exanor/components/home_screen_skeleton.dart';
 
@@ -77,25 +80,52 @@ class CustomSliverAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return SliverAppBar(
-      expandedHeight: 56.0,
+      expandedHeight: 70.0, // Increased to fix 9px overflow
       toolbarHeight: 56.0,
       floating: false,
       pinned: false,
       elevation: 0,
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: isDarkMode
+          ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkStart())
+          : _hexToColor(
+              FirebaseRemoteConfigService.getThemeGradientLightStart(),
+            ), // Match gradient start
       automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
         background: RepaintBoundary(
           child: Container(
-            color: theme.colorScheme.surface,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: isDarkMode
+                    ? [
+                        _hexToColor(
+                          FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                        ),
+                        _hexToColor(
+                          FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+                        ),
+                      ]
+                    : [
+                        _hexToColor(
+                          FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                        ),
+                        _hexToColor(
+                          FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                        ), // Solid Blue to match top
+                      ],
+              ),
+            ),
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.only(
                   left: 16.0,
                   right: 16.0,
-                  top: 8.0,
+                  top: 12.0, // Increased top padding
                   bottom: 0.0,
                 ),
                 child: Column(
@@ -166,7 +196,6 @@ class CustomSliverAppBar extends StatelessWidget {
                           ),
                         ),
 
-                        // Action icons
                         // Action icons
                         GestureDetector(
                           onTap: () async {
@@ -281,21 +310,59 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(
-      color: Theme.of(context).colorScheme.surface,
-      padding: const EdgeInsets.only(top: 22.0),
-      child: StoreCategoriesWidget(
-        onCategorySelected: onCategorySelected,
-        selectedCategoryId: selectedCategoryId,
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Calculate shrink percentage
+    // We want the content to resize as we scroll.
+    // When shrinkOffset increases, we are scrolling down.
+    final double shrinkPercentage = (shrinkOffset / (maxExtent - minExtent))
+        .clamp(0.0, 1.0);
+
+    // Glassmorphism effect
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isDarkMode
+                  ? [
+                      _hexToColor(
+                        FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                      ),
+                      _hexToColor(
+                        FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+                      ),
+                    ]
+                  : [
+                      _hexToColor(
+                        FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                      ),
+                      Colors.white,
+                    ],
+              stops: const [0.0, 1.0],
+            ),
+          ),
+          // Add top padding dynamically to avoid status bar overlap
+          padding: EdgeInsets.only(top: topPadding * shrinkPercentage),
+          child: StoreCategoriesWidget(
+            onCategorySelected: onCategorySelected,
+            selectedCategoryId: selectedCategoryId,
+            shrinkPercentage: shrinkPercentage,
+          ),
+        ),
       ),
     );
   }
 
   @override
-  double get maxExtent => 200.0; // Increased to protect categories layout
+  double get maxExtent => 145.0 + topPadding; // Tighter spacing
 
   @override
-  double get minExtent => 190.0;
+  double get minExtent => 108.0 + topPadding; // Search (58) + Chips (34) + spacing
 
   @override
   bool shouldRebuild(covariant StoreCategoriesDelegate oldDelegate) {
@@ -307,11 +374,13 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
 class StoreCategoriesWidget extends StatefulWidget {
   final Function(String) onCategorySelected;
   final String selectedCategoryId;
+  final double shrinkPercentage;
 
   const StoreCategoriesWidget({
     super.key,
     required this.onCategorySelected,
     required this.selectedCategoryId,
+    this.shrinkPercentage = 0.0,
   });
 
   @override
@@ -330,6 +399,9 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
 
   Future<void> _fetchCategories() async {
     if (!mounted) return;
+
+    // Forced delay to visualize skeleton
+    await Future.delayed(const Duration(seconds: 2));
 
     try {
       final response = await ApiService.post(
@@ -371,12 +443,13 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
     final isDarkMode = theme.brightness == Brightness.dark;
 
     return Container(
-      color: theme.colorScheme.surface,
+      color: Colors.transparent,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Search Bar
+          // Search Bar (Always visible)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -393,9 +466,9 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: theme.shadowColor.withOpacity(0.08),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
+                      color: theme.shadowColor.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                   border: Border.all(
@@ -414,7 +487,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                     ),
                     const SizedBox(width: 12),
                     TranslatedText(
-                      'Search "Exanor"', // Or "Search"
+                      'Search "Exanor"',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: isDarkMode
                             ? Colors.grey[400]
@@ -423,7 +496,6 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                       ),
                     ),
                     const Spacer(),
-                    // Mic Icon
                     GestureDetector(
                       onTap: () async {
                         final result = await showModalBottomSheet<String>(
@@ -432,7 +504,6 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                           backgroundColor: Colors.transparent,
                           builder: (context) => const VoiceSearchSheet(),
                         );
-
                         if (result != null && result.isNotEmpty) {
                           Navigator.push(
                             context,
@@ -451,7 +522,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                           shape: BoxShape.circle,
                           color: isDarkMode
                               ? theme.colorScheme.primary.withOpacity(0.2)
-                              : const Color(0xFFFFF0EC), // Light salmon/orange
+                              : const Color(0xFFFFF0EC),
                         ),
                         child: Icon(
                           Icons.mic_rounded,
@@ -466,16 +537,15 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
             ),
           ),
 
-          // Categories List
           Expanded(
-            child: _isLoading
-                ? const CategorySkeleton()
-                : ListView.separated(
+            child: widget.shrinkPercentage > 0.5
+                ? // Compact Layout (Chips)
+                  ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     scrollDirection: Axis.horizontal,
                     itemCount: _categories.length,
                     separatorBuilder: (context, index) =>
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                     itemBuilder: (context, index) {
                       final category = _categories[index];
                       final categoryId = category['id'];
@@ -484,87 +554,171 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                           (widget.selectedCategoryId.isEmpty &&
                               categoryId == 'all');
 
-                      return GestureDetector(
-                        onTap: () => widget.onCategorySelected(
-                          categoryId == 'all' ? '' : categoryId,
+                      return Center(
+                        child: GestureDetector(
+                          onTap: () => widget.onCategorySelected(
+                            categoryId == 'all' ? '' : categoryId,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? (isDarkMode ? Colors.white : Colors.black)
+                                  : (isDarkMode
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.white.withOpacity(0.5)),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected
+                                    ? Colors.transparent
+                                    : Colors.black.withOpacity(0.05),
+                              ),
+                            ),
+                            child: TranslatedText(
+                              category['category_name'] ?? '',
+                              style: TextStyle(
+                                color: isSelected
+                                    ? (isDarkMode ? Colors.black : Colors.white)
+                                    : (isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
                         ),
-                        child: SizedBox(
-                          width: 85, // Increased width for bigger items
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                height: 64, // Bigger bubble 64x64
-                                width: 64,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: isDarkMode
-                                      ? const Color(0xFF1E1E1E)
-                                      : Colors.white,
-                                  shape: BoxShape.circle,
-                                  border: isSelected
-                                      ? Border.all(
-                                          color: theme.colorScheme.primary,
-                                          width: 2,
-                                        )
-                                      : Border.all(
-                                          color: isDarkMode
-                                              ? Colors.white.withOpacity(0.1)
-                                              : Colors.transparent,
-                                          width: 1,
-                                        ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                      spreadRadius: 0,
-                                    ),
-                                  ],
-                                ),
-                                child: ClipOval(
-                                  child: Image.network(
-                                    category['category_icon'] ?? '',
-                                    fit: BoxFit.contain,
-                                    errorBuilder: (c, e, s) => Icon(
-                                      Icons.category_outlined,
-                                      color: isSelected
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.onSurfaceVariant,
-                                      size: 28, // Bigger fallback icon
+                      );
+                    },
+                  )
+                : // Expanded Layout (Bubbles)
+                  _isLoading
+                ? const CategorySkeleton()
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _categories.length,
+                    separatorBuilder: (context, index) => SizedBox(width: 12.0),
+                    itemBuilder: (context, index) {
+                      final category = _categories[index];
+                      final categoryId = category['id'];
+                      final isSelected =
+                          categoryId == widget.selectedCategoryId ||
+                          (widget.selectedCategoryId.isEmpty &&
+                              categoryId == 'all');
+
+                      return Center(
+                        child: GestureDetector(
+                          onTap: () => widget.onCategorySelected(
+                            categoryId == 'all' ? '' : categoryId,
+                          ),
+                          child: SizedBox(
+                            width: 70.0,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Standard Bubble
+                                Container(
+                                  height: 52.0,
+                                  width: 52.0,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: isDarkMode
+                                        ? const Color(0xFF1E1E1E)
+                                        : Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: isSelected
+                                        ? Border.all(
+                                            color: theme.colorScheme.primary,
+                                            width: 2,
+                                          )
+                                        : Border.all(
+                                            color: isDarkMode
+                                                ? Colors.white.withOpacity(0.1)
+                                                : Colors.transparent,
+                                            width: 1,
+                                          ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.08),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                        spreadRadius: 0,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.network(
+                                      category['category_icon'] ?? '',
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (c, e, s) => Icon(
+                                        Icons.category_outlined,
+                                        color: isSelected
+                                            ? theme.colorScheme.primary
+                                            : theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                        size: 24.0,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              TranslatedText(
-                                category['category_name'] ?? '',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurface,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                  fontSize: 12, // Slightly bigger text
-                                  letterSpacing: 0.2,
-                                  height:
-                                      1.1, // Tighter line height for wrapping
+                                const SizedBox(height: 8),
+                                TranslatedText(
+                                  category['category_name'] ?? '',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurface,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    fontSize: 11.0,
+                                    letterSpacing: 0.2,
+                                    height: 1.1,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 2, // Allow 2 lines if needed
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );
                     },
                   ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
+          // Cinematic Fade Line
+          Container(
+            height: 1.5,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  isDarkMode
+                      ? Colors.white.withOpacity(0.3)
+                      : Colors.black.withOpacity(0.1),
+                  Colors.transparent,
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+}
+
+Color _hexToColor(String hex) {
+  try {
+    return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+  } catch (e) {
+    return Colors.transparent;
   }
 }

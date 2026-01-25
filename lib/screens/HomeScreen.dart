@@ -92,6 +92,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onScroll() {
+    // Handle Bottom Nav Visibility
+    if (_scrollController.position.userScrollDirection ==
+        ScrollDirection.reverse) {
+      if (_isBottomNavVisible) setState(() => _isBottomNavVisible = false);
+    } else if (_scrollController.position.userScrollDirection ==
+        ScrollDirection.forward) {
+      if (!_isBottomNavVisible) setState(() => _isBottomNavVisible = true);
+    }
+
     if (_scrollController.hasClients &&
         _scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 200) {
@@ -198,122 +207,97 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       extendBody: true, // Allows content to go under the glass bottom nav
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: (notification) {
-          if (notification.metrics.axis == Axis.vertical) {
-            if (notification.direction == ScrollDirection.reverse &&
-                _isBottomNavVisible) {
-              setState(() {
-                _isBottomNavVisible = false;
-              });
-            } else if (notification.direction == ScrollDirection.forward &&
-                !_isBottomNavVisible) {
-              setState(() {
-                _isBottomNavVisible = true;
-              });
-            }
-          }
-          return true;
-        },
-        child: Stack(
-          children: [
-            RefreshIndicator(
-              onRefresh: _loadAddressData,
-              child: CustomScrollView(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  // 1. Custom Sliver App Bar
-                  CustomSliverAppBar(
-                    addressTitle: _addressTitle,
-                    addressSubtitle: _addressSubtitle,
-                    userName: userName,
-                    isLoadingUserData: _isLoadingUserData,
-                    onAddressUpdated: () {
-                      print("Address updated callback received");
-                      _loadAddressData();
-                    },
-                    onUserDataUpdated: _loadUserData,
-                  ),
-
-                  // 2. Store Categories Sticky Header
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: StoreCategoriesDelegate(
-                      selectedCategoryId: _selectedCategoryId,
-                      topPadding: MediaQuery.of(context).padding.top,
-                      onCategorySelected: (categoryId) {
-                        setState(() {
-                          _selectedCategoryId = categoryId;
-                          _page = 1;
-                        });
-                        _fetchStores();
-                      },
-                    ),
-                  ),
-
-                  // 2. Content Body
-                  if (_isLoading)
-                    const HomeScreenSkeleton()
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.only(
-                        left: 16,
-                        right: 16,
-                        top: 4, // Reduced from 16
-                        bottom: 80,
-                      ),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            if (index == _stores.length) {
-                              return _isMoreLoading
-                                  ? const Center(
-                                      child: Padding(
-                                        padding: EdgeInsets.all(16.0),
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    )
-                                  : const SizedBox.shrink();
-                            }
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 20.0),
-                              child: _buildStoreCard(_stores[index], theme),
-                            );
-                          },
-                          childCount: _stores.length + (_isMoreLoading ? 1 : 0),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // Animated Bottom Navigation
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 500),
-              curve: Curves.easeOutQuart,
-              left: 0,
-              right: 0,
-              bottom: _isBottomNavVisible
-                  ? 0
-                  : -200, // Move completely off-screen
-              child: SafeArea(
-                child: ProfessionalBottomNav(
-                  currentIndex: _bottomNavIndex,
-                  onTap: (index) {
-                    setState(() {
-                      _bottomNavIndex = index;
-                    });
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _loadAddressData,
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // 1. Custom Sliver App Bar
+                CustomSliverAppBar(
+                  addressTitle: _addressTitle,
+                  addressSubtitle: _addressSubtitle,
+                  userName: userName,
+                  isLoadingUserData: _isLoadingUserData,
+                  onAddressUpdated: () {
+                    print("Address updated callback received");
+                    _loadAddressData();
                   },
+                  onUserDataUpdated: _loadUserData,
                 ),
-              ),
+
+                // 2. Store Categories Sticky Header
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: StoreCategoriesDelegate(
+                    selectedCategoryId: _selectedCategoryId,
+                    topPadding: MediaQuery.of(context).padding.top,
+                    onCategorySelected: (categoryId) {
+                      setState(() {
+                        _selectedCategoryId = categoryId;
+                        _page = 1;
+                      });
+                      _fetchStores();
+                    },
+                  ),
+                ),
+
+                // 2. Content Body
+                if (_isLoading)
+                  const HomeScreenSkeleton()
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 4, // Reduced from 16
+                      bottom: 110, // Increased for new static bottom bar
+                    ),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        if (index == _stores.length) {
+                          return _isMoreLoading
+                              ? const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(16.0),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+                        }
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 20.0),
+                          child: _buildStoreCard(_stores[index], theme),
+                        );
+                      }, childCount: _stores.length + (_isMoreLoading ? 1 : 0)),
+                    ),
+                  ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // Animated Bottom Navigation
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            left: 0,
+            right: 0,
+            bottom: _isBottomNavVisible ? 0 : -100,
+            child: ProfessionalBottomNav(
+              currentIndex: _bottomNavIndex,
+              onTap: (index) {
+                setState(() {
+                  _bottomNavIndex = index;
+                });
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

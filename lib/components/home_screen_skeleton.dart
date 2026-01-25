@@ -185,6 +185,8 @@ class CategorySkeleton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       scrollDirection: Axis.horizontal,
       itemCount: 6,
+      physics:
+          const NeverScrollableScrollPhysics(), // Disable scrolling for skeleton
       separatorBuilder: (context, index) => const SizedBox(width: 12),
       itemBuilder: (context, index) {
         return Shimmer.fromColors(

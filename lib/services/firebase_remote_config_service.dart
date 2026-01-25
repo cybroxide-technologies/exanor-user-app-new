@@ -48,6 +48,12 @@ class FirebaseRemoteConfigService {
   // Dashboard section configuration
   static const String _dashboardSectionKey = 'dashboardSection';
 
+  // Theme Gradient Configuration
+  static const String _themeGradientLightStartKey = 'themeGradientLightStart';
+  static const String _themeGradientLightEndKey = 'themeGradientLightEnd';
+  static const String _themeGradientDarkStartKey = 'themeGradientDarkStart';
+  static const String _themeGradientDarkEndKey = 'themeGradientDarkEnd';
+
   // Default values
   static const Map<String, dynamic> _defaults = {
     _baseUrlKey: 'https://development.api.exanor.com/api/v1',
@@ -173,6 +179,12 @@ class FirebaseRemoteConfigService {
         "order": 2
       }
     ]''',
+
+    // Theme Gradient defaults
+    _themeGradientLightStartKey: '#B9FBC0',
+    _themeGradientLightEndKey: '#F7F9FC',
+    _themeGradientDarkStartKey: '#0F3D3E',
+    _themeGradientDarkEndKey: '#0F172A',
   };
 
   /// Initialize Firebase Remote Config
@@ -996,6 +1008,54 @@ class FirebaseRemoteConfigService {
       return List<Map<String, dynamic>>.from(
         jsonDecode(_defaults[_dashboardSectionKey] as String),
       );
+    }
+  }
+
+  /// Get Theme Gradient Light Start Color
+  static String getThemeGradientLightStart() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientLightStartKey] as String;
+      }
+      return _remoteConfig!.getString(_themeGradientLightStartKey);
+    } catch (e) {
+      return _defaults[_themeGradientLightStartKey] as String;
+    }
+  }
+
+  /// Get Theme Gradient Light End Color
+  static String getThemeGradientLightEnd() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientLightEndKey] as String;
+      }
+      return _remoteConfig!.getString(_themeGradientLightEndKey);
+    } catch (e) {
+      return _defaults[_themeGradientLightEndKey] as String;
+    }
+  }
+
+  /// Get Theme Gradient Dark Start Color
+  static String getThemeGradientDarkStart() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientDarkStartKey] as String;
+      }
+      return _remoteConfig!.getString(_themeGradientDarkStartKey);
+    } catch (e) {
+      return _defaults[_themeGradientDarkStartKey] as String;
+    }
+  }
+
+  /// Get Theme Gradient Dark End Color
+  static String getThemeGradientDarkEnd() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientDarkEndKey] as String;
+      }
+      return _remoteConfig!.getString(_themeGradientDarkEndKey);
+    } catch (e) {
+      return _defaults[_themeGradientDarkEndKey] as String;
     }
   }
 

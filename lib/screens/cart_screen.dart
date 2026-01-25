@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:exanor/components/translation_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
+import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,7 +12,6 @@ import 'package:exanor/models/store_model.dart';
 import 'package:exanor/models/product_model.dart';
 
 import 'package:exanor/components/custom_cached_network_image.dart';
-import 'package:exanor/components/order_method_selector.dart';
 import 'package:exanor/components/product_variant_sheet.dart'; // Added
 import 'package:exanor/screens/order_details_screen.dart';
 import 'package:shimmer/shimmer.dart';
@@ -78,9 +79,13 @@ class _CartScreenState extends State<CartScreen> {
   late double _currentLat;
   late double _currentLng;
 
+  // Scroll State
+  bool _isScrolled = false;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     _currentAddressId = widget.userAddressId;
     _currentLat = widget.lat.toDouble();
     _currentLng = widget.lng.toDouble();
@@ -1659,27 +1664,311 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  Color _hexToColor(String? hex, {Color? defaultColor}) {
+    if (hex == null || hex.isEmpty) {
+      return defaultColor ?? Colors.transparent;
+    }
+    try {
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (e) {
+      return defaultColor ?? Colors.transparent;
+    }
+  }
+
+  Widget _buildBackButton(ThemeData theme, bool isDark) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.1)
+            : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.onSurface.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: InkWell(
+            onTap: () => Navigator.pop(context),
+            child: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 22,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onScroll() {
+    final isScrolled =
+        _scrollController.hasClients && _scrollController.offset > 10;
+    if (isScrolled != _isScrolled) {
+      setState(() => _isScrolled = isScrolled);
+    }
+  }
+
+  Widget _buildSlidingTabs(ThemeData theme, bool isDark) {
+    if (_orderMethods.isEmpty) return const SizedBox();
+
+    int selectedIndex = 0;
+    for (int i = 0; i < _orderMethods.length; i++) {
+      if (_orderMethods[i]['id'] == _selectedOrderMethodId) {
+        selectedIndex = i;
+        break;
+      }
+    }
+
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.black.withOpacity(0.2)
+            : Colors.white.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.1)
+              : Colors.white.withOpacity(0.5),
+          width: 1.0,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth <= 0) return const SizedBox();
+          final tabWidth = constraints.maxWidth / _orderMethods.length;
+
+          return Stack(
+            children: [
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOutCubic,
+                left: selectedIndex * tabWidth,
+                top: 4,
+                bottom: 4,
+                width: tabWidth,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Row(
+                children: List.generate(_orderMethods.length, (index) {
+                  final method = _orderMethods[index];
+                  final isSelected = selectedIndex == index;
+                  final title =
+                      method['order_method_name'] ??
+                      method['title'] ??
+                      method['name'] ??
+                      'Method';
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        if (method['id'] != _selectedOrderMethodId) {
+                          setState(() {
+                            _selectedOrderMethodId = method['id'];
+                          });
+                          _fetchCartData(forceLoading: true);
+                          // Re-initialize to validate for new method
+                          _initializeOrder();
+                        }
+                      },
+                      child: Container(
+                        color: Colors.transparent,
+                        alignment: Alignment.center,
+                        child: AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: TextStyle(
+                            fontFamily: theme.textTheme.bodyMedium?.fontFamily,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? theme.colorScheme.onSurface
+                                : theme.colorScheme.onSurface.withOpacity(0.6),
+                            fontSize: 13,
+                          ),
+                          child: TranslatedText(title),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme, bool isDark) {
+    final topPadding = MediaQuery.of(context).padding.top;
+    final totalHeaderHeight = topPadding + 100;
+
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 200),
+      tween: Tween<double>(begin: 0.0, end: _isScrolled ? 1.0 : 0.0),
+      builder: (context, value, child) {
+        final double blurSigma = value * 15.0;
+        final double opacity = 0.95 + (value * 0.05);
+
+        final startColor = isDark
+            ? _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                defaultColor: const Color(0xFF1A1A1A),
+              )
+            : _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                defaultColor: const Color(0xFFE3F2FD),
+              );
+        final endColor = isDark
+            ? _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+                defaultColor: Colors.black,
+              )
+            : Colors.white;
+
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(20),
+          ),
+          child: Container(
+            height: totalHeaderHeight,
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.4),
+                  blurRadius: 25,
+                  offset: const Offset(0, 10),
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRect(
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(
+                  sigmaX: blurSigma,
+                  sigmaY: blurSigma,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        startColor.withOpacity(opacity),
+                        endColor.withOpacity(opacity),
+                      ],
+                    ),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: theme.dividerColor.withOpacity(value * 0.1),
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      // Watermark Background Icon
+                      Positioned(
+                        right: -40,
+                        top: 40,
+                        child: Transform.rotate(
+                          angle: -0.2,
+                          child: Opacity(
+                            opacity: 0.05,
+                            child: Icon(
+                              Icons.shopping_cart_rounded,
+                              size: 150,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      SafeArea(
+                        bottom: false,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 46,
+                              child: Stack(
+                                children: [
+                                  Center(
+                                    child: TranslatedText(
+                                      "My Cart",
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: theme.colorScheme.onSurface,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 20),
+                                      child: _buildBackButton(theme, isDark),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                              ),
+                              child: _buildSlidingTabs(theme, isDark),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     if (_isLoading && _cartData == null) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF5F6F8),
-        appBar: AppBar(
-          title: const TranslatedText('Cart'),
-          backgroundColor: Colors.white,
-          elevation: 0,
-        ),
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: _buildSkeletonLoader(),
       );
     }
 
     if (_cartData == null) {
       return Scaffold(
-        backgroundColor:
-            theme.scaffoldBackgroundColor, // Use theme background color
-        appBar: AppBar(title: const TranslatedText('Cart')),
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: const Center(child: TranslatedText('Failed to load cart')),
       );
     }
@@ -1701,997 +1990,1229 @@ class _CartScreenState extends State<CartScreen> {
     } catch (e) {
       debugPrint('Error calculating savings: $e');
     }
-    // If items_available is empty, maybe check product_in_cart?
-    // User sample has items in items_available.
+
+    // Premium Gradient from Firebase Remote Config
+    final bgGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: isDark
+          ? [
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                defaultColor: const Color(0xFF1A1A1A),
+              ),
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+                defaultColor: Colors.black,
+              ),
+            ]
+          : [
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                defaultColor: const Color(0xFFE3F2FD),
+              ),
+              Colors.white,
+            ],
+    );
+
+    final topPadding = MediaQuery.of(context).padding.top;
+    final headerTotalHeight = topPadding + 130;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // Use theme background
-      appBar: AppBar(
-        title: TranslatedText(
-          'Cart',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor:
-            theme.appBarTheme.backgroundColor ??
-            theme.cardColor, // Use theme appbar color or card color
-        elevation: 0,
-        centerTitle: false,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: theme.iconTheme.color,
-          ), // Use theme icon color
-          onPressed: () => Navigator.pop(context),
-        ),
-        bottom: _orderMethods.isNotEmpty
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(60),
-                child: OrderMethodSelector(
-                  methods: _orderMethods,
-                  selectedMethodId: _selectedOrderMethodId,
-                  onMethodSelected: (id) async {
-                    setState(() {
-                      _selectedOrderMethodId = id;
-                      _isLoading = true; // Reload cart with new method
-                    });
-                    await _fetchCartData(forceLoading: true);
-                    _initializeOrder(); // Validate order with new method
-                  },
+      backgroundColor: theme.scaffoldBackgroundColor,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Main Content
+          RefreshIndicator(
+            onRefresh: () async {
+              await Future.wait([_fetchCartData(), _fetchProductSuggestions()]);
+            },
+            edgeOffset: headerTotalHeight + 10,
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // Spacer for fixed header
+                SliverToBoxAdapter(
+                  child: SizedBox(height: headerTotalHeight + 10),
                 ),
-              )
-            : null,
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await Future.wait([_fetchCartData(), _fetchProductSuggestions()]);
-        },
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 100),
-          child: Column(
-            children: [
-              if (_isLoading && _cartData != null)
-                const LinearProgressIndicator(minHeight: 2),
 
-              // ... existing column children
-              // ... existing column children
-              // Delivery Alert / Savings
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                color: Colors.green.withOpacity(0.1),
-                child: Row(
-                  children: [
-                    const TranslatedText('🎉'),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TranslatedText(
-                        'You saved ₹10 with Gold', // Placeholder from screenshot
-                        style: TextStyle(
-                          color: Colors.blue[800],
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Cart Items List
-              if (items.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor, // Use theme card color
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                // Content
+                SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      ...items.map((item) => _buildCartItemRow(item, theme)),
+                      if (_isLoading && _cartData != null)
+                        const LinearProgressIndicator(minHeight: 2),
 
-                      // Add more items button
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: InkWell(
-                          onTap: () => Navigator.pop(context),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // Cart Items List (Big Main Card)
+                      if (items.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.shadowColor.withOpacity(0.12),
+                                blurRadius: 30,
+                                offset: const Offset(0, 10),
+                                spreadRadius: -5,
+                              ),
+                            ],
+                            border: Border.all(
+                              color: theme.dividerColor.withOpacity(0.5),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.add,
-                                    color: Colors.deepOrange,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  TranslatedText(
-                                    'Add more items',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.bold,
+                              // Header
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // Modern Title with Accent
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 3,
+                                          height: 14,
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.primary,
+                                            borderRadius: BorderRadius.circular(
+                                              2,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        TranslatedText(
+                                          "Order Summary",
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: theme.colorScheme.onSurface,
+                                            letterSpacing: -0.3,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    // Innovative Pill Badge
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 5,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary
+                                            .withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: theme.colorScheme.primary
+                                              .withOpacity(0.15),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.shopping_basket_rounded,
+                                            size: 12,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          TranslatedText(
+                                            "${items.length} Items",
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Divider(
+                                height: 1,
+                                thickness: 0.5,
+                                color: theme.dividerColor.withOpacity(0.3),
+                              ),
+
+                              // Items
+                              ...items.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final item = entry.value;
+                                final isLast = index == items.length - 1;
+                                return _buildCartItemContent(
+                                  item,
+                                  theme,
+                                  isLast: isLast,
+                                );
+                              }),
+
+                              // Aesthetic "Add More" Footer
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: theme.dividerColor.withOpacity(
+                                        0.3,
+                                      ),
+                                      width: 1,
                                     ),
                                   ),
-                                ],
+                                  borderRadius: const BorderRadius.vertical(
+                                    bottom: Radius.circular(24),
+                                  ),
+                                ),
+                                child: InkWell(
+                                  onTap: () => Navigator.pop(context),
+                                  borderRadius: const BorderRadius.vertical(
+                                    bottom: Radius.circular(24),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 16,
+                                      horizontal: 20,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(6),
+                                              decoration: BoxDecoration(
+                                                color: theme.colorScheme.primary
+                                                    .withOpacity(0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(
+                                                Icons.add,
+                                                size: 16,
+                                                color:
+                                                    theme.colorScheme.primary,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            TranslatedText(
+                                              "Add more items",
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color:
+                                                    theme.colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Icon(
+                                          Icons.arrow_forward_ios_rounded,
+                                          size: 12,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.4),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ),
 
-                      const Divider(height: 1),
+                      // Add method to show coupon sheet
+                      // Placement here is invalid, it must be outside build or inside _showCouponsBottomSheet definition
 
-                      // Note and Cutlery
-                      /*
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
+                      // Since I am inside build method's list, I will add the function at the end of the class.
+
+                      // Continuing inside Column children...
+                      /* ... */
+
+                      // Product Suggestions
+                      if (_isLoadingSuggestions)
+                        const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_suggestedProducts.isNotEmpty)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: theme.dividerColor),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.note_alt_outlined,
-                                      size: 16,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Expanded(
-                                      child: TranslatedText(
-                                        "Add a note",
-                                        style: TextStyle(color: Colors.grey),
-                                      ),
-                                    ),
-                                  ],
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0,
+                              ),
+                              child: TranslatedText(
+                                "Recommended products",
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: theme.dividerColor),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.cut_outlined,
-                                      size: 16,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Expanded(
-                                      child: TranslatedText(
-                                        "No cutlery",
-                                        style: TextStyle(color: Colors.grey),
+                            const SizedBox(height: 12),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              height: 250, // Increased height for premium cards
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification:
+                                    (ScrollNotification scrollInfo) {
+                                      if (!_isFetchingMoreSuggestions &&
+                                          _hasMoreSuggestions &&
+                                          scrollInfo.metrics.pixels >=
+                                              scrollInfo
+                                                      .metrics
+                                                      .maxScrollExtent -
+                                                  200) {
+                                        _fetchProductSuggestions(
+                                          isLoadMore: true,
+                                        );
+                                      }
+                                      return false;
+                                    },
+                                child: AnimatedList(
+                                  key: _listKey,
+                                  scrollDirection: Axis.horizontal,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  initialItemCount:
+                                      _suggestedProducts.length +
+                                      (_hasMoreSuggestions ? 1 : 0),
+                                  itemBuilder: (context, index, animation) {
+                                    if (index >= _suggestedProducts.length) {
+                                      // Loader at end
+                                      if (_hasMoreSuggestions) {
+                                        return const Center(
+                                          child: Padding(
+                                            padding: EdgeInsets.all(16.0),
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                        );
+                                      } else {
+                                        return const SizedBox.shrink();
+                                      }
+                                    }
+
+                                    return SlideTransition(
+                                      position: animation.drive(
+                                        Tween(
+                                          begin: const Offset(1, 0),
+                                          end: const Offset(0, 0),
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                      child: _buildSuggestionCard(
+                                        _suggestedProducts[index],
+                                        theme,
+                                        onTapAdd: () => _addSuggestedProduct(
+                                          _suggestedProducts[index],
+                                          index,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ),
+                            const SizedBox(height: 24),
                           ],
                         ),
-                      ),
-                      */
-                    ],
-                  ),
-                ),
 
-              // Add method to show coupon sheet
-              // Placement here is invalid, it must be outside build or inside _showCouponsBottomSheet definition
-
-              // Since I am inside build method's list, I can't define functions here.
-              // I will add the function at the end of the class.
-
-              // Continuing inside Column children...
-              /* ... */
-
-              // Product Suggestions
-              if (_isLoadingSuggestions)
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_suggestedProducts.isNotEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: TranslatedText(
-                        "Recommended products",
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 180,
-                      child: NotificationListener<ScrollNotification>(
-                        onNotification: (ScrollNotification scrollInfo) {
-                          if (!_isFetchingMoreSuggestions &&
-                              _hasMoreSuggestions &&
-                              scrollInfo.metrics.pixels >=
-                                  scrollInfo.metrics.maxScrollExtent - 200) {
-                            _fetchProductSuggestions(isLoadMore: true);
-                          }
-                          return false;
-                        },
-                        child: AnimatedList(
-                          key: _listKey,
-                          scrollDirection: Axis.horizontal,
+                      // Coupons Section (God Tier Revamp)
+                      if (!_isLoadingCoupons && _storeCoupons.isNotEmpty)
+                        Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          initialItemCount:
-                              _suggestedProducts.length +
-                              (_hasMoreSuggestions ? 1 : 0),
-                          itemBuilder: (context, index, animation) {
-                            if (index >= _suggestedProducts.length) {
-                              // Loader at end
-                              if (_hasMoreSuggestions) {
-                                return const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(16.0),
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                );
-                              } else {
-                                return const SizedBox.shrink();
-                              }
-                            }
-
-                            return SlideTransition(
-                              position: animation.drive(
-                                Tween(
-                                  begin: const Offset(1, 0),
-                                  end: const Offset(0, 0),
-                                ),
-                              ),
-                              child: _buildSuggestionCard(
-                                _suggestedProducts[index],
-                                theme,
-                                onTapAdd: () => _addSuggestedProduct(
-                                  _suggestedProducts[index],
-                                  index,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-
-              // Coupons
-              if (!_isLoadingCoupons && _storeCoupons.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: theme.dividerColor),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.shadowColor.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: _showCouponsBottomSheet,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: _selectedCouponCode != null
-                                    ? Colors.green.withOpacity(0.1)
-                                    : Colors.blue.withOpacity(0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.local_offer_rounded,
-                                color: _selectedCouponCode != null
-                                    ? Colors.green
-                                    : Colors.blue,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  TranslatedText(
-                                    _selectedCouponCode != null
-                                        ? "Coupon Applied"
-                                        : "Apply Coupon",
-                                    style: theme.textTheme.titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: _selectedCouponCode != null
-                                              ? Colors.green
-                                              : theme
-                                                    .textTheme
-                                                    .titleMedium
-                                                    ?.color,
+                          child: Container(
+                            height: 76,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _selectedCouponCode != null
+                                      ? Colors.green.withOpacity(0.2)
+                                      : theme.colorScheme.primary.withOpacity(
+                                          0.15,
                                         ),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 8),
+                                  spreadRadius: -2,
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: _showCouponsBottomSheet,
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  // The "Card"
+                                  padding: const EdgeInsets.all(
+                                    2,
+                                  ), // Border width
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    gradient: _selectedCouponCode != null
+                                        ? LinearGradient(
+                                            colors: [
+                                              Colors.green[400]!,
+                                              Colors.green[700]!,
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          )
+                                        : LinearGradient(
+                                            colors: [
+                                              theme.colorScheme.primary,
+                                              theme.colorScheme.tertiary,
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  TranslatedText(
-                                    _selectedCouponCode != null
-                                        ? "Code: $_selectedCouponCode"
-                                        : "Save more with coupons",
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.textTheme.bodyMedium?.color
-                                          ?.withOpacity(0.7),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: _selectedCouponCode != null
+                                          ? Colors
+                                                .green[50] // Light green surface for applied
+                                          : theme.cardColor,
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    child: Stack(
+                                      children: [
+                                        // Artistic Abstract Blobs
+                                        if (_selectedCouponCode == null) ...[
+                                          Positioned(
+                                            top: -20,
+                                            right: -20,
+                                            child: Container(
+                                              width: 80,
+                                              height: 80,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: theme.colorScheme.primary
+                                                    .withOpacity(0.05),
+                                              ),
+                                            ),
+                                          ),
+                                          Positioned(
+                                            bottom: -30,
+                                            right: 30,
+                                            child: Container(
+                                              width: 60,
+                                              height: 60,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: theme
+                                                    .colorScheme
+                                                    .secondary
+                                                    .withOpacity(0.05),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+
+                                        // Content
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              // 1. Premium Icon
+                                              Container(
+                                                width: 44,
+                                                height: 44,
+                                                decoration: BoxDecoration(
+                                                  gradient:
+                                                      _selectedCouponCode !=
+                                                          null
+                                                      ? const LinearGradient(
+                                                          colors: [
+                                                            Color(0xFF43A047),
+                                                            Color(0xFF2E7D32),
+                                                          ],
+                                                          begin:
+                                                              Alignment.topLeft,
+                                                          end: Alignment
+                                                              .bottomRight,
+                                                        )
+                                                      : LinearGradient(
+                                                          colors: [
+                                                            theme
+                                                                .colorScheme
+                                                                .primary
+                                                                .withOpacity(
+                                                                  0.1,
+                                                                ),
+                                                            theme
+                                                                .colorScheme
+                                                                .primary
+                                                                .withOpacity(
+                                                                  0.2,
+                                                                ),
+                                                          ],
+                                                          begin:
+                                                              Alignment.topLeft,
+                                                          end: Alignment
+                                                              .bottomRight,
+                                                        ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(14),
+                                                ),
+                                                child: Icon(
+                                                  _selectedCouponCode != null
+                                                      ? Icons.verified_rounded
+                                                      : Icons.percent_rounded,
+                                                  color:
+                                                      _selectedCouponCode !=
+                                                          null
+                                                      ? Colors.white
+                                                      : theme
+                                                            .colorScheme
+                                                            .primary,
+                                                  size: 24,
+                                                ),
+                                              ),
+
+                                              const SizedBox(width: 14),
+
+                                              // 2. Texts
+                                              Expanded(
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    TranslatedText(
+                                                      _selectedCouponCode !=
+                                                              null
+                                                          ? "Code Applied!"
+                                                          : "Apply Coupon",
+                                                      style: TextStyle(
+                                                        fontSize: 15,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        color:
+                                                            _selectedCouponCode !=
+                                                                null
+                                                            ? Colors.green[800]
+                                                            : theme
+                                                                  .colorScheme
+                                                                  .onSurface,
+                                                        letterSpacing: -0.2,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 3),
+                                                    if (_selectedCouponCode !=
+                                                        null)
+                                                      Row(
+                                                        children: [
+                                                          Text(
+                                                            _selectedCouponCode!,
+                                                            style: TextStyle(
+                                                              fontSize: 12,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w900,
+                                                              color: Colors
+                                                                  .green[700],
+                                                              letterSpacing:
+                                                                  0.5,
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                            width: 6,
+                                                          ),
+                                                          Icon(
+                                                            Icons.check_circle,
+                                                            size: 10,
+                                                            color: Colors
+                                                                .green[700],
+                                                          ),
+                                                        ],
+                                                      )
+                                                    else
+                                                      TranslatedText(
+                                                        "Save more on this order",
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onSurface
+                                                              .withOpacity(0.5),
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+
+                                              // 3. Action Button
+                                              if (_selectedCouponCode != null)
+                                                InkWell(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      _selectedCouponCode =
+                                                          null;
+                                                    });
+                                                    _fetchCartData(
+                                                      forceLoading: true,
+                                                    );
+                                                    _initializeOrder();
+                                                  },
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 6,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            20,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: Colors.red
+                                                            .withOpacity(0.2),
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        const TranslatedText(
+                                                          "REMOVE",
+                                                          style: TextStyle(
+                                                            fontSize: 10,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            color: Colors.red,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
+                                                        const Icon(
+                                                          Icons.close,
+                                                          size: 12,
+                                                          color: Colors.red,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                )
+                                              else
+                                                Row(
+                                                  children: [
+                                                    TranslatedText(
+                                                      "View",
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: theme
+                                                            .colorScheme
+                                                            .primary,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Icon(
+                                                      Icons
+                                                          .arrow_forward_ios_rounded,
+                                                      size: 12,
+                                                      color: theme
+                                                          .colorScheme
+                                                          .primary,
+                                                    ),
+                                                  ],
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
                             ),
-                            if (_selectedCouponCode != null)
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.close,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _selectedCouponCode = null;
-                                  });
-                                  // Update cart without coupon
-                                  _fetchCartData(forceLoading: true);
-                                  _initializeOrder();
-                                },
-                              )
-                            else
-                              const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 16,
+                          ),
+                        ),
+                      const SizedBox(height: 24),
+
+                      // Location Details Card
+                      if (_addressTitle != null) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TranslatedText(
+                              "Your Address",
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
                                 color: Colors.grey,
                               ),
-                          ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 24),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: theme.dividerColor),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withOpacity(
+                                    0.1,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.location_on,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TranslatedText(
+                                      _addressTitle!,
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                    if (_addressSubtitle?.isNotEmpty ==
+                                        true) ...[
+                                      const SizedBox(height: 4),
+                                      TranslatedText(
+                                        _addressSubtitle!,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: theme
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.color
+                                                  ?.withOpacity(0.7),
+                                            ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  final result =
+                                      await Navigator.push<
+                                        Map<String, dynamic>
+                                      >(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const SavedAddressesScreen(),
+                                        ),
+                                      );
 
-              // Location Details Card
-              if (_addressTitle != null) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: TranslatedText(
-                      "Your Address",
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: theme.dividerColor),
-                  ),
-                  child: Row(
-                    children: [
+                                  if (result != null &&
+                                      result['addressSelected'] == true) {
+                                    await _updateLocationFromPrefs();
+                                    await _fetchCartData(forceLoading: true);
+                                    _initializeOrder();
+                                  }
+                                },
+                                child: const TranslatedText("Change"),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Bill Details
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.1),
-                          shape: BoxShape.circle,
+                          color: theme.cardColor, // Use theme card color
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Icon(
-                          Icons.location_on,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             TranslatedText(
-                              _addressTitle!,
+                              "Bill Details",
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            if (_addressSubtitle?.isNotEmpty == true) ...[
-                              const SizedBox(height: 4),
-                              TranslatedText(
-                                _addressSubtitle!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.textTheme.bodySmall?.color
-                                      ?.withOpacity(0.7),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          final result =
-                              await Navigator.push<Map<String, dynamic>>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const SavedAddressesScreen(),
+                            const SizedBox(height: 16),
+                            // Item Total from cart_total
+                            ...(_cartData!['cart_total'] as List).map<Widget>((
+                              e,
+                            ) {
+                              final val = (e['value'] as num);
+                              if (val == 0) return const SizedBox.shrink();
+                              final isDiscount = val < 0;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    TranslatedText(
+                                      e['title'],
+                                      style: TextStyle(
+                                        color: isDiscount
+                                            ? Colors.green[700]
+                                            : Colors.grey[700],
+                                      ),
+                                    ),
+                                    TranslatedText(
+                                      '₹${val.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        color: isDiscount
+                                            ? Colors.green[700]
+                                            : null,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
+                            }).toList(),
 
-                          if (result != null &&
-                              result['addressSelected'] == true) {
-                            await _updateLocationFromPrefs();
-                            await _fetchCartData(forceLoading: true);
-                            _initializeOrder();
-                          }
-                        },
-                        child: const TranslatedText("Change"),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
+                            // Platform Fees (Coupons, etc)
+                            if (_cartData!['platform_fees'] != null)
+                              ...(_cartData!['platform_fees'] as List).map<
+                                Widget
+                              >((e) {
+                                final val = (e['value'] as num);
+                                // Show even if 0 if it's a coupon, or strictly non-zero?
+                                // User complained about not seeing details. Let's show it if it's explicitly explicitly returned.
+                                // But usually 0 value lines are hidden.
+                                // However, for coupons, users check for confirmation.
+                                // Let's hide if 0 UNLESS it contains "Coupon" in title?
+                                // For safety, let's just hide 0.0 like before, BUT if the user's issue is specifically that they see -0.0 and it's hidden,
+                                // then we should show it.
+                                // Let's try showing everything from platform_fees for now, as usually these are explicit fees/discounts.
+                                // Actually, I'll filter 0.
+                                if (val == 0 &&
+                                    !(e['title']
+                                        .toString()
+                                        .toLowerCase()
+                                        .contains('coupon'))) {
+                                  return const SizedBox.shrink();
+                                }
 
-              // Bill Details
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: theme.cardColor, // Use theme card color
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TranslatedText(
-                      "Bill Details",
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Item Total from cart_total
-                    ...(_cartData!['cart_total'] as List).map<Widget>((e) {
-                      final val = (e['value'] as num);
-                      if (val == 0) return const SizedBox.shrink();
-                      final isDiscount = val < 0;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            TranslatedText(
-                              e['title'],
-                              style: TextStyle(
-                                color: isDiscount
-                                    ? Colors.green[700]
-                                    : Colors.grey[700],
-                              ),
-                            ),
-                            TranslatedText(
-                              '₹${val.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                color: isDiscount ? Colors.green[700] : null,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-
-                    // Platform Fees (Coupons, etc)
-                    if (_cartData!['platform_fees'] != null)
-                      ...(_cartData!['platform_fees'] as List).map<Widget>((e) {
-                        final val = (e['value'] as num);
-                        // Show even if 0 if it's a coupon, or strictly non-zero?
-                        // User complained about not seeing details. Let's show it if it's explicitly explicitly returned.
-                        // But usually 0 value lines are hidden.
-                        // However, for coupons, users check for confirmation.
-                        // Let's hide if 0 UNLESS it contains "Coupon" in title?
-                        // For safety, let's just hide 0.0 like before, BUT if the user's issue is specifically that they see -0.0 and it's hidden,
-                        // then we should show it.
-                        // Let's try showing everything from platform_fees for now, as usually these are explicit fees/discounts.
-                        // Actually, I'll filter 0.
-                        if (val == 0 &&
-                            !(e['title'].toString().toLowerCase().contains(
-                              'coupon',
-                            ))) {
-                          return const SizedBox.shrink();
-                        }
-
-                        final isDiscount = val < 0;
-                        // Determine display string.
-                        // If it's a discount (negative), show as -₹X.XX
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              TranslatedText(
-                                e['title'],
-                                style: TextStyle(
-                                  color: isDiscount
-                                      ? Colors.green[700]
-                                      : Colors.grey[700],
-                                ),
-                              ),
-                              TranslatedText(
-                                '₹${val.toStringAsFixed(2)}',
-                                style: TextStyle(
-                                  color: isDiscount ? Colors.green[700] : null,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-
-                    if (totalSavings < 0) ...[
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: Divider(),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.green.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const TranslatedText(
-                              "Total Savings",
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                            TranslatedText(
-                              "₹${totalSavings.abs().toStringAsFixed(2)}",
-                              style: const TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    const Divider(),
-                    const SizedBox(height: 8),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const TranslatedText(
-                          "Grand Total",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        TranslatedText(
-                          '₹${(_cartData!['grand_total'] as num).toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Policy Text
-              if (_cartData!['refund_policy'] != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const TranslatedText(
-                          "Refund Policy",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        TranslatedText(
-                          _cartData!['refund_policy'],
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.cardColor, // Use card color for bottom bar
-          boxShadow: [
-            BoxShadow(
-              color: theme.shadowColor.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -5),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Payment Method Selector
-              if (_selectedPaymentMethod != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16.0),
-                  child: InkWell(
-                    onTap: _showPaymentMethodSelector,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.scaffoldBackgroundColor,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: theme.dividerColor),
-                      ),
-                      child: Row(
-                        children: [
-                          const TranslatedText(
-                            "Pay using",
-                            style: TextStyle(color: Colors.grey, fontSize: 12),
-                          ),
-                          const Spacer(),
-                          if (_selectedPaymentMethod!['img_url'] != null)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8.0),
-                              child: Image.network(
-                                _selectedPaymentMethod!['img_url'],
-                                width: 24,
-                                height: 24,
-                                errorBuilder: (c, e, s) =>
-                                    const SizedBox.shrink(),
-                              ),
-                            ),
-                          TranslatedText(
-                            _selectedPaymentMethod!['payment_method_name'] ??
-                                '',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(
-                            Icons.keyboard_arrow_up,
-                            size: 20,
-                            color: Colors.grey,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TranslatedText(
-                          'Total',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
-                        ),
-                        TranslatedText(
-                          '₹${((_cartData!['grand_total'] ?? 0) as num).toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  if (_selectedOrderMethodId == null)
-                    Expanded(
-                      flex: 2,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.red.withOpacity(0.5),
-                          ),
-                        ),
-                        child: Center(
-                          child: TranslatedText(
-                            "Select Order Method",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red[700],
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_orderInitMessage.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: TranslatedText(
-                                _orderInitMessage,
-                                style: TextStyle(
-                                  color: _isOrderPlaceable
-                                      ? Colors.green[700]
-                                      : Colors.red[700],
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          SizedBox(
-                            width: double.infinity,
-                            child: Stack(
-                              children: [
-                                // Main button
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed:
-                                        _isOrderPlaceable &&
-                                            !_isInitializingOrder &&
-                                            !_isCountingDown
-                                        ? _startOrderCountdown
-                                        : null,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor:
-                                          theme.colorScheme.primary,
-                                      disabledBackgroundColor: Colors.grey[400],
-                                      foregroundColor: Colors.white,
-                                      disabledForegroundColor: Colors.white70,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 16,
+                                final isDiscount = val < 0;
+                                // Determine display string.
+                                // If it's a discount (negative), show as -₹X.XX
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      TranslatedText(
+                                        e['title'],
+                                        style: TextStyle(
+                                          color: isDiscount
+                                              ? Colors.green[700]
+                                              : Colors.grey[700],
+                                        ),
                                       ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                      TranslatedText(
+                                        '₹${val.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          color: isDiscount
+                                              ? Colors.green[700]
+                                              : null,
+                                        ),
                                       ),
-                                      elevation: 0,
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+
+                            if (totalSavings < 0) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.0),
+                                child: Divider(),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.green.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const TranslatedText(
+                                      "Total Savings",
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
                                     ),
-                                    child: _isInitializingOrder
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    Colors.white,
-                                                  ),
-                                            ),
-                                          )
-                                        : const TranslatedText(
-                                            'Place Order',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                            ),
-                                          ),
+                                    TranslatedText(
+                                      "₹${totalSavings.abs().toStringAsFixed(2)}",
+                                      style: const TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+
+                            const Divider(),
+                            const SizedBox(height: 8),
+
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const TranslatedText(
+                                  "Grand Total",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                TranslatedText(
+                                  '₹${(_cartData!['grand_total'] as num).toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Policy Text
+                      if (_cartData!['refund_policy'] != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const TranslatedText(
+                                  "Refund Policy",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                TranslatedText(
+                                  _cartData!['refund_policy'],
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 10,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ],
+                        ),
+                    ],
+                  ),
+                ),
+                // Spacer for Glassy Bottom Bar
+                SliverToBoxAdapter(child: SizedBox(height: 140)),
+              ],
+            ),
           ),
-        ),
+
+          // Fixed Header Overlay
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildHeader(theme, isDark),
+          ),
+
+          // Glassy Bottom Bar
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildGlassyBottomBar(theme),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCartItemRow(Map<String, dynamic> item, ThemeData theme) {
+  Widget _buildCartItemContent(
+    Map<String, dynamic> item,
+    ThemeData theme, {
+    bool isLast = false,
+  }) {
     final pricing = item['pricing_details'];
-    final price = pricing != null
-        ? (pricing['item_total'] as num? ?? 0.0)
-        : 0.0;
     final unitPrice = pricing != null
         ? (pricing['selling_amount_including_tax'] as num? ?? 0.0)
         : 0.0;
     final qty = item['enquired_quantity'] as int? ?? 1;
 
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
+    // Use item_total if available, else fallback to unit * qty
+    final displayPrice = (pricing != null && pricing['item_total'] != null)
+        ? (pricing['item_total'] as num? ?? 0.0)
+        : (unitPrice * qty);
+
+    final imageUrl = item['img_url'] as String? ?? '';
+    final variantName = item['variant_name'] as String? ?? '';
+    final productName = item['product_name'] ?? 'Unknown';
+
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isLast ? null : theme.dividerColor.withOpacity(0.0),
+        border: isLast
+            ? null
+            : Border(
+                bottom: BorderSide(
+                  color: theme.dividerColor.withOpacity(0.4),
+                  width: 0.5,
+                ),
+              ),
+      ),
+      padding: const EdgeInsets.all(16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Veg/Non-veg icon (Mocking for now as it's not in item detail explicitly in sample, or assuming standard)
+          // 1. Image
           Container(
-            margin: const EdgeInsets.only(top: 4, right: 8),
-            padding: const EdgeInsets.all(2),
+            height: 60,
+            width: 60,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.green),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.dividerColor.withOpacity(0.6),
+                width: 0.5,
+              ),
+              color: isDark ? Colors.grey[800] : Colors.white,
             ),
-            child: const Icon(Icons.circle, size: 8, color: Colors.green),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: imageUrl.isNotEmpty
+                  ? CustomCachedNetworkImage(
+                      imgUrl: imageUrl,
+                      height: 60,
+                      width: 60,
+                      fit: BoxFit.cover,
+                    )
+                  : Icon(
+                      Icons.image_not_supported_outlined,
+                      size: 24,
+                      color: theme.disabledColor,
+                    ),
+            ),
           ),
 
+          const SizedBox(width: 14),
+
+          // 2. Info Grid (Quadrant Layout)
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TranslatedText(
-                  item['product_name'] ?? 'Unknown',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                // Top Row: Name vs Price
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TranslatedText(
+                        productName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.onSurface,
+                          height: 1.2,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    TranslatedText(
+                      '₹${displayPrice.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                TranslatedText('₹${unitPrice.toStringAsFixed(2)}'),
-              ],
-            ),
-          ),
 
-          // Quantity Control
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: theme.colorScheme.primary.withOpacity(0.3),
-              ),
-              borderRadius: BorderRadius.circular(8),
-              color: theme.colorScheme.primary.withOpacity(0.05),
-            ),
-            child: Row(
-              children: [
-                InkWell(
-                  onTap: () => _decrementCartItem(item),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Icon(
-                      Icons.remove,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 30, // Fixed width to prevent jumping
-                  child: Center(
-                    child:
-                        _updatingItemIds.contains(
-                          item['product_combination_id'] ?? item['id'],
-                        )
-                        ? Opacity(
-                            opacity: 0.5,
-                            child: TranslatedText(
-                              '$qty',
+                const SizedBox(height: 8),
+
+                // Bottom Row: Variant vs Counter
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: variantName.isNotEmpty
+                          ? TranslatedText(
+                              variantName,
                               style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.6,
+                                ),
                               ),
-                            ),
-                          )
-                        : TranslatedText(
-                            '$qty',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : const SizedBox(),
+                    ),
+                    Container(
+                      height: 30, // Compact height
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest
+                            .withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.6),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildSymmetricalButton(
+                            theme,
+                            Icons.remove,
+                            () =>
+                                _updatingItemIds.contains(
+                                  item['product_combination_id'] ?? item['id'],
+                                )
+                                ? null
+                                : _decrementCartItem(item),
                           ),
-                  ),
-                ),
-                InkWell(
-                  onTap: () => _incrementCartItem(item),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                          Container(
+                            width: 24,
+                            alignment: Alignment.center,
+                            child:
+                                _updatingItemIds.contains(
+                                  item['product_combination_id'] ?? item['id'],
+                                )
+                                ? Padding(
+                                    padding: const EdgeInsets.all(6.0),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                  )
+                                : TranslatedText(
+                                    '$qty',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                          ),
+                          _buildSymmetricalButton(
+                            theme,
+                            Icons.add,
+                            () =>
+                                _updatingItemIds.contains(
+                                  item['product_combination_id'] ?? item['id'],
+                                )
+                                ? null
+                                : _incrementCartItem(item),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Icon(
-                      Icons.add,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
+                  ],
                 ),
               ],
             ),
-          ),
-
-          const SizedBox(width: 16),
-
-          TranslatedText(
-            '₹${price.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSymmetricalButton(
+    ThemeData theme,
+    IconData icon,
+    VoidCallback? onTap,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          width: 32,
+          height: 32,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: 14,
+            color: onTap == null
+                ? theme.disabledColor.withOpacity(0.3)
+                : theme.colorScheme.primary,
+          ),
+        ),
       ),
     );
   }
@@ -2703,79 +3224,123 @@ class _CartScreenState extends State<CartScreen> {
     bool isRemoving = false,
   }) {
     return Container(
-      width: 140,
-      margin: const EdgeInsets.only(right: 12),
+      width: 160, // Standardized width
+      margin: const EdgeInsets.only(
+        right: 16,
+        bottom: 8,
+        top: 4,
+      ), // Added vertical margin for shadow
       decoration: BoxDecoration(
         color: theme.cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: theme.dividerColor),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: theme.dividerColor.withOpacity(0.5),
+          width: 0.5,
+        ),
         boxShadow: isRemoving
             ? []
             : [
                 BoxShadow(
-                  color: theme.shadowColor.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+                  color: theme.shadowColor.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                  spreadRadius: 0,
                 ),
               ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: CustomCachedNetworkImage(
-              imgUrl: product.imgUrl,
-              height: 90,
-              width: 140,
-              fit: BoxFit.cover,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TranslatedText(
-                  product.productName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
+          // 1. Image Area
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(19.5),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (product.priceStartsFrom != null)
-                      TranslatedText(
-                        '₹${product.priceStartsFrom!.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 12),
+                child: CustomCachedNetworkImage(
+                  imgUrl: product.imgUrl,
+                  height: 110,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              // Subtle gradient overlay at bottom of image for depth? No, keep it clean.
+            ],
+          ),
+
+          // 2. Content
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Title
+                  TranslatedText(
+                    product.productName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      height: 1.2,
+                    ),
+                  ),
+
+                  // Footer: Price & ADD Button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // Price
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TranslatedText(
+                            '₹${product.priceStartsFrom?.toStringAsFixed(0) ?? "0"}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ],
                       ),
 
-                    // Add btn
-                    InkWell(
-                      onTap: onTapAdd,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.grey[300]!),
-                        ),
-                        child: const Icon(
-                          Icons.add,
-                          size: 16,
-                          color: Colors.red,
+                      // ADD Button
+                      InkWell(
+                        onTap: onTapAdd,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: theme.colorScheme.primary,
+                              width: 1,
+                            ),
+                          ),
+                          child: TranslatedText(
+                            "ADD",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -2872,6 +3437,234 @@ class _CartScreenState extends State<CartScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGlassyBottomBar(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          padding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            bottom: 24, // Extra padding for safety
+            top: 12,
+          ),
+          decoration: BoxDecoration(
+            color: theme.scaffoldBackgroundColor.withOpacity(0.85),
+            border: Border(
+              top: BorderSide(
+                color: theme.dividerColor.withOpacity(0.1),
+                width: 0.5,
+              ),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Payment Method Selector
+              if (_selectedPaymentMethod != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12.0),
+                  child: InkWell(
+                    onTap: _showPaymentMethodSelector,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.black.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.dividerColor.withOpacity(0.5),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          TranslatedText(
+                            "Pay with",
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.6,
+                              ),
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (_selectedPaymentMethod!['img_url'] != null)
+                            Image.network(
+                              _selectedPaymentMethod!['img_url'],
+                              width: 20,
+                              height: 20,
+                              errorBuilder: (c, e, s) =>
+                                  const SizedBox.shrink(),
+                            ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TranslatedText(
+                              _selectedPaymentMethod!['payment_method_name'] ??
+                                  '',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.keyboard_arrow_up,
+                            size: 16,
+                            color: Colors.grey,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TranslatedText(
+                          'Total',
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        TranslatedText(
+                          '₹${((_cartData!['grand_total'] ?? 0) as num).toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  if (_selectedOrderMethodId == null)
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        height: 50,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.5),
+                          ),
+                        ),
+                        child: Center(
+                          child: TranslatedText(
+                            "Select Method",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red[700],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_orderInitMessage.isNotEmpty &&
+                              false) // Hide message to save space, show in snackbar if failed? Or keep tiny?
+                            // Let's keep it but very small
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4.0),
+                              child: TranslatedText(
+                                _orderInitMessage,
+                                style: TextStyle(
+                                  color: _isOrderPlaceable
+                                      ? Colors.green[700]
+                                      : Colors.red[700],
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed:
+                                  _isOrderPlaceable &&
+                                      !_isInitializingOrder &&
+                                      !_isCountingDown
+                                  ? _startOrderCountdown
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.colorScheme.primary,
+                                disabledBackgroundColor: theme.disabledColor,
+                                foregroundColor: Colors.white,
+                                shadowColor: theme.colorScheme.primary
+                                    .withOpacity(0.5),
+                                elevation: 8,
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: _isInitializingOrder
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Colors.white,
+                                            ),
+                                      ),
+                                    )
+                                  : const TranslatedText(
+                                      'Place Order',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

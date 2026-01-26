@@ -232,6 +232,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 decoration: BoxDecoration(
                   color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withOpacity(0.6)
+                          : Colors.black.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
                 child: Column(
                   children: [

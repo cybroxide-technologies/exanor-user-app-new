@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'dart:async'; // Added for Timer
 import 'package:exanor/services/translation_service.dart';
 import 'package:exanor/components/translation_diagnostics.dart';
 import 'package:exanor/components/translation_test_widget.dart';
-import 'package:exanor/components/translation_integration_guide.dart';
-import 'package:exanor/guides/universal_translation_integration_guide.dart';
-import 'package:exanor/examples/comprehensive_translation_example.dart';
 
 class LanguageSelector extends StatefulWidget {
   final Function(SupportedLanguage)? onLanguageSelected;
@@ -41,6 +39,9 @@ class _LanguageSelectorState extends State<LanguageSelector>
   Map<String, bool> _downloadedLanguages = {};
   Map<String, double> _downloadProgress = {};
   bool _showHelperTools = false;
+
+  // Simulated progress timer
+  Timer? _progressTimer;
 
   @override
   void initState() {
@@ -86,6 +87,7 @@ class _LanguageSelectorState extends State<LanguageSelector>
     _slideController.dispose();
     _scaleController.dispose();
     _searchController.dispose();
+    _progressTimer?.cancel();
     super.dispose();
   }
 
@@ -154,10 +156,30 @@ class _LanguageSelectorState extends State<LanguageSelector>
     try {
       setState(() {
         _downloadedLanguages[language.code] = false;
-        // Use 0.0 as a marker that downloading is in progress.
-        // The UI will show an indeterminate indicator (spinner/loader)
-        // because the ML Kit library does not provide real-time progress percentages.
-        _downloadProgress[language.code] = 0.0;
+        _downloadProgress[language.code] = 0.05; // Start with small progress
+      });
+
+      // Start simulated progress
+      _progressTimer?.cancel();
+      _progressTimer = Timer.periodic(const Duration(milliseconds: 200), (
+        timer,
+      ) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
+        setState(() {
+          final current = _downloadProgress[language.code] ?? 0.0;
+          if (current < 0.9) {
+            _downloadProgress[language.code] =
+                current +
+                0.05 +
+                (0.02 * (0.5 - current).abs()); // Random-ish curve
+          } else {
+            timer.cancel();
+          }
+        });
       });
 
       // Show user immediate feedback that it has started
@@ -287,39 +309,111 @@ class _LanguageSelectorState extends State<LanguageSelector>
   }
 
   Future<bool> _showDownloadDialog(SupportedLanguage language) async {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return await showDialog<bool>(
           context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Row(
-              children: [
-                Text(language.flag, style: const TextStyle(fontSize: 24)),
-                const SizedBox(width: 12),
-                Expanded(child: Text('Download ${language.name}?')),
-              ],
-            ),
-            content: Text(
-              'The ${language.name} language model needs to be downloaded before use. This may take a few moments.',
-              style: const TextStyle(fontSize: 16),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+          builder: (context) => Dialog(
+            backgroundColor: Colors.transparent,
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
-                ),
-                child: const Text('Download'),
+                ],
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                    ),
+                    child: Icon(
+                      Icons.download_rounded,
+                      size: 32,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Download ${language.name}?',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'To use ${language.name}, we need to download a small language pack. This will only happen once.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: isDarkMode
+                                  ? Colors.white60
+                                  : Colors.black54,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            backgroundColor: theme.colorScheme.primary,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Download',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ) ??
         false;
@@ -345,7 +439,7 @@ class _LanguageSelectorState extends State<LanguageSelector>
             child: ScaleTransition(
               scale: _scaleAnimation,
               child: Container(
-                height: screenSize.height * 0.9,
+                height: screenSize.height * 0.75, // Reduced height
                 decoration: BoxDecoration(
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(28),
@@ -396,6 +490,7 @@ class _LanguageSelectorState extends State<LanguageSelector>
                         children: [
                           _buildHeader(theme, isDarkMode),
                           _buildSearchSection(theme, isDarkMode),
+                          // Helper tools removed for cleaner UI as per "artistic" request or moved
                           if (_showHelperTools)
                             _buildHelperTools(theme, isDarkMode),
                           Expanded(
@@ -561,56 +656,50 @@ class _LanguageSelectorState extends State<LanguageSelector>
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           color: isDarkMode
               ? Colors.white.withOpacity(0.08)
-              : Colors.black.withOpacity(0.04),
+              : Colors.black.withOpacity(0.03),
           border: Border.all(
             color: isDarkMode
                 ? Colors.white.withOpacity(0.1)
-                : Colors.black.withOpacity(0.08),
+                : Colors.black.withOpacity(0.05),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
         ),
         child: TextField(
           controller: _searchController,
           onChanged: _filterLanguages,
+          style: TextStyle(
+            color: isDarkMode ? Colors.white : Colors.black87,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
           decoration: InputDecoration(
             hintText: widget.searchHint,
             hintStyle: TextStyle(
               color: isDarkMode
-                  ? Colors.white.withOpacity(0.5)
-                  : Colors.black.withOpacity(0.5),
+                  ? Colors.white.withOpacity(0.4)
+                  : Colors.black.withOpacity(0.4),
               fontSize: 16,
             ),
-            prefixIcon: Container(
-              padding: const EdgeInsets.all(12),
-              child: Icon(
-                Icons.search,
-                color: isDarkMode
-                    ? Colors.white.withOpacity(0.6)
-                    : Colors.black.withOpacity(0.6),
-                size: 22,
-              ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              color: theme.colorScheme.primary.withOpacity(0.7),
+              size: 24,
             ),
             suffixIcon: _searchController.text.isNotEmpty
-                ? IconButton(
-                    icon: Icon(
-                      Icons.clear,
-                      color: isDarkMode
-                          ? Colors.white.withOpacity(0.6)
-                          : Colors.black.withOpacity(0.6),
-                    ),
-                    onPressed: () {
+                ? GestureDetector(
+                    onTap: () {
                       _searchController.clear();
                       _filterLanguages('');
                     },
+                    child: Icon(
+                      Icons.close_rounded,
+                      color: isDarkMode
+                          ? Colors.white.withOpacity(0.5)
+                          : Colors.black.withOpacity(0.5),
+                      size: 20,
+                    ),
                   )
                 : null,
             border: InputBorder.none,
@@ -618,10 +707,7 @@ class _LanguageSelectorState extends State<LanguageSelector>
               horizontal: 20,
               vertical: 16,
             ),
-          ),
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black87,
-            fontSize: 16,
+            isDense: true,
           ),
         ),
       ),
@@ -823,139 +909,126 @@ class _LanguageSelectorState extends State<LanguageSelector>
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: isCurrentLanguage
-            ? LinearGradient(
-                colors: [
-                  theme.colorScheme.primary.withOpacity(0.15),
-                  theme.colorScheme.primary.withOpacity(0.05),
-                ],
-              )
-            : null,
         color: isCurrentLanguage
-            ? null
-            : isDarkMode
-            ? Colors.white.withOpacity(0.06)
-            : Colors.white.withOpacity(0.7),
+            ? theme.colorScheme.primary.withOpacity(0.1)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isCurrentLanguage
-              ? theme.colorScheme.primary.withOpacity(0.4)
+              ? theme.colorScheme.primary.withOpacity(0.5)
               : isDarkMode
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.08),
-          width: isCurrentLanguage ? 2 : 1,
+              ? Colors.white.withOpacity(0.05)
+              : Colors.black.withOpacity(0.05),
         ),
-        boxShadow: [
-          if (isCurrentLanguage)
-            BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.2),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            )
-          else
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-        ],
       ),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _selectLanguage(language),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Language image and flag
+                // Flag
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isDarkMode
-                        ? Colors.white.withOpacity(0.08)
-                        : Colors.black.withOpacity(0.05),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: ClipOval(
                     child: language.imageUrl != null
                         ? Image.network(
                             language.imageUrl!,
-                            width: 48,
-                            height: 48,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Center(
-                                  child: Text(
-                                    language.flag,
-                                    style: const TextStyle(fontSize: 28),
-                                  ),
-                                ),
+                            errorBuilder: (_, __, ___) =>
+                                _buildTextFlag(language),
                           )
-                        : Center(
-                            child: Text(
-                              language.flag,
-                              style: const TextStyle(fontSize: 28),
-                            ),
-                          ),
+                        : _buildTextFlag(language),
                   ),
                 ),
                 const SizedBox(width: 16),
 
-                // Language info
+                // Name
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         language.name,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 18,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
                           color: isDarkMode ? Colors.white : Colors.black87,
-                          letterSpacing: -0.2,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         language.nativeName,
-                        style: theme.textTheme.bodyMedium?.copyWith(
+                        style: TextStyle(
+                          fontSize: 13,
                           color: isDarkMode
-                              ? Colors.white.withOpacity(0.7)
-                              : Colors.black.withOpacity(0.6),
-                          fontSize: 15,
+                              ? Colors.white.withOpacity(0.5)
+                              : Colors.black.withOpacity(0.5),
                         ),
                       ),
-                      if (downloadProgress != null) ...[
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            minHeight: 4,
-                            backgroundColor: isDarkMode
-                                ? Colors.white.withOpacity(0.1)
-                                : Colors.black.withOpacity(0.1),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              theme.colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
 
-                // Status/Action
-                _buildLanguageStatus(
-                  language: language,
-                  isDownloaded: isDownloaded,
-                  downloadProgress: downloadProgress,
-                  isCurrentLanguage: isCurrentLanguage,
-                  theme: theme,
-                  isDarkMode: isDarkMode,
-                ),
+                // Action Button
+                if (downloadProgress != null)
+                  _buildProgressIndicator(downloadProgress, theme)
+                else if (isCurrentLanguage)
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: theme.colorScheme.primary,
+                  )
+                else if (isDownloaded)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Select',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDarkMode
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.black.withOpacity(0.05),
+                    ),
+                    child: Icon(
+                      Icons.download_rounded,
+                      size: 20,
+                      color: isDarkMode
+                          ? Colors.white.withOpacity(0.7)
+                          : Colors.black.withOpacity(0.7),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -964,132 +1037,38 @@ class _LanguageSelectorState extends State<LanguageSelector>
     );
   }
 
-  Widget _buildLanguageStatus({
-    required SupportedLanguage language,
-    required bool isDownloaded,
-    required double? downloadProgress,
-    required bool isCurrentLanguage,
-    required ThemeData theme,
-    required bool isDarkMode,
-  }) {
-    // If this is the current language, always show "Current" status
-    if (isCurrentLanguage) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
+  Widget _buildTextFlag(SupportedLanguage language) {
+    return Container(
+      color: Colors.grey.shade200,
+      alignment: Alignment.center,
+      child: Text(language.flag, style: const TextStyle(fontSize: 24)),
+    );
+  }
+
+  Widget _buildProgressIndicator(double progress, ThemeData theme) {
+    return SizedBox(
+      width: 36,
+      height: 36,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CircularProgressIndicator(
+            value: progress,
+            strokeWidth: 3,
+            backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
+            valueColor: AlwaysStoppedAnimation<Color>(
               theme.colorScheme.primary,
-              theme.colorScheme.primary.withOpacity(0.8),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: theme.colorScheme.primary.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check, color: Colors.white, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              'Current',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // If download is in progress, show indeterminate progress indicator
-    if (downloadProgress != null) {
-      return Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: theme.colorScheme.primary.withOpacity(0.1),
-        ),
-        child: Center(
-          child: SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(
-              value: null, // INDETERMINATE
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                theme.colorScheme.primary,
-              ),
             ),
           ),
-        ),
-      );
-    }
-
-    // If English or model is downloaded, show "Select" button
-    if (language.code == 'en' || isDownloaded) {
-      return GestureDetector(
-        onTap: () => _selectLanguage(language),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.green, Colors.green.withOpacity(0.8)],
+          Text(
+            '${(progress * 100).toInt()}%',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
             ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.green.withOpacity(0.3),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 16),
-              const SizedBox(width: 4),
-              Text(
-                'Select',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Default: show download button
-    return GestureDetector(
-      onTap: () => _downloadLanguageModel(language),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: LinearGradient(
-            colors: [
-              theme.colorScheme.primary.withOpacity(0.15),
-              theme.colorScheme.primary.withOpacity(0.05),
-            ],
-          ),
-          border: Border.all(color: theme.colorScheme.primary.withOpacity(0.3)),
-        ),
-        child: Icon(Icons.download, color: theme.colorScheme.primary, size: 20),
+        ],
       ),
     );
   }

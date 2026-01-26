@@ -1416,19 +1416,23 @@ class _StoreScreenState extends State<StoreScreen> {
             ),
           ),
 
-          // Floating Cart Bar
-          if (_isCartVisible)
-            Positioned(
-              left: 16,
-              right: 16,
-              bottom: 24,
-              child: _buildCartSummaryBar(theme),
-            ),
+          // Floating Cart Bar - Animated Entry/Exit
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOutCubic,
+            left: 16,
+            right: 16,
+            // Slide nicely from bottom (-200 ensures it's fully offscreen)
+            bottom: _isCartVisible ? 24 : -200,
+            child: _buildCartSummaryBar(theme),
+          ),
 
           // Floating Back Button (Top Left) - REMOVED (Now in AppBar)
 
           // Floating Menu Button (Bottom Right - Swiggy Style)
-          Positioned(
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOutCubic,
             bottom: _isCartVisible ? 130 : 24,
             right: 16,
             child: _buildMenuButton(theme, isDark),

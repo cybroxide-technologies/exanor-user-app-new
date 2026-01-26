@@ -159,19 +159,34 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         final status = (order['status'] ?? '').toString().toLowerCase();
         bool statusMatch = false;
         switch (_selectedTabIndex) {
-          case 0: // Processing
+          case 0: // Processing - includes partially_paid and any in-progress statuses
             statusMatch =
-                status != 'order_completed' &&
-                status != 'delivered' &&
-                status != 'order_cancelled' &&
-                status != 'order_returned';
+                status == 'partially_paid' ||
+                status == 'processing' ||
+                status == 'pending' ||
+                status == 'confirmed' ||
+                status == 'preparing' ||
+                status == 'ready' ||
+                status == 'shipped' ||
+                status == 'out_for_delivery' ||
+                (status != 'order_completed' &&
+                 status != 'delivered' &&
+                 status != 'order_cancelled' &&
+                 status != 'fully_cancelled' &&
+                 status != 'cancelled' &&
+                 status != 'partially_returned' &&
+                 status != 'order_returned');
             break;
-          case 1: // Delivered
+          case 1: // Delivered - only completed orders
             statusMatch = status == 'order_completed' || status == 'delivered';
             break;
-          case 2: // Cancelled
+          case 2: // Cancelled - includes partially_returned, fully_cancelled and other cancelled statuses
             statusMatch =
-                status == 'order_cancelled' || status == 'order_returned';
+                status == 'partially_returned' ||
+                status == 'fully_cancelled' ||
+                status == 'order_cancelled' ||
+                status == 'cancelled' ||
+                status == 'order_returned';
             break;
         }
 
@@ -228,6 +243,178 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   String _formatCurrency(dynamic amount) {
     if (amount == null) return '₹0.00';
     return '₹${double.tryParse(amount.toString())?.toStringAsFixed(2) ?? '0.00'}';
+  }
+
+  String _formatStatusLabel(String status, String statusTitle) {
+    final lowerStatus = status.toLowerCase();
+    
+    // Special formatting for specific statuses
+    if (lowerStatus == 'partially_paid') {
+      return 'PARTIAL PAYMENT';
+    } else if (lowerStatus == 'partially_returned') {
+      return 'PARTIAL RETURN';
+    } else if (lowerStatus == 'fully_cancelled') {
+      return 'CANCELLED';
+    } else if (lowerStatus == 'order_completed') {
+      return 'COMPLETED';
+    } else if (lowerStatus == 'out_for_delivery') {
+      return 'OUT FOR DELIVERY';
+    }
+    
+    return statusTitle.toUpperCase();
+  }
+
+  void _showRatingDialog(dynamic order) {
+    int rating = 0;
+    final TextEditingController reviewController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: Theme.of(context).brightness == Brightness.dark
+                        ? [
+                            const Color(0xFF1E293B),
+                            const Color(0xFF0F172A),
+                          ]
+                        : [
+                            Colors.white,
+                            const Color(0xFFF8FAFC),
+                          ],
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.star_rounded,
+                      size: 60,
+                      color: Colors.amber,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Rate Your Experience',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Order #${order['id']}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              rating = index + 1;
+                            });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              index < rating
+                                  ? Icons.star_rounded
+                                  : Icons.star_border_rounded,
+                              size: 40,
+                              color: index < rating
+                                  ? Colors.amber
+                                  : Colors.grey.withOpacity(0.3),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: reviewController,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: 'Write your review (optional)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.05)
+                            : Colors.grey.withOpacity(0.1),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: rating > 0
+                                ? () {
+                                    // TODO: Submit rating to backend
+                                    Navigator.pop(context);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Thank you for rating! $rating stars',
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                  }
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              backgroundColor: Colors.amber,
+                              foregroundColor: Colors.black,
+                            ),
+                            child: const Text(
+                              'Submit',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -337,7 +524,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     final isDelivered =
         status.toLowerCase() == 'order_completed' ||
         status.toLowerCase() == 'delivered';
-    
+
     String? imageUrl;
     if (order['product_details'] != null &&
         (order['product_details'] as List).isNotEmpty) {
@@ -527,9 +714,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                       // Price & Status (Bottom)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 2),
-                        child: Wrap(
-                          spacing: 10,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                        child: Row(
                           children: [
                             Text(
                               _formatCurrency(order['grand_total']),
@@ -539,7 +724,9 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                                 color: () {
-                                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                                  final isDark =
+                                      Theme.of(context).brightness ==
+                                      Brightness.dark;
                                   final hexColor = isDark
                                       ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
                                       : FirebaseRemoteConfigService.getThemeGradientLightStart();
@@ -548,20 +735,51 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                                 }(),
                               ),
                             ),
-                            Container(
-                              width: 1,
-                              height: 12,
-                              color: theme.dividerColor,
-                            ),
-                            Text(
-                              statusTitle.toUpperCase(),
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.6,
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
                                 ),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.8,
+                                decoration: BoxDecoration(
+                                  color: () {
+                                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                                    final hexColor = isDark
+                                        ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
+                                        : FirebaseRemoteConfigService.getThemeGradientLightStart();
+                                    final baseColor = _hexToColor(hexColor);
+                                    return baseColor.withOpacity(0.15);
+                                  }(),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: () {
+                                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                                      final hexColor = isDark
+                                          ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
+                                          : FirebaseRemoteConfigService.getThemeGradientLightStart();
+                                      return _hexToColor(hexColor).withOpacity(0.3);
+                                    }(),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  _formatStatusLabel(status, statusTitle),
+                                  style: TextStyle(
+                                    color: () {
+                                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                                      final hexColor = isDark
+                                          ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
+                                          : FirebaseRemoteConfigService.getThemeGradientLightStart();
+                                      return _hexToColor(hexColor);
+                                    }(),
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.3,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                             ),
                           ],
@@ -580,15 +798,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           if (isDelivered)
             buildArtisticButton(
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => OrderDetailsScreen(
-                      orderId: order['id'],
-                      storeId: order['store_id'] ?? _effectiveStoreId ?? '',
-                    ),
-                  ),
-                );
+                _showRatingDialog(order);
               },
               label: "Rate Experience",
               icon: Icons.star_rate_rounded,

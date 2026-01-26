@@ -1,11 +1,16 @@
-import 'package:flutter/material.dart';
-import 'package:exanor/services/api_service.dart';
-import 'package:exanor/screens/location_selection_screen.dart';
+import 'dart:async';
 import 'dart:math';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:ui';
+
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/components/universal_translation_wrapper.dart';
+import 'package:exanor/screens/location_selection_screen.dart';
+import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/enhanced_translation_service.dart';
+import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shimmer/shimmer.dart';
 
 class SavedAddressesScreen extends StatefulWidget {
   const SavedAddressesScreen({super.key});
@@ -14,31 +19,42 @@ class SavedAddressesScreen extends StatefulWidget {
   State<SavedAddressesScreen> createState() => _SavedAddressesScreenState();
 }
 
-class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
+class _SavedAddressesScreenState extends State<SavedAddressesScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _addresses = [];
   List<Map<String, dynamic>> _filteredAddresses = [];
   bool _isLoading = true;
   String? _errorMessage;
 
-  // Track expanded cards
+  // Track extended cards
   final Set<String> _expandedCards = <String>{};
 
-  // Enhanced translation service for API responses
+  // Enhanced translation service
   final EnhancedTranslationService _enhancedTranslation =
       EnhancedTranslationService.instance;
+
+  // Animation Controllers
+  late AnimationController _entryAnimationController;
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
 
   @override
   void initState() {
     super.initState();
+    _entryAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _fetchAddresses();
     _searchController.addListener(_onSearchChanged);
+    _entryAnimationController.forward();
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _entryAnimationController.dispose();
     super.dispose();
   }
 
@@ -54,7 +70,6 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         _filteredAddresses = _addresses.where((address) {
           final searchText = query.toLowerCase();
 
-          // Search across multiple fields
           final addressName = (address['address_name'] ?? '')
               .toString()
               .toLowerCase();
@@ -64,25 +79,15 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
           final addressLine1 = (address['address_line_1'] ?? '')
               .toString()
               .toLowerCase();
-          final addressLine2 = (address['address_line_2'] ?? '')
-              .toString()
-              .toLowerCase();
-          final locality = (address['locality'] ?? '').toString().toLowerCase();
-          final city = (address['city'] ?? '').toString().toLowerCase();
-          final state = (address['state'] ?? '').toString().toLowerCase();
-          final district = (address['district'] ?? '').toString().toLowerCase();
           final area = (address['area'] ?? '').toString().toLowerCase();
+          final city = (address['city'] ?? '').toString().toLowerCase();
           final pincode = (address['pincode'] ?? 0).toString();
 
           return addressName.contains(searchText) ||
               attendeeName.contains(searchText) ||
               addressLine1.contains(searchText) ||
-              addressLine2.contains(searchText) ||
-              locality.contains(searchText) ||
-              city.contains(searchText) ||
-              state.contains(searchText) ||
-              district.contains(searchText) ||
               area.contains(searchText) ||
+              city.contains(searchText) ||
               pincode.contains(searchText);
         }).toList();
       }
@@ -96,7 +101,6 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         _errorMessage = null;
       });
 
-      // Send POST request to /user-address/ with bearer token
       final response = await ApiService.post(
         '/user-address/',
         body: {"query": {}},
@@ -109,12 +113,10 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
             response['data']['response'] ?? [],
           );
 
-          // Translate API response data (addresses, areas, localities, etc.)
           final translatedAddresses = await _enhancedTranslation
               .translateApiResponseList(
                 rawAddresses,
-                translateUserNames:
-                    false, // Don't translate address IDs/phone numbers
+                translateUserNames: false,
                 forceIncludeFields: [
                   'address_name',
                   'address_line_1',
@@ -134,6 +136,10 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
             _filteredAddresses = List.from(_addresses);
             _isLoading = false;
           });
+
+          // Re-trigger animation
+          _entryAnimationController.reset();
+          _entryAnimationController.forward();
         } else {
           setState(() {
             _errorMessage = 'Failed to load addresses';
@@ -154,224 +160,171 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            TranslatedText(
-              'Select a location',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
+      body: UniversalTranslationWrapper(
+        excludePatterns: ['@', '.com', '+', 'ID:'],
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverAppBar(
+              expandedHeight: 120.0,
+              floating: false,
+              pinned: true,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              backgroundColor: theme.colorScheme.surface,
+              leading: IconButton(
+                icon: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest
+                        .withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+              flexibleSpace: FlexibleSpaceBar(
+                titlePadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                centerTitle: false,
+                title: TranslatedText(
+                  'Saved Addresses',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 20, // Scaled for SliverAppBar
+                  ),
+                ),
+                background: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                      colors: isDarkMode
+                          ? [
+                              Colors.blueGrey.shade900,
+                              theme.colorScheme.surface,
+                            ]
+                          : [Colors.blue.shade50, theme.colorScheme.surface],
+                    ),
+                  ),
+                ),
               ),
             ),
-            Icon(
-              Icons.keyboard_arrow_down,
-              color: theme.colorScheme.onSurface,
-              size: 20,
-            ),
           ],
-        ),
-      ),
-      body: UniversalTranslationWrapper(
-        excludePatterns: [
-          '@',
-          '.com',
-          '+',
-          'ID:',
-        ], // Don't translate emails, URLs, phone numbers, IDs
-        child: RefreshIndicator(
-          onRefresh: _fetchAddresses,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          body: RefreshIndicator(
+            onRefresh: _fetchAddresses,
+            child: CustomScrollView(
+              slivers: [
                 // Search Bar
-                Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: theme.colorScheme.outline.withOpacity(0.3),
-                    ),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search for area, street name...',
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: theme.colorScheme.primary,
-                      ),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(
-                                Icons.clear,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.6,
-                                ),
-                              ),
-                              onPressed: () {
-                                _searchController.clear();
-                              },
-                            )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 16,
-                      ),
-                    ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                    child: _buildSearchBar(theme),
                   ),
                 ),
 
-                const SizedBox(height: 24),
-
-                // Search Results Info
-                if (_searchController.text.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: TranslatedText(
-                      '${_filteredAddresses.length} address${_filteredAddresses.length != 1 ? 'es' : ''} found',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
-                      ),
+                // Add Address Button
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 0,
                     ),
+                    child: _buildAddAddressButton(theme),
                   ),
-                ],
-
-                // Add Address Option
-                _buildActionTile(
-                  icon: Icons.add,
-                  iconColor: theme.colorScheme.primary,
-                  title: 'Add address',
-                  onTap: () async {
-                    // Navigate to location selection screen
-                    final result = await Navigator.push<Map<String, dynamic>>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LocationSelectionScreen(),
-                      ),
-                    );
-
-                    // If address was selected, refresh the addresses list
-                    if (result != null) {
-                      _fetchAddresses();
-                    }
-                  },
                 ),
 
-                const SizedBox(height: 32),
+                SliverPadding(padding: const EdgeInsets.only(top: 24)),
 
-                // Saved Addresses Section
-                if (_isLoading)
-                  const Center(
+                // Title
+                if (!_isLoading && _filteredAddresses.isNotEmpty)
+                  SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                else if (_errorMessage != null)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      child: Row(
                         children: [
-                          TranslatedText(
-                            _errorMessage!,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.error,
-                            ),
-                            textAlign: TextAlign.center,
+                          Icon(
+                            Icons.bookmark_border_rounded,
+                            size: 18,
+                            color: theme.colorScheme.primary,
                           ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _fetchAddresses,
-                            child: const TranslatedText('Retry'),
+                          const SizedBox(width: 8),
+                          TranslatedText(
+                            "YOUR LOCATIONS",
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.6,
+                              ),
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  )
-                else ...[
-                  TranslatedText(
-                    'SAVED ADDRESSES',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.2,
-                    ),
                   ),
-                  const SizedBox(height: 16),
 
-                  if (_filteredAddresses.isEmpty)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          children: [
-                            Icon(
-                              _searchController.text.isNotEmpty
-                                  ? Icons.search_off
-                                  : Icons.location_off,
-                              size: 48,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.5,
-                              ),
+                // Content
+                if (_isLoading)
+                  SliverFillRemaining(child: _buildLoadingState(theme))
+                else if (_errorMessage != null)
+                  SliverFillRemaining(child: _buildErrorState(theme))
+                else if (_filteredAddresses.isEmpty)
+                  SliverFillRemaining(child: _buildEmptyState(theme))
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final address = _filteredAddresses[index];
+                      // Staggered Animation
+                      return AnimatedBuilder(
+                        animation: _entryAnimationController,
+                        builder: (context, child) {
+                          final double slideStart = 50.0 * (index + 1);
+                          final double slideEnd = 0.0;
+
+                          final double start = (index * 0.1).clamp(0.0, 1.0);
+                          final double end = (start + 0.6).clamp(0.0, 1.0);
+
+                          final curve = CurvedAnimation(
+                            parent: _entryAnimationController,
+                            curve: Interval(
+                              start,
+                              end,
+                              curve: Curves.easeOutQuint,
                             ),
-                            const SizedBox(height: 16),
-                            TranslatedText(
-                              _searchController.text.isNotEmpty
-                                  ? 'No addresses found'
-                                  : 'No saved addresses',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.7,
-                                ),
-                              ),
+                          );
+
+                          return Opacity(
+                            opacity: curve.value,
+                            child: Transform.translate(
+                              offset: Offset(0, slideStart * (1 - curve.value)),
+                              child: child,
                             ),
-                            const SizedBox(height: 8),
-                            TranslatedText(
-                              _searchController.text.isNotEmpty
-                                  ? 'Try searching with different keywords'
-                                  : 'Add your first address to get started',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.5,
-                                ),
-                              ),
-                            ),
-                          ],
+                          );
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 8,
+                          ),
+                          child: _buildModernAddressCard(address, theme),
                         ),
-                      ),
-                    )
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _filteredAddresses.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 16),
-                      itemBuilder: (context, index) {
-                        final address = _filteredAddresses[index];
-                        return _buildAddressCard(address, theme);
-                      },
-                    ),
-                ],
+                      );
+                    }, childCount: _filteredAddresses.length),
+                  ),
+
+                // Bottom padding
+                const SliverPadding(padding: EdgeInsets.only(bottom: 40)),
               ],
             ),
           ),
@@ -380,448 +333,106 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
     );
   }
 
-  Widget _buildActionTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    String? subtitle,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor, size: 24),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TranslatedText(
-                    title,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
-                  if (subtitle != null)
-                    TranslatedText(
-                      subtitle,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.7),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: theme.colorScheme.onSurface.withOpacity(0.5),
-              size: 20,
-            ),
-          ],
+  Widget _buildSearchBar(ThemeData theme) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        style: theme.textTheme.bodyMedium,
+        decoration: InputDecoration(
+          hintText: 'Search your saved places...',
+          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: theme.colorScheme.primary,
+          ),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded),
+                  onPressed: () => _searchController.clear(),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 16,
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildAddressCard(Map<String, dynamic> address, ThemeData theme) {
-    // Extract address data based on the new API response structure
-    final String addressId = address['id'] ?? '';
-    final String addressName = address['address_name'] ?? 'Address';
-    final String attendeeName = address['attendee_name'] ?? '';
-    final String addressLine1 = address['address_line_1'] ?? '';
-    final String addressLine2 = address['address_line_2'] ?? '';
-    final String locality = address['locality'] ?? '';
-    final String state = address['state'] ?? '';
-    final String district = address['district'] ?? '';
-    final String city = address['city'] ?? '';
-    final String area = address['area'] ?? '';
-    final int pincode = address['pincode'] ?? 0;
-    final int phoneNumber = address['phone_number'] ?? 0;
-
-    // Check if this card is expanded
-    final bool isExpanded = _expandedCards.contains(addressId);
-
-    // Build short address for collapsed view
-    List<String> shortAddressParts = [];
-    if (addressLine1.isNotEmpty) shortAddressParts.add(addressLine1);
-    if (area.isNotEmpty) shortAddressParts.add(area);
-    if (locality.isNotEmpty) shortAddressParts.add(locality);
-    final String shortAddress = shortAddressParts.join(', ');
-
-    // Build full address string for expanded view
-    List<String> fullAddressParts = [];
-    if (addressLine1.isNotEmpty) fullAddressParts.add(addressLine1);
-    if (addressLine2.isNotEmpty) fullAddressParts.add(addressLine2);
-    if (area.isNotEmpty) fullAddressParts.add(area);
-    if (locality.isNotEmpty) fullAddressParts.add(locality);
-    if (district.isNotEmpty) fullAddressParts.add(district);
-    if (city.isNotEmpty) fullAddressParts.add(city);
-    if (state.isNotEmpty) fullAddressParts.add(state);
-    if (pincode > 0) fullAddressParts.add(pincode.toString());
-    final String fullAddress = fullAddressParts.join(', ');
-
-    IconData addressIcon;
-    Color iconColor = theme.colorScheme.primary;
-
-    // Determine icon based on address type
-    switch (addressName.toLowerCase()) {
-      case 'home':
-        addressIcon = Icons.home;
-        iconColor = Colors.green;
-        break;
-      case 'work':
-        addressIcon = Icons.work;
-        iconColor = Colors.blue;
-        break;
-      case 'office':
-        addressIcon = Icons.business;
-        iconColor = Colors.blue;
-        break;
-      case 'friends and family':
-      case 'friends':
-      case 'family':
-        addressIcon = Icons.people;
-        iconColor = Colors.orange;
-        break;
-      default:
-        addressIcon = Icons.location_on;
-        iconColor = theme.colorScheme.primary;
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 2),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.colorScheme.outline.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+  Widget _buildAddAddressButton(ThemeData theme) {
+    return ScaleButton(
+      onTap: () async {
+        final result = await Navigator.push<Map<String, dynamic>>(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const LocationSelectionScreen(),
           ),
-        ],
-      ),
-      child: InkWell(
-        onTap: () {
-          setState(() {
-            if (isExpanded) {
-              _expandedCards.remove(addressId);
-            } else {
-              _expandedCards.add(addressId);
-            }
-          });
-        },
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        );
+        if (result != null) {
+          _fetchAddresses();
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(4), // For border
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: [
+              theme.colorScheme.primary.withOpacity(0.2),
+              theme.colorScheme.secondary.withOpacity(0.1),
+            ],
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: theme.colorScheme.primary.withOpacity(0.2),
+              width: 1.5,
+              style: BorderStyle
+                  .solid, // Can change to use a DottedBorder package if available
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Header Row - Always visible
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: iconColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(addressIcon, color: iconColor, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TranslatedText(
-                          addressName.toUpperCase(),
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: iconColor,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        if (attendeeName.isNotEmpty) ...[
-                          const SizedBox(height: 2),
-                          TranslatedText(
-                            attendeeName,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // More options button
-                      IconButton(
-                        onPressed: () {
-                          _showAddressOptions(address);
-                        },
-                        icon: Icon(
-                          Icons.more_vert,
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          size: 20,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                        padding: EdgeInsets.zero,
-                      ),
-                      // Expand/Collapse button
-                      AnimatedRotation(
-                        turns: isExpanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 300),
-                        child: Icon(
-                          Icons.keyboard_arrow_down,
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          size: 24,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Short Address - Always visible
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.location_on_outlined,
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TranslatedText(
-                      shortAddress.isNotEmpty ? shortAddress : fullAddress,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.8),
-                        height: 1.4,
-                      ),
-                      maxLines: isExpanded ? null : 2,
-                      overflow: isExpanded ? null : TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Expandable Content
-              AnimatedCrossFade(
-                duration: const Duration(milliseconds: 300),
-                firstChild: const SizedBox.shrink(),
-                secondChild: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 16),
-
-                    // Full Address (only if different from short)
-                    if (fullAddress != shortAddress) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceVariant.withOpacity(
-                            0.3,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.map_outlined,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.6,
-                              ),
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  TranslatedText(
-                                    'FULL ADDRESS',
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: theme.colorScheme.onSurface
-                                          .withOpacity(0.6),
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  TranslatedText(
-                                    fullAddress,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurface
-                                          .withOpacity(0.9),
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Contact Information
-                    if (phoneNumber > 0) ...[
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.phone_outlined,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                            size: 16,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '+91 ${phoneNumber.toString()}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.7,
-                              ),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Address Details Grid
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceVariant.withOpacity(
-                          0.3,
-                        ),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          if (locality.isNotEmpty || district.isNotEmpty)
-                            Row(
-                              children: [
-                                if (locality.isNotEmpty) ...[
-                                  Expanded(
-                                    child: _buildDetailItem(
-                                      'Locality',
-                                      locality,
-                                      theme,
-                                    ),
-                                  ),
-                                ],
-                                if (locality.isNotEmpty && district.isNotEmpty)
-                                  const SizedBox(width: 16),
-                                if (district.isNotEmpty) ...[
-                                  Expanded(
-                                    child: _buildDetailItem(
-                                      'District',
-                                      district,
-                                      theme,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-
-                          if ((locality.isNotEmpty || district.isNotEmpty) &&
-                              (city.isNotEmpty || state.isNotEmpty))
-                            const SizedBox(height: 8),
-
-                          if (city.isNotEmpty || state.isNotEmpty)
-                            Row(
-                              children: [
-                                if (city.isNotEmpty) ...[
-                                  Expanded(
-                                    child: _buildDetailItem(
-                                      'City',
-                                      city,
-                                      theme,
-                                    ),
-                                  ),
-                                ],
-                                if (city.isNotEmpty && state.isNotEmpty)
-                                  const SizedBox(width: 16),
-                                if (state.isNotEmpty) ...[
-                                  Expanded(
-                                    child: _buildDetailItem(
-                                      'State',
-                                      state,
-                                      theme,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-
-                          if (pincode > 0 &&
-                              (city.isNotEmpty ||
-                                  state.isNotEmpty ||
-                                  locality.isNotEmpty ||
-                                  district.isNotEmpty)) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                _buildDetailItem(
-                                  'Pincode',
-                                  pincode.toString(),
-                                  theme,
-                                ),
-                                const Spacer(),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Action Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          _selectAddress(address);
-                        },
-                        icon: const Icon(Icons.my_location, size: 18),
-                        label: const TranslatedText('Select This Address'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
-                crossFadeState: isExpanded
-                    ? CrossFadeState.showSecond
-                    : CrossFadeState.showFirst,
+                child: Icon(
+                  Icons.add_location_alt_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              TranslatedText(
+                "Add New Address",
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ],
           ),
@@ -830,65 +441,339 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
     );
   }
 
-  Widget _buildDetailItem(String label, String value, ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TranslatedText(
-          label.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-        ),
-        const SizedBox(height: 2),
-        TranslatedText(
-          value,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.9),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildModernAddressCard(
+    Map<String, dynamic> address,
+    ThemeData theme,
+  ) {
+    final String addressName = address['address_name'] ?? 'Address';
+    final String addressLine1 = address['address_line_1'] ?? '';
+    final String locality = address['locality'] ?? '';
+    final String city = address['city'] ?? '';
+    final int pincode = address['pincode'] ?? 0;
+    final int phoneNumber = address['phone_number'] ?? 0;
 
-  void _showAddressOptions(Map<String, dynamic> address) {
-    final theme = Theme.of(context);
+    // Determine Type Icon
+    IconData typeIcon;
+    Color typeColor;
 
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.edit, color: theme.colorScheme.primary),
-              title: const TranslatedText('Edit address'),
-              onTap: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: TranslatedText('Edit address coming soon!'),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.delete, color: theme.colorScheme.error),
-              title: const TranslatedText('Delete address'),
-              onTap: () {
-                Navigator.pop(context);
-                _showDeleteConfirmation(address);
-              },
+    final nameLower = addressName.toLowerCase();
+    if (nameLower.contains('home')) {
+      typeIcon = Icons.home_rounded;
+      typeColor = Colors.teal;
+    } else if (nameLower.contains('work') || nameLower.contains('office')) {
+      typeIcon = Icons.work_rounded;
+      typeColor = Colors.indigo;
+    } else {
+      typeIcon = Icons.location_on_rounded;
+      typeColor = theme.colorScheme.primary;
+    }
+
+    final bool isExpanded = _expandedCards.contains(address['id']);
+
+    return ScaleButton(
+      onTap: () {
+        setState(() {
+          if (isExpanded) {
+            _expandedCards.remove(address['id']);
+          } else {
+            _expandedCards.add(address['id'] ?? '');
+          }
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isExpanded ? typeColor.withOpacity(0.5) : Colors.transparent,
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Column(
+            children: [
+              // Main Card Content
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Icon Puc
+                    Container(
+                      height: 48,
+                      width: 48,
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(typeIcon, color: typeColor, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Texts
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              TranslatedText(
+                                addressName.toUpperCase(),
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: typeColor,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const Spacer(),
+                              if (!isExpanded)
+                                Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          TranslatedText(
+                            addressLine1,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          TranslatedText(
+                            "$locality, $city",
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Expanded Actions Area
+              AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                child: isExpanded
+                    ? Container(
+                        width: double.infinity,
+                        color: theme
+                            .colorScheme
+                            .surfaceContainer, // Slightly darker
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Additional Details Grid
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 12,
+                              children: [
+                                if (pincode > 0)
+                                  _buildMiniDetail(
+                                    Icons.grid_3x3,
+                                    "$pincode",
+                                    theme,
+                                  ),
+                                if (phoneNumber > 0)
+                                  _buildMiniDetail(
+                                    Icons.phone_rounded,
+                                    "$phoneNumber",
+                                    theme,
+                                  ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // Action Buttons
+                            Row(
+                              children: [
+                                // Select Button
+                                Expanded(
+                                  flex: 2,
+                                  child: ElevatedButton(
+                                    onPressed: () => _selectAddress(address),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: typeColor,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child: const TranslatedText(
+                                      "Deliver Here",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // Delete Icon Btn
+                                Material(
+                                  color: theme.colorScheme.error.withOpacity(
+                                    0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: InkWell(
+                                    onTap: () =>
+                                        _showDeleteConfirmation(address),
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: theme.colorScheme.error,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _buildMiniDetail(IconData icon, String text, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState(ThemeData theme) {
+    return Shimmer.fromColors(
+      baseColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+      highlightColor: theme.colorScheme.surface,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(20),
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 4,
+        separatorBuilder: (_, __) => const SizedBox(height: 16),
+        itemBuilder: (_, __) => Container(
+          height: 120,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.wifi_off_rounded,
+            size: 48,
+            color: theme.colorScheme.error,
+          ),
+          const SizedBox(height: 16),
+          TranslatedText(
+            _errorMessage ?? "Something went wrong",
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton.tonal(
+            onPressed: _fetchAddresses,
+            child: const TranslatedText("Try Again"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Using Lottie for "good animation" as requested
+          // Fallback to Icon if lottie fails or file missing
+          SizedBox(
+            height: 200,
+            width: 200,
+            child: Lottie.asset(
+              'assets/lottie/location_marker.json',
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  Icons.map_rounded,
+                  size: 100,
+                  color: theme.colorScheme.outline.withOpacity(0.3),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 24),
+          TranslatedText(
+            "No Saved Addresses",
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TranslatedText(
+            "It feels a bit empty here.",
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // LOGIC & UTILS
 
   void _showDeleteConfirmation(Map<String, dynamic> address) {
     showDialog(
@@ -903,7 +788,10 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
             onPressed: () => Navigator.pop(context),
             child: const TranslatedText('Cancel'),
           ),
-          TextButton(
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () {
               Navigator.pop(context);
               _deleteAddress(address);
@@ -915,11 +803,84 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
     );
   }
 
-  void _deleteAddress(Map<String, dynamic> address) {
-    // Implement delete functionality
+  void _deleteAddress(Map<String, dynamic> address) async {
+    // Implement API call here
+    // For now assuming success or showing snackbar as per original code
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: TranslatedText('Delete functionality coming soon!')),
     );
+  }
+
+  void _selectAddress(Map<String, dynamic> address) async {
+    try {
+      final String addressName = address['address_name'] ?? 'Address';
+      final String addressLine1 = address['address_line_1'] ?? '';
+      final String addressLine2 = address['address_line_2'] ?? '';
+      final double lat =
+          double.tryParse(address['lat']?.toString() ?? '0.0') ?? 0.0;
+      final double lng =
+          double.tryParse(address['lng']?.toString() ?? '0.0') ?? 0.0;
+      final String area = address['area'] ?? '';
+      final String city = address['city'] ?? '';
+      final String locality = address['locality'] ?? '';
+
+      List<String> addressParts = [];
+      if (addressLine1.isNotEmpty) addressParts.add(addressLine1);
+      if (addressLine2.isNotEmpty) addressParts.add(addressLine2);
+      if (area.isNotEmpty && area != city)
+        addressParts.add(area);
+      else if (locality.isNotEmpty && locality != city)
+        addressParts.add(locality);
+      if (city.isNotEmpty) addressParts.add(city);
+      final String addressSubtitle = addressParts.join(', ');
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('address_title', addressName.toUpperCase());
+      await prefs.setString(
+        'address_subtitle',
+        addressSubtitle.isNotEmpty ? addressSubtitle : 'Selected address',
+      );
+      await prefs.setString('display_area', area);
+      await prefs.setString('display_city', city);
+      await prefs.setString('display_locality', locality);
+      await prefs.setDouble('latitude', lat);
+      await prefs.setDouble('longitude', lng);
+      await prefs.setString('lat_string', address['lat']?.toString() ?? '0.0');
+      await prefs.setString('lng_string', address['lng']?.toString() ?? '0.0');
+      await prefs.setString('saved_address_id', address['id'] ?? '');
+      await prefs.setString('saved_address_name', addressName);
+      await prefs.setString('saved_address_line_1', addressLine1);
+      await prefs.setString('saved_address_line_2', addressLine2);
+      await prefs.setString('saved_locality', locality);
+      await prefs.setString('saved_city', city);
+      await prefs.setString('saved_state', address['state'] ?? '');
+      await prefs.setString('saved_district', address['district'] ?? '');
+      await prefs.setString('saved_area', area);
+      await prefs.setInt('saved_pincode', address['pincode'] ?? 0);
+      await prefs.setInt('saved_phone_number', address['phone_number'] ?? 0);
+      await prefs.setString(
+        'saved_attendee_name',
+        address['attendee_name'] ?? '',
+      );
+
+      if (mounted) {
+        _showSelectionAnimation(context, addressName);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 1800));
+
+      if (mounted) {
+        Navigator.of(context).pop(); // Close dialog
+        Navigator.pop(context, {
+          'addressSelected': true,
+          'addressData': address,
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   void _showSelectionAnimation(BuildContext context, String addressName) {
@@ -933,14 +894,14 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
           child: Material(
             color: Colors.transparent,
             child: Container(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(32),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.2),
-                    blurRadius: 20,
+                    blurRadius: 30,
                     offset: const Offset(0, 10),
                   ),
                 ],
@@ -951,29 +912,30 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0.0, end: 1.0),
                     duration: const Duration(milliseconds: 1500),
-                    curve: Curves.easeInOut,
+                    curve: Curves.elasticOut,
                     builder: (context, value, child) {
-                      return Transform.translate(
-                        offset: Offset(
-                          (value * 50) - 25,
-                          -sin(value * pi) * 20,
-                        ),
-                        child: Transform.rotate(
-                          angle: 0.2 * value,
-                          child: Icon(
-                            Icons.flight_takeoff_rounded,
-                            size: 48,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                      return Transform.scale(
+                        scale: value,
+                        child: Icon(
+                          Icons.check_circle_rounded,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.primary,
                         ),
                       );
                     },
                   ),
                   const SizedBox(height: 24),
                   TranslatedText(
-                    'Flying to $addressName...',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    'Location Updated!',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    addressName,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -984,126 +946,49 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
       },
     );
   }
+}
 
-  void _selectAddress(Map<String, dynamic> address) async {
-    try {
-      print('📍 SavedAddresses: Processing address selection...');
-      print('   Raw address data: $address');
+// Helper Widget for bounce/scale effect
+class ScaleButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  const ScaleButton({super.key, required this.child, required this.onTap});
 
-      // Extract address information
-      final String addressName = address['address_name'] ?? 'Address';
-      final String addressLine1 = address['address_line_1'] ?? '';
-      final String addressLine2 = address['address_line_2'] ?? '';
+  @override
+  State<ScaleButton> createState() => _ScaleButtonState();
+}
 
-      // Parse coordinates from strings (API returns lat/lng as strings)
-      final double lat =
-          double.tryParse(address['lat']?.toString() ?? '0.0') ?? 0.0;
-      final double lng =
-          double.tryParse(address['lng']?.toString() ?? '0.0') ?? 0.0;
+class _ScaleButtonState extends State<ScaleButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scale;
 
-      print('📍 SavedAddresses: Parsed coordinates - Lat: $lat, Lng: $lng');
-      print('   Original lat string: "${address['lat']}"');
-      print('   Original lng string: "${address['lng']}"');
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.96).animate(_controller);
+  }
 
-      // Extract area and city for subtitle
-      final String area = address['area'] ?? '';
-      final String city = address['city'] ?? '';
-      final String locality = address['locality'] ?? '';
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
-      // Build address subtitle with priority: address_lines + area/city
-      List<String> addressParts = [];
-      if (addressLine1.isNotEmpty) addressParts.add(addressLine1);
-      if (addressLine2.isNotEmpty) addressParts.add(addressLine2);
-
-      // Add area or locality, then city for location context
-      if (area.isNotEmpty && area != city) {
-        addressParts.add(area);
-      } else if (locality.isNotEmpty && locality != city) {
-        addressParts.add(locality);
-      }
-      if (city.isNotEmpty) {
-        addressParts.add(city);
-      }
-
-      final String addressSubtitle = addressParts.join(', ');
-
-      // Save address data to SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-
-      // Save address title and subtitle for display (using new keys to match HomeScreen)
-      await prefs.setString('address_title', addressName.toUpperCase());
-      await prefs.setString(
-        'address_subtitle',
-        addressSubtitle.isNotEmpty ? addressSubtitle : 'Selected address',
-      );
-
-      // Save area and city for additional context
-      await prefs.setString('display_area', area);
-      await prefs.setString('display_city', city);
-      await prefs.setString('display_locality', locality);
-
-      // Save latitude and longitude (using new keys to match HomeScreen)
-      await prefs.setDouble('latitude', lat);
-      await prefs.setDouble('longitude', lng);
-      await prefs.setString('lat_string', address['lat']?.toString() ?? '0.0');
-      await prefs.setString('lng_string', address['lng']?.toString() ?? '0.0');
-
-      // Save complete address data for future use (using consistent naming)
-      await prefs.setString('saved_address_id', address['id'] ?? '');
-      await prefs.setString('saved_address_name', addressName);
-      await prefs.setString('saved_address_line_1', addressLine1);
-      await prefs.setString('saved_address_line_2', addressLine2);
-      await prefs.setString('saved_locality', address['locality'] ?? '');
-      await prefs.setString('saved_city', address['city'] ?? '');
-      await prefs.setString('saved_state', address['state'] ?? '');
-      await prefs.setString('saved_district', address['district'] ?? '');
-      await prefs.setString('saved_area', address['area'] ?? '');
-      await prefs.setInt('saved_pincode', address['pincode'] ?? 0);
-      await prefs.setInt('saved_phone_number', address['phone_number'] ?? 0);
-      await prefs.setString(
-        'saved_attendee_name',
-        address['attendee_name'] ?? '',
-      );
-
-      print(
-        '📍 SavedAddresses: Address data saved to SharedPreferences with NEW KEYS',
-      );
-      print('   address_title: ${addressName.toUpperCase()}');
-      print('   address_subtitle: $addressSubtitle');
-      print('   display_area: $area');
-      print('   display_city: $city');
-      print('   latitude: $lat');
-      print('   longitude: $lng');
-      print(
-        '📍 SavedAddresses: This should match the keys HomeScreen is looking for',
-      );
-
-      // Show animation
-      if (mounted) {
-        _showSelectionAnimation(context, addressName);
-      }
-
-      // Wait for animation
-      await Future.delayed(const Duration(milliseconds: 1800));
-
-      if (mounted) {
-        // Close animation dialog
-        Navigator.of(context).pop();
-
-        // Navigate back to previous screen (HomeScreen)
-        Navigator.pop(context, {
-          'addressSelected': true,
-          'addressData': address,
-        });
-      }
-    } catch (e) {
-      print('❌ SavedAddresses: Error selecting address: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error selecting address: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) {
+        _controller.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _controller.reverse(),
+      child: ScaleTransition(scale: _scale, child: widget.child),
+    );
   }
 }

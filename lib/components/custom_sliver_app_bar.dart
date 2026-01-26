@@ -96,204 +96,292 @@ class CustomSliverAppBar extends StatelessWidget {
       automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
         stretchModes: const [StretchMode.zoomBackground, StretchMode.fadeTitle],
-        background: RepaintBoundary(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: isDarkMode
-                    ? [
-                        _hexToColor(
-                          FirebaseRemoteConfigService.getThemeGradientDarkStart(),
-                        ),
-                        _hexToColor(
-                          FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
-                        ),
-                      ]
-                    : [
-                        _hexToColor(
-                          FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                        ).withOpacity(0.12), // Unified strong tint
-                        _hexToColor(
-                          FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                        ).withOpacity(0.12), // Consistent opacity
-                      ],
-                stops: isDarkMode ? null : const [0.0, 1.0],
-              ),
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  left: 16.0,
-                  right: 16.0,
-                  top: 12.0, // Increased top padding
-                  bottom: 0.0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top row with location and actions
-                    Row(
-                      children: [
-                        // Location icon and text
-                        Icon(
-                          Icons.location_on,
-                          color: theme.colorScheme.primary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              // Navigate to SavedAddressesScreen
-                              final result =
-                                  await Navigator.push<Map<String, dynamic>>(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const SavedAddressesScreen(),
-                                    ),
-                                  );
+        background: LayoutBuilder(
+          builder: (context, constraints) {
+            // Calculate opacity to fade out content as it collapses
+            // expandedHeight is 70, toolbarHeight is 56.
+            // We fade from 1.0 to 0.0 as it shrinks from 70 to 56.
+            final double currentHeight = constraints.maxHeight;
+            final double opacity = ((currentHeight - 56.0) / (70.0 - 56.0))
+                .clamp(0.0, 1.0);
 
-                              // If address was selected, call the callback to refresh
-                              if (result != null &&
-                                  result['addressSelected'] == true &&
-                                  onAddressUpdated != null) {
-                                onAddressUpdated!();
-                              }
-                            },
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    TranslatedText(
-                                      addressTitle ?? 'Set Location',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: theme.colorScheme.onSurface,
+            return Opacity(
+              opacity: opacity,
+              child: RepaintBoundary(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: isDarkMode
+                          ? [
+                              _hexToColor(
+                                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                              ),
+                              _hexToColor(
+                                FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+                              ),
+                            ]
+                          : [
+                              _hexToColor(
+                                FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                              ).withOpacity(0.12), // Unified strong tint
+                              _hexToColor(
+                                FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                              ).withOpacity(0.12), // Consistent opacity
+                            ],
+                      stops: isDarkMode ? null : const [0.0, 1.0],
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        left: 16.0,
+                        right: 16.0,
+                        top: 12.0, // Increased top padding
+                        bottom: 0.0,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Top row with refined layout - Standalone Icon & Consistent Buttons
+                          Row(
+                            children: [
+                              // 1. Address Section (Expanded)
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () async {
+                                    final result =
+                                        await Navigator.push<
+                                          Map<String, dynamic>
+                                        >(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const SavedAddressesScreen(),
+                                          ),
+                                        );
+
+                                    if (result != null &&
+                                        result['addressSelected'] == true &&
+                                        onAddressUpdated != null) {
+                                      onAddressUpdated!();
+                                    }
+                                  },
+                                  child: Container(
+                                    color:
+                                        Colors.transparent, // Hit test target
+                                    child: Row(
+                                      children: [
+                                        // Standalone Location Icon (No Box)
+                                        Icon(
+                                          Icons.location_on_rounded,
+                                          color: theme.colorScheme.primary,
+                                          size:
+                                              32, // Slightly larger to stand out without box
+                                        ),
+                                        const SizedBox(width: 8),
+
+                                        // Text Content
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              // Title Row
+                                              Row(
+                                                children: [
+                                                  Flexible(
+                                                    child: TranslatedText(
+                                                      addressTitle ??
+                                                          'Set Location',
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        color: theme
+                                                            .colorScheme
+                                                            .onSurface,
+                                                        height: 1.1,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 2),
+                                                  Icon(
+                                                    Icons
+                                                        .keyboard_arrow_down_rounded,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onSurface,
+                                                    size: 20,
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 2),
+                                              // Subtitle
+                                              TranslatedText(
+                                                _buildAddressExcerpt(),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withOpacity(0.7),
+                                                  letterSpacing: 0,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(width: 8),
+
+                              // 2. Actions Row (Language + Profile)
+                              // Wrapped in a Row to keep them tight
+                              Row(
+                                children: [
+                                  // Language Button
+                                  GestureDetector(
+                                    onTap: () {
+                                      showLanguageSelector(context);
+                                    },
+                                    child: Container(
+                                      width: 44, // Fixed consistent size
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isDarkMode
+                                            ? Colors.white.withOpacity(0.1)
+                                            : Colors.white,
+                                        border: Border.all(
+                                          color: isDarkMode
+                                              ? Colors.white.withOpacity(0.1)
+                                              : Colors.grey.withOpacity(0.2),
+                                          width: 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.05,
+                                            ),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Icon(
+                                        Icons.translate_rounded,
+                                        color: theme.colorScheme.primary,
+                                        size: 20,
                                       ),
                                     ),
-                                    Icon(
-                                      Icons.keyboard_arrow_down,
-                                      color: theme.colorScheme.onSurface,
-                                      size: 20,
-                                    ),
-                                  ],
-                                ),
-                                TranslatedText(
-                                  _buildAddressExcerpt(),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(0.7),
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
 
-                        // Action icons
-                        GestureDetector(
-                          onTap: () async {
-                            // Navigate to Profile screen
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const MyProfileScreen(),
-                              ),
-                            );
-                            // Refresh user data after returning from profile
-                            if (onUserDataUpdated != null) {
-                              onUserDataUpdated!();
-                            }
-                          },
-                          child: isLoadingUserData
-                              ? Shimmer.fromColors(
-                                  baseColor: Colors.grey[800]!,
-                                  highlightColor: Colors.grey[800]!,
-                                  child: CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: Colors.grey[300],
-                                  ),
-                                )
-                              : CircleAvatar(
-                                  radius: 20,
-                                  backgroundColor: Colors.orange,
-                                  backgroundImage:
-                                      (userImage != null &&
-                                              userImage!.isNotEmpty) ||
-                                          (userImgUrl != null &&
-                                              userImgUrl!.isNotEmpty)
-                                      ? NetworkImage(userImage ?? userImgUrl!)
-                                      : null,
-                                  child:
-                                      (userImage == null ||
-                                              userImage!.isEmpty) &&
-                                          (userImgUrl == null ||
-                                              userImgUrl!.isEmpty)
-                                      ? TranslatedText(
-                                          userName?.isNotEmpty == true
-                                              ? userName!
-                                                    .substring(0, 1)
-                                                    .toUpperCase()
-                                              : 'U',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 10),
+
+                                  // Profile Button
+                                  GestureDetector(
+                                    onTap: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const MyProfileScreen(),
+                                        ),
+                                      );
+                                      if (onUserDataUpdated != null) {
+                                        onUserDataUpdated!();
+                                      }
+                                    },
+                                    child: isLoadingUserData
+                                        ? Shimmer.fromColors(
+                                            baseColor: Colors.grey[800]!,
+                                            highlightColor: Colors.grey[700]!,
+                                            child: const CircleAvatar(
+                                              radius: 22,
+                                            ),
+                                          )
+                                        : Container(
+                                            width: 44, // Matched size
+                                            height: 44,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors
+                                                    .white, // Clean white border acting as a ring
+                                                width: 2,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.1),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: CircleAvatar(
+                                              backgroundColor:
+                                                  theme.colorScheme.primary,
+                                              backgroundImage:
+                                                  (userImage != null &&
+                                                          userImage!
+                                                              .isNotEmpty) ||
+                                                      (userImgUrl != null &&
+                                                          userImgUrl!
+                                                              .isNotEmpty)
+                                                  ? NetworkImage(
+                                                      userImage ?? userImgUrl!,
+                                                    )
+                                                  : null,
+                                              child:
+                                                  (userImage == null ||
+                                                          userImage!.isEmpty) &&
+                                                      (userImgUrl == null ||
+                                                          userImgUrl!.isEmpty)
+                                                  ? TranslatedText(
+                                                      userName?.isNotEmpty ==
+                                                              true
+                                                          ? userName!
+                                                                .substring(0, 1)
+                                                                .toUpperCase()
+                                                          : 'U',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 18,
+                                                      ),
+                                                    )
+                                                  : null,
+                                            ),
                                           ),
-                                        )
-                                      : null,
-                                ),
-                        ),
-                        // Language Selector
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () {
-                            // Show language selector
-                            showLanguageSelector(context);
-                          },
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: theme.colorScheme.surface,
-                              border: Border.all(
-                                color: theme.colorScheme.primary.withOpacity(
-                                  0.3,
-                                ),
-                                width: 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.shadow.withOpacity(
-                                    0.1,
                                   ),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.translate,
-                              color: theme.colorScheme.primary,
-                              size: 20,
-                            ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -329,47 +417,61 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
     // Solid background with subtle tint
     // Solid background with subtle tint
     return Material(
-      color: isDarkMode
-          ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkStart())
-          : Colors.white, // Strictly opaque background
+      color: Colors.transparent,
       elevation: 0,
       child: Container(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDarkMode
-                ? [
-                    _hexToColor(
-                      FirebaseRemoteConfigService.getThemeGradientDarkStart(),
-                    ),
-                    _hexToColor(
-                      FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
-                    ),
-                  ]
-                : [
-                    _hexToColor(
-                      FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                    ).withOpacity(0.12), // Consistent tint with top bar
-                    Colors.white, // Solid white end (strictly opaque)
-                  ],
-            stops: const [0.0, 1.0],
+          color: isDarkMode
+              ? _hexToColor(
+                  FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                )
+              : Colors.white,
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(15),
           ),
           boxShadow: [
-            if (!isDarkMode)
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
+            BoxShadow(
+              color: isDarkMode
+                  ? Colors.black.withOpacity(0.6)
+                  : Colors.black.withOpacity(0.2),
+              blurRadius: 25,
+              offset: const Offset(0, 12),
+              spreadRadius: -5,
+            ),
           ],
         ),
-        // Add top padding dynamically to avoid status bar overlap
-        padding: EdgeInsets.only(top: topPadding * shrinkPercentage),
-        child: StoreCategoriesWidget(
-          onCategorySelected: onCategorySelected,
-          selectedCategoryId: selectedCategoryId,
-          shrinkPercentage: shrinkPercentage,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(12),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isDarkMode
+                  ? [
+                      _hexToColor(
+                        FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                      ),
+                      _hexToColor(
+                        FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+                      ),
+                    ]
+                  : [
+                      _hexToColor(
+                        FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                      ).withOpacity(0.12),
+                      Colors.white,
+                    ],
+              stops: const [0.0, 1.0],
+            ),
+          ),
+          padding: EdgeInsets.only(top: topPadding * shrinkPercentage),
+          child: StoreCategoriesWidget(
+            onCategorySelected: onCategorySelected,
+            selectedCategoryId: selectedCategoryId,
+            shrinkPercentage: shrinkPercentage,
+          ),
         ),
       ),
     );
@@ -487,7 +589,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
             padding: const EdgeInsets.only(
               left: 16,
               right: 16,
-              top: 14, // Pushed down further
+              top: 16, // Increased top padding
               bottom: 4,
             ),
             child: GestureDetector(

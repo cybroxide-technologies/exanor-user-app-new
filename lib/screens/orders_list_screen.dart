@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/screens/order_details_screen.dart';
+import 'package:exanor/screens/return_details_screen.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:flutter/material.dart';
@@ -162,6 +163,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           case 0: // Processing - includes partially_paid and any in-progress statuses
             statusMatch =
                 status == 'partially_paid' ||
+                status == 'order_partially_paid' ||
                 status == 'processing' ||
                 status == 'pending' ||
                 status == 'confirmed' ||
@@ -170,19 +172,21 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                 status == 'shipped' ||
                 status == 'out_for_delivery' ||
                 (status != 'order_completed' &&
-                 status != 'delivered' &&
-                 status != 'order_cancelled' &&
-                 status != 'fully_cancelled' &&
-                 status != 'cancelled' &&
-                 status != 'partially_returned' &&
-                 status != 'order_returned');
+                    status != 'delivered' &&
+                    status != 'order_cancelled' &&
+                    status != 'fully_cancelled' &&
+                    status != 'cancelled' &&
+                    status != 'partially_returned' &&
+                    status != 'order_partially_returned' &&
+                    status != 'order_returned');
             break;
           case 1: // Delivered - only completed orders
             statusMatch = status == 'order_completed' || status == 'delivered';
             break;
-          case 2: // Cancelled - includes partially_returned, fully_cancelled and other cancelled statuses
+          case 2: // Cancelled - includes order_partially_returned, fully_cancelled and other cancelled statuses
             statusMatch =
                 status == 'partially_returned' ||
+                status == 'order_partially_returned' ||
                 status == 'fully_cancelled' ||
                 status == 'order_cancelled' ||
                 status == 'cancelled' ||
@@ -247,7 +251,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
   String _formatStatusLabel(String status, String statusTitle) {
     final lowerStatus = status.toLowerCase();
-    
+
     // Special formatting for specific statuses
     if (lowerStatus == 'partially_paid') {
       return 'PARTIAL PAYMENT';
@@ -260,7 +264,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     } else if (lowerStatus == 'out_for_delivery') {
       return 'OUT FOR DELIVERY';
     }
-    
+
     return statusTitle.toUpperCase();
   }
 
@@ -285,14 +289,8 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: Theme.of(context).brightness == Brightness.dark
-                        ? [
-                            const Color(0xFF1E293B),
-                            const Color(0xFF0F172A),
-                          ]
-                        : [
-                            Colors.white,
-                            const Color(0xFFF8FAFC),
-                          ],
+                        ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                        : [Colors.white, const Color(0xFFF8FAFC)],
                   ),
                 ),
                 child: Column(
@@ -316,7 +314,9 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                       'Order #${order['id']}',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.6),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -354,7 +354,8 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         filled: true,
-                        fillColor: Theme.of(context).brightness == Brightness.dark
+                        fillColor:
+                            Theme.of(context).brightness == Brightness.dark
                             ? Colors.white.withOpacity(0.05)
                             : Colors.grey.withOpacity(0.1),
                       ),
@@ -744,7 +745,9 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: () {
-                                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                                    final isDark =
+                                        Theme.of(context).brightness ==
+                                        Brightness.dark;
                                     final hexColor = isDark
                                         ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
                                         : FirebaseRemoteConfigService.getThemeGradientLightStart();
@@ -754,11 +757,15 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
                                     color: () {
-                                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                                      final isDark =
+                                          Theme.of(context).brightness ==
+                                          Brightness.dark;
                                       final hexColor = isDark
                                           ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
                                           : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                                      return _hexToColor(hexColor).withOpacity(0.3);
+                                      return _hexToColor(
+                                        hexColor,
+                                      ).withOpacity(0.3);
                                     }(),
                                     width: 1,
                                   ),
@@ -767,7 +774,9 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                                   _formatStatusLabel(status, statusTitle),
                                   style: TextStyle(
                                     color: () {
-                                      final isDark = Theme.of(context).brightness == Brightness.dark;
+                                      final isDark =
+                                          Theme.of(context).brightness ==
+                                          Brightness.dark;
                                       final hexColor = isDark
                                           ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
                                           : FirebaseRemoteConfigService.getThemeGradientLightStart();
@@ -795,6 +804,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           const SizedBox(height: 24),
 
           // Action Button
+          // Action Button
           if (isDelivered)
             buildArtisticButton(
               onTap: () {
@@ -819,6 +829,27 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                 FirebaseRemoteConfigService.getRateExperienceButtonColor(),
                 defaultColor: const Color(0xFFFF8C00),
               ),
+            )
+          else if (status.toLowerCase().contains('returned'))
+            buildArtisticButton(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ReturnDetailsScreen(
+                      orderId: order['id'],
+                      storeId: order['store_id'] ?? _effectiveStoreId ?? '',
+                    ),
+                  ),
+                );
+              },
+              label: "View Return Details",
+              icon: Icons.assignment_return_rounded,
+              baseColors: [
+                const Color(0xFFD32F2F), // Reddish for return
+                const Color(0xFFEF5350),
+              ],
+              glowColor: const Color(0xFFD32F2F),
             )
           else
             buildArtisticButton(

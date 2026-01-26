@@ -241,54 +241,259 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                   SliverFillRemaining(child: _buildLoadingView(theme))
                 else ...[
                   // Rest of the content
+                  // Unified Receipt Layout
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 100, 16, 40),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        // 1. STATUS CARD FIRST (Top priority)
-                        SizedBox(
-                          height: MediaQuery.of(context).padding.top + 90,
-                        ),
-                        // 1. STATUS CARD (Top priority)
-                        _buildStatusCard(theme),
+                        // 1. Status Banner (Floating above receipt)
+                        _buildStatusBanner(theme),
+
                         const SizedBox(height: 24),
-                        const SizedBox(height: 20),
 
-                        // 2. Order Quick Info (ID, Date)
-                        _buildOrderMetadataCard(theme),
-                        const SizedBox(height: 32),
+                        // 2. The Great Receipt
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 40,
+                                offset: const Offset(0, 20),
+                                spreadRadius: -10,
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Receipt Header (Shop & Order ID)
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: theme
+                                      .colorScheme
+                                      .surfaceContainerHighest
+                                      .withOpacity(0.3),
+                                  borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(24),
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              "ORDER ID",
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 1.5,
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.4),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            SelectableText(
+                                              "#${_orderData?['order_id'] ?? widget.orderId}",
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color:
+                                                    theme.colorScheme.onSurface,
+                                                fontFamily: 'monospace',
+                                                letterSpacing: -0.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        // Store Icon or Logo Placeholder
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.primary
+                                                .withOpacity(0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Icons.store_mall_directory_rounded,
+                                            color: theme.colorScheme.primary,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+                                    // Date
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.calendar_today_rounded,
+                                          size: 14,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.5),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _orderData?['created_at'] ??
+                                              "Date not available",
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: theme.colorScheme.onSurface
+                                                .withOpacity(0.6),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
 
-                        // Products List
-                        _buildSectionHeader(
-                          theme,
-                          "Your Items",
-                          Icons.shopping_bag_outlined,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildProductsList(theme),
-                        const SizedBox(height: 32),
+                              // Separator (ZigZag or Dashed)
+                              _buildDashedSeparator(theme),
 
-                        // Bill Summary (Receipt Style)
-                        _buildSectionHeader(
-                          theme,
-                          "Payment Summary",
-                          Icons.receipt_long_outlined,
-                        ),
-                        const SizedBox(height: 16),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: _buildBillSummary(theme),
-                        ),
-                        const SizedBox(height: 32),
+                              // Items List
+                              Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 16,
+                                      ),
+                                      child: Text(
+                                        "YOUR ITEMS",
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1.5,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.4),
+                                        ),
+                                      ),
+                                    ),
+                                    _buildProductsListUnified(theme),
+                                  ],
+                                ),
+                              ),
 
-                        // Combined Store & Order Info
-                        _buildSectionHeader(
-                          theme,
-                          "Order Details",
-                          Icons.info_outline_rounded,
+                              // Separator
+                              _buildDashedSeparator(theme),
+
+                              // Bill Summary
+                              Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: 16,
+                                      ),
+                                      child: Text(
+                                        "PAYMENT SUMMARY",
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1.5,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.4),
+                                        ),
+                                      ),
+                                    ),
+                                    _buildBillSummaryUnified(theme),
+                                  ],
+                                ),
+                              ),
+
+                              // Total Footer
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  borderRadius: const BorderRadius.vertical(
+                                    bottom: Radius.circular(24),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text(
+                                      "TOTAL PAID",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14,
+                                        letterSpacing: 1,
+                                      ),
+                                    ),
+                                    Text(
+                                      "₹${double.tryParse(_orderData?['grand_total']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'}",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 20,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 16),
-                        _buildCombinedOrderInfo(theme),
+
+                        // 3. Shipping Info Card (Separate)
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.local_shipping_outlined,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    "Delivery Details",
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              _buildCombinedOrderInfoUnified(theme),
+                            ],
+                          ),
+                        ),
+
                         const SizedBox(height: 120), // Bottom padding
                       ]),
                     ),
@@ -446,36 +651,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildOrderMetadataCard(ThemeData theme) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: SelectableText(
-          "Ref: #${_orderData?['order_id'] ?? widget.orderId}",
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
-            letterSpacing: 0.5,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusCard(ThemeData theme) {
+  Widget _buildStatusBanner(ThemeData theme) {
     String title = 'Processing';
-    String description = 'Your order is being processed';
+    String description = 'Order is being processed';
 
     if (_orderStatuses.isNotEmpty) {
       final latest = _orderStatuses.first;
       title = latest['order_status_title'] ?? title;
       description = latest['order_status_description'] ?? description;
-
       if (title == 'Unknown' || title.isEmpty) {
         final raw = latest['order_status'];
         if (raw != null) title = _formatStatus(raw.toString());
@@ -485,91 +668,55 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       if (mainStatus != null) title = _formatStatus(mainStatus.toString());
     }
 
+    // Determine Color & Icon
     Color statusColor = theme.colorScheme.primary;
+    IconData statusIcon = Icons.hourglass_top_rounded;
+
     if (title.toLowerCase().contains('cancelled') ||
         title.toLowerCase().contains('failed')) {
       statusColor = theme.colorScheme.error;
+      statusIcon = Icons.cancel_rounded;
     } else if (title.toLowerCase().contains('delivered') ||
         title.toLowerCase().contains('completed')) {
-      statusColor = const Color(0xFF00C853); // Vibrant Green
+      statusColor = const Color(0xFF00C853);
+      statusIcon = Icons.check_circle_rounded;
     } else if (title.toLowerCase().contains('ready') ||
         title.toLowerCase().contains('prepared')) {
       statusColor = Colors.orange.shade700;
+      statusIcon = Icons.restaurant_rounded;
     }
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
+        color: statusColor,
+        borderRadius: BorderRadius.circular(50),
         boxShadow: [
           BoxShadow(
-            color: statusColor.withOpacity(0.1),
+            color: statusColor.withOpacity(0.4),
             blurRadius: 20,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 10),
             spreadRadius: -2,
           ),
         ],
-        border: Border.all(color: statusColor.withOpacity(0.2), width: 1),
       ),
-      child: Column(
-        children: [
-          TranslatedText(
-            title,
-            style: TextStyle(
-              color: statusColor,
-              fontWeight: FontWeight.w900,
-              fontSize: 24,
-              letterSpacing: -0.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          TranslatedText(
-            description,
-            style: TextStyle(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: 0.5,
-              minHeight: 4,
-              backgroundColor: statusColor.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(ThemeData theme, String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 16, color: theme.colorScheme.primary),
-          ),
+          Icon(statusIcon, color: Colors.white, size: 24),
           const SizedBox(width: 12),
-          TranslatedText(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-              letterSpacing: 0.2,
+          Flexible(
+            child: Text(
+              title.toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                letterSpacing: 1,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -577,196 +724,122 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildProductsList(ThemeData theme) {
+  Widget _buildDashedSeparator(ThemeData theme) {
+    return SizedBox(
+      height: 20,
+      child: Center(
+        child: CustomPaint(
+          painter: DottedLinePainter(
+            color: theme.dividerColor.withOpacity(0.2),
+          ),
+          size: const Size(double.infinity, 1),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductsListUnified(ThemeData theme) {
     if (_isLoadingProducts) {
       return Center(
-        child: CircularProgressIndicator(color: theme.colorScheme.primary),
+        child: CircularProgressIndicator(
+          color: theme.colorScheme.primary,
+          strokeWidth: 2,
+        ),
       );
     }
     if (_products.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: theme.cardColor.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              Icons.remove_shopping_cart_outlined,
-              size: 40,
-              color: theme.disabledColor,
-            ),
-            const SizedBox(height: 12),
-            TranslatedText(
-              "No items found",
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-          ],
+      return Center(
+        child: Text(
+          "No items found",
+          style: TextStyle(color: theme.colorScheme.onSurface.withOpacity(0.5)),
         ),
       );
     }
 
-    final isDark = theme.brightness == Brightness.dark;
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _products.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        final product = _products[index];
+        final quantity = product['quantity'] ?? 0;
+        final price =
+            double.tryParse(
+              product['amount_including_tax']?.toString() ?? '0',
+            ) ??
+            0.0;
+        final total = price * quantity;
+        final variant = product['variant_name'];
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 5),
-          ),
-        ],
-        border: Border.all(
-          color: theme.dividerColor.withOpacity(0.5),
-          width: 0.5,
-        ),
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _products.length,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        separatorBuilder: (_, __) => Divider(
-          height: 1,
-          thickness: 0.5,
-          color: theme.dividerColor.withOpacity(0.3),
-          indent: 16,
-          endIndent: 16,
-        ),
-        itemBuilder: (context, index) {
-          final product = _products[index];
-          final quantity = product['quantity'] ?? 0;
-          final price =
-              double.tryParse(
-                product['amount_including_tax']?.toString() ?? '0',
-              ) ??
-              0.0;
-          final total = price * quantity;
-          final variant = product['variant_name'];
-          final imageUrl = product['image_url'];
-
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 1. Image (Small & Rounded)
-                Container(
-                  height: 50,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: theme.dividerColor.withOpacity(0.6),
-                      width: 0.5,
-                    ),
-                    color: isDark ? Colors.grey[800] : Colors.white,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: imageUrl != null
-                        ? Image.network(imageUrl, fit: BoxFit.cover)
-                        : Icon(
-                            Icons.image_outlined,
-                            size: 20,
-                            color: theme.disabledColor,
-                          ),
-                  ),
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Quantity Box
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withOpacity(
+                  0.5,
                 ),
-
-                const SizedBox(width: 16),
-
-                // 2. Name & Variant (Left Aligned)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TranslatedText(
-                        product['product_name'] ?? 'Item',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
-                          height: 1.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (variant != null && variant.toString().isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            variant.toString(),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.5,
-                              ),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                  ),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: theme.dividerColor.withOpacity(0.2)),
+              ),
+              child: Text(
+                "${quantity}x",
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurface,
                 ),
-
-                const SizedBox(width: 16),
-
-                // 3. Price & Qty (Right Aligned - Symmetrical)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "₹${total.toStringAsFixed(0)}",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.onSurface.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        "x$quantity",
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface.withOpacity(0.8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          );
-        },
-      ),
+            const SizedBox(width: 12),
+            // Name
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product['product_name'] ?? 'Item',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: theme.colorScheme.onSurface,
+                      height: 1.3,
+                    ),
+                  ),
+                  if (variant != null && variant.toString().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        variant.toString(),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Price
+            Text(
+              "₹${total.toStringAsFixed(0)}",
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Widget _buildBillSummary(ThemeData theme) {
-    // Data Loading
+  Widget _buildBillSummaryUnified(ThemeData theme) {
     final cartTotal = _orderData != null && _orderData!['cart_total'] is List
         ? _orderData!['cart_total'] as List
         : [];
@@ -774,17 +847,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         _orderData != null && _orderData!['platform_fees'] is List
         ? _orderData!['platform_fees'] as List
         : [];
-    final grandTotal = _orderData?['grand_total'] != null
-        ? double.tryParse(_orderData!['grand_total'].toString()) ?? 0.0
-        : 0.0;
 
-    Widget buildRow(
-      String label,
-      dynamic value, {
-      bool isBold = false,
-      Color? color,
-      double? fontSize,
-    }) {
+    Widget buildRow(String key, dynamic value, {bool isLarge = false}) {
       String displayValue = "₹0.00";
       if (value is num) {
         displayValue = "₹${value.toStringAsFixed(2)}";
@@ -797,327 +861,59 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       }
 
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TranslatedText(
-              label,
+            Text(
+              key,
               style: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(
-                  isBold ? 1.0 : 0.6,
-                ),
-                fontSize: fontSize ?? (isBold ? 16 : 14),
-                fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
               ),
             ),
             Text(
               displayValue,
               style: TextStyle(
-                color:
-                    color ??
-                    theme.colorScheme.onSurface.withOpacity(isBold ? 1.0 : 0.8),
-                fontSize: fontSize ?? (isBold ? 16 : 14),
-                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-                fontFamily: isBold ? null : 'RobotoMono',
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Simplified Modern Bill Card
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TranslatedText(
-            "Payment Summary",
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Items
-          if (cartTotal.isNotEmpty)
-            ...cartTotal.map(
-              (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
-            ),
-
-          if (cartTotal.isEmpty && _orderData != null) ...[
-            buildRow("Item Total", _orderData!['sub_total'] ?? 0),
-            buildRow("Tax", _orderData!['total_tax_amount'] ?? 0),
-            buildRow("Delivery", _orderData!['delivery_charges'] ?? 0),
-          ],
-
-          if (platformFees.isNotEmpty)
-            ...platformFees.map(
-              (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
-            ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(height: 1),
-          ),
-
-          // Total
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TranslatedText(
-                "Order Total",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-              Text(
-                "₹${grandTotal.toStringAsFixed(2)}",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.payment, size: 14, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text(
-                  "${_orderData?['payment_method'] ?? 'Card'}".toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Helper method removed as it is now inside _buildBillSummary for better local scope or we can keep it if needed.
-  // I'll replace _buildBillRow with nothing (or if other things use it, I should keep it but I think only summary uses it).
-  // Checking file usage: _buildBillSummary calls it. Since I overwrote _buildBillSummary to use local helper or I can implement it there.
-  // The replacement above uses a local 'buildRow'. So I should remove the old _buildBillRow to avoid duplication/confusion,
-  // or I can just update _buildBillRow and use it.
-  // I will replace _buildBillRow with a dummy or empty widget if it's not used, OR I'll just map the space.
-  // Actually, I'll just replace the whole block of functions.
-
-  Widget _buildStoreInfo(ThemeData theme) {
-    if (_orderData == null) return const SizedBox.shrink();
-
-    final storeName = _orderData!['store_name'] ?? 'Store';
-    final storeAddress = _orderData!['store_address'] ?? 'No Address Provided';
-    final storeImage = _orderData!['store_image_url'];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: theme.colorScheme.surfaceContainerHighest,
-              image: storeImage != null
-                  ? DecorationImage(
-                      image: NetworkImage(storeImage),
-                      fit: BoxFit.cover,
-                    )
-                  : null,
-            ),
-            child: storeImage == null
-                ? Icon(
-                    Icons.store,
-                    color: theme.colorScheme.onSurface.withOpacity(0.4),
-                  )
-                : null,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  storeName,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  storeAddress,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          // Action Button
-          Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: theme.colorScheme.primary,
-              ),
-              onPressed: () {
-                // Navigate to store
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrderMetaGrid(ThemeData theme) {
-    final paymentData = _orderData?['payment_details'];
-    String paymentMethod = 'Unknown';
-    if (paymentData is Map) {
-      paymentMethod = paymentData['payment_method_name'] ?? 'Unknown';
-    } else {
-      paymentMethod = _orderData?['payment_method'] ?? 'Unknown';
-    }
-
-    final orderType =
-        _orderData?['order_method_name'] ??
-        _orderData?['order_type'] ??
-        'Delivery';
-
-    Widget buildTile(String label, String value, IconData icon, Color accent) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: accent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, size: 20, color: accent),
-            ),
-            const Spacer(),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface.withOpacity(0.9),
+                fontFamily: 'monospace',
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
       );
     }
 
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.6,
+    return Column(
       children: [
-        buildTile(
-          "Payment Method",
-          _formatStatus(paymentMethod),
-          Icons.payment_rounded,
-          Colors.purple,
-        ),
-        buildTile(
-          "Order Type",
-          _formatStatus(orderType),
-          Icons.category_rounded,
-          Colors.blue,
-        ),
+        if (cartTotal.isNotEmpty)
+          ...cartTotal.map(
+            (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
+          ),
+        if (cartTotal.isEmpty && _orderData != null) ...[
+          buildRow("Subtotal", _orderData!['sub_total'] ?? 0),
+          buildRow("Tax", _orderData!['total_tax_amount'] ?? 0),
+          buildRow("Delivery", _orderData!['delivery_charges'] ?? 0),
+        ],
+        if (platformFees.isNotEmpty)
+          ...platformFees.map(
+            (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
+          ),
       ],
     );
   }
 
-  Widget _buildCombinedOrderInfo(ThemeData theme) {
+  Widget _buildCombinedOrderInfoUnified(ThemeData theme) {
     if (_orderData == null) return const SizedBox.shrink();
 
     final storeName = _orderData!['store_name'] ?? 'Store';
     final storeAddress = _orderData!['store_address'] ?? 'No Address';
+    final storeImage = _orderData!['store_image_url'];
+
+    // Payment & Type
     final paymentData = _orderData?['payment_details'];
     String paymentMethod = 'Unknown';
     if (paymentData is Map) {
@@ -1131,151 +927,137 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         _orderData?['order_type'] ??
         'Delivery';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  Icons.storefront_outlined,
-                  color: theme.colorScheme.onSecondaryContainer,
-                ),
+    final isPaid =
+        _orderData?['payment_status'] == 'paid' ||
+        _orderData?['payment_status'] == 'Paid';
+
+    return Column(
+      children: [
+        // Store Row
+        Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: theme.colorScheme.surfaceContainerHighest,
+                image: storeImage != null
+                    ? DecorationImage(
+                        image: NetworkImage(storeImage),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
               ),
-              const SizedBox(width: 16),
-              Expanded(
+              child: storeImage == null
+                  ? Icon(
+                      Icons.store,
+                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    storeName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    storeAddress,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        // Info Grid
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: theme.dividerColor.withOpacity(0.1),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Order from",
+                    Text(
+                      "METHOD",
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey,
+                        color: theme.colorScheme.onSurface.withOpacity(0.4),
+                        letterSpacing: 1,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
-                      storeName,
+                      paymentMethod.toUpperCase(),
                       style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      storeAddress,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor,
-                    borderRadius: BorderRadius.circular(16),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: theme.dividerColor.withOpacity(0.1),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.payment_outlined,
-                        size: 20,
-                        color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "STATUS",
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface.withOpacity(0.4),
+                        letterSpacing: 1,
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Payment",
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isPaid ? "PAID" : "PENDING",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: isPaid ? Colors.green : Colors.orange,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatStatus(paymentMethod),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.directions_bike_outlined,
-                        size: 20,
-                        color: theme.colorScheme.secondary,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Type",
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatStatus(orderType),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

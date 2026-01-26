@@ -661,226 +661,217 @@ class _StoreScreenState extends State<StoreScreen> {
           ),
           child: Material(
             color: Colors.transparent,
-            child: OverflowBox(
-              minWidth: 260,
-              maxWidth: 260,
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 260,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header for the "Table"
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.restaurant_menu_rounded,
-                            size: 18,
+            child: SizedBox(
+              width: 260,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header for the "Table"
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.restaurant_menu_rounded,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          "CATEGORIES",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.0,
                             color: theme.colorScheme.onSurface.withOpacity(0.6),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            "CATEGORIES",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.0,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.6,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(height: 1, color: Colors.black.withOpacity(0.05)),
+
+                  if (!_isLoadingCategories && _categories.isNotEmpty)
+                    InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        setState(() {
+                          _selectedCategoryId = null; // Clear selection = All
+                          _products.clear();
+                          _currentPage = 1;
+                          _isSearching = false;
+                          _searchController.clear();
+                        });
+                        _fetchProducts();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _selectedCategoryId == null
+                              ? theme.colorScheme.primary.withOpacity(0.08)
+                              : Colors.transparent,
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.black.withOpacity(0.03),
+                            ),
+                            left: _selectedCategoryId == null
+                                ? BorderSide(
+                                    color: theme.colorScheme.primary,
+                                    width: 3,
+                                  )
+                                : BorderSide.none,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              "All Products",
+                              style: TextStyle(
+                                color: _selectedCategoryId == null
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurface.withOpacity(
+                                        0.8,
+                                      ),
+                                fontSize: 14,
+                                fontWeight: _selectedCategoryId == null
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
                               ),
                             ),
+                            const Spacer(),
+                            if (_selectedCategoryId == null)
+                              Icon(
+                                Icons.check_circle,
+                                size: 16,
+                                color: theme.colorScheme.primary,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  if (_isLoadingCategories && _categories.isEmpty)
+                    Container(
+                      height: 100,
+                      alignment: Alignment.center,
+                      child: CircularProgressIndicator(
+                        color: theme.colorScheme.primary,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  else if (_categories.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            "No categories",
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.5,
+                              ),
+                              fontSize: 13,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              setState(() => _isLoadingCategories = true);
+                              _fetchCategories();
+                            },
+                            child: Text("Retry"),
                           ),
                         ],
                       ),
-                    ),
-                    Divider(height: 1, color: Colors.black.withOpacity(0.05)),
-
-                    if (!_isLoadingCategories && _categories.isNotEmpty)
-                      InkWell(
-                        onTap: () {
-                          Navigator.pop(context);
-                          setState(() {
-                            _selectedCategoryId = null; // Clear selection = All
-                            _products.clear();
-                            _currentPage = 1;
-                            _isSearching = false;
-                            _searchController.clear();
-                          });
-                          _fetchProducts();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _selectedCategoryId == null
-                                ? theme.colorScheme.primary.withOpacity(0.08)
-                                : Colors.transparent,
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Colors.black.withOpacity(0.03),
-                              ),
-                              left: _selectedCategoryId == null
-                                  ? BorderSide(
-                                      color: theme.colorScheme.primary,
-                                      width: 3,
-                                    )
-                                  : BorderSide.none,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                "All Products",
-                                style: TextStyle(
-                                  color: _selectedCategoryId == null
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurface.withOpacity(
-                                          0.8,
-                                        ),
-                                  fontSize: 14,
-                                  fontWeight: _selectedCategoryId == null
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
-                                ),
-                              ),
-                              const Spacer(),
-                              if (_selectedCategoryId == null)
-                                Icon(
-                                  Icons.check_circle,
-                                  size: 16,
-                                  color: theme.colorScheme.primary,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    if (_isLoadingCategories && _categories.isEmpty)
-                      Container(
-                        height: 100,
-                        alignment: Alignment.center,
-                        child: CircularProgressIndicator(
-                          color: theme.colorScheme.primary,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    else if (_categories.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(24.0),
+                    )
+                  else
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.zero,
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              "No categories",
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.5,
-                                ),
-                                fontSize: 13,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                setState(() => _isLoadingCategories = true);
-                                _fetchCategories();
-                              },
-                              child: Text("Retry"),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Flexible(
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.zero,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            mainAxisSize: MainAxisSize.min,
-                            children: List.generate(_categories.length, (
-                              index,
-                            ) {
-                              final category = _categories[index];
-                              final isSelected =
-                                  _selectedCategoryId == category.id;
-                              final isLast = index == _categories.length - 1;
+                          children: List.generate(_categories.length, (index) {
+                            final category = _categories[index];
+                            final isSelected =
+                                _selectedCategoryId == category.id;
+                            final isLast = index == _categories.length - 1;
 
-                              return InkWell(
-                                onTap: () {
-                                  Navigator.pop(context);
-                                  setState(() {
-                                    _selectedCategoryId = category.id;
-                                    _products.clear();
-                                    _currentPage = 1;
-                                    _isSearching = false;
-                                    _searchController.clear();
-                                  });
-                                  _fetchProducts();
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 14,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? theme.colorScheme.primary.withOpacity(
-                                            0.08,
-                                          )
-                                        : Colors.transparent,
-                                    border: Border(
-                                      bottom: isLast
-                                          ? BorderSide.none
-                                          : BorderSide(
-                                              color: Colors.black.withOpacity(
-                                                0.03,
-                                              ),
+                            return InkWell(
+                              onTap: () {
+                                Navigator.pop(context);
+                                setState(() {
+                                  _selectedCategoryId = category.id;
+                                  _products.clear();
+                                  _currentPage = 1;
+                                  _isSearching = false;
+                                  _searchController.clear();
+                                });
+                                _fetchProducts();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? theme.colorScheme.primary.withOpacity(
+                                          0.08,
+                                        )
+                                      : Colors.transparent,
+                                  border: Border(
+                                    bottom: isLast
+                                        ? BorderSide.none
+                                        : BorderSide(
+                                            color: Colors.black.withOpacity(
+                                              0.03,
                                             ),
-                                      left: isSelected
-                                          ? BorderSide(
-                                              color: theme.colorScheme.primary,
-                                              width: 3,
-                                            )
-                                          : BorderSide.none,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          category.categoryName,
-                                          style: TextStyle(
-                                            color: isSelected
-                                                ? theme.colorScheme.primary
-                                                : theme.colorScheme.onSurface
-                                                      .withOpacity(0.8),
-                                            fontSize: 14,
-                                            fontWeight: isSelected
-                                                ? FontWeight.bold
-                                                : FontWeight.w500,
                                           ),
+                                    left: isSelected
+                                        ? BorderSide(
+                                            color: theme.colorScheme.primary,
+                                            width: 3,
+                                          )
+                                        : BorderSide.none,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        category.categoryName,
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? theme.colorScheme.primary
+                                              : theme.colorScheme.onSurface
+                                                    .withOpacity(0.8),
+                                          fontSize: 14,
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.w500,
                                         ),
                                       ),
-                                      if (isSelected)
-                                        Icon(
-                                          Icons.check_circle,
-                                          color: theme.colorScheme.primary,
-                                          size: 16,
-                                        ),
-                                    ],
-                                  ),
+                                    ),
+                                    if (isSelected)
+                                      Icon(
+                                        Icons.check_circle,
+                                        color: theme.colorScheme.primary,
+                                        size: 16,
+                                      ),
+                                  ],
                                 ),
-                              );
-                            }),
-                          ),
+                              ),
+                            );
+                          }),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -1412,6 +1403,22 @@ class _StoreScreenState extends State<StoreScreen> {
                       child: Center(child: CircularProgressIndicator()),
                     ),
                   ),
+                // Spacer and Footer
+                SliverToBoxAdapter(
+                  child: Container(
+                    height: MediaQuery.of(context).size.height * 0.25,
+                    alignment: Alignment.center,
+                    child: Text(
+                      "WITH ❤️ EXANOR",
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[700] : Colors.grey[400],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

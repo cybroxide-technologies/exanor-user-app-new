@@ -1734,12 +1734,39 @@ class _AddressDetailsBottomSheetState extends State<AddressDetailsBottomSheet> {
       final prefs = await SharedPreferences.getInstance();
       print('💾 SharedPreferences instance obtained');
 
-      // Save as address_details object
+      // 1. Save as current address_details object (keep existing logic)
       final addressDetailsJson = json.encode(addressData);
       print('💾 Encoded JSON: $addressDetailsJson');
 
       await prefs.setString('address_details', addressDetailsJson);
       print('💾 Saved address_details to SharedPreferences');
+
+      // 2. Save to list of saved addresses
+      List<String> savedAddressesList =
+          prefs.getStringList('saved_addresses_list') ?? [];
+
+      // Check for duplicates - remove if exists to update it
+      // We'll assume uniqueness based on address_name (e.g. 'home', 'work') or lat/lng
+      // Logic: If name matches 'home' or 'work', overwrite. Custom names too.
+      final newName = addressData['address_name'].toString().toLowerCase();
+      savedAddressesList.removeWhere((item) {
+        try {
+          final Map<String, dynamic> existing = json.decode(item);
+          final existingName = existing['address_name']
+              .toString()
+              .toLowerCase();
+          return existingName == newName;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      // Add new address to top of list
+      savedAddressesList.insert(0, addressDetailsJson);
+      await prefs.setStringList('saved_addresses_list', savedAddressesList);
+      print(
+        '💾 Saved to saved_addresses_list. Total saved: ${savedAddressesList.length}',
+      );
 
       // Save data in format expected by HomeScreen and CustomSliverAppBar
       final addressTitle = addressData['address_name'].toString().toUpperCase();

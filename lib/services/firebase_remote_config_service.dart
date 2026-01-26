@@ -33,6 +33,14 @@ class FirebaseRemoteConfigService {
   static const String _deleteAccountKey = 'deleteAccount';
   static const String _contactUsKey = 'contactUs';
 
+  // Visibility control keys for profile section elements
+  static const String _showAboutUsKey = 'showAboutUs';
+  static const String _showDeleteAccountKey = 'showDeleteAccount';
+  static const String _showDisclaimerKey = 'showDisclaimer';
+  static const String _showPrivacyPolicyKey = 'showPrivacyPolicy';
+  static const String _showRefundPolicyKey = 'showRefundPolicy';
+  static const String _showTermsAndConditionsKey = 'showTermsAndConditions';
+
   // App download URL
   static const String _appDownloadUrlKey = 'app_download_url';
 
@@ -87,6 +95,14 @@ class FirebaseRemoteConfigService {
     _disclaimerKey: 'https://exanor.com/disclaimer',
     _deleteAccountKey: 'https://exanor.com/delete-account',
     _contactUsKey: 'https://exanor.com/contact-us',
+
+    // Visibility control defaults (all visible by default)
+    _showAboutUsKey: true,
+    _showDeleteAccountKey: true,
+    _showDisclaimerKey: true,
+    _showPrivacyPolicyKey: true,
+    _showRefundPolicyKey: true,
+    _showTermsAndConditionsKey: true,
 
     // App download URL default
     _appDownloadUrlKey: 'https://exanor.com/download',

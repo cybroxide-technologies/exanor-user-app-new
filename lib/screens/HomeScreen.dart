@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/components/home_screen_skeleton.dart';
 import 'package:flutter/material.dart';
@@ -220,26 +221,21 @@ class _HomeScreenState extends State<HomeScreen> {
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // 1. Custom Sliver App Bar
-                CustomSliverAppBar(
-                  addressTitle: _addressTitle,
-                  addressSubtitle: _addressSubtitle,
-                  userName: userName,
-                  userImage: userImage,
-                  isLoadingUserData: _isLoadingUserData,
-                  onAddressUpdated: () {
-                    print("Address updated callback received");
-                    _loadAddressData();
-                  },
-                  onUserDataUpdated: _loadUserData,
-                ),
-
                 // 2. Store Categories Sticky Header
                 SliverPersistentHeader(
                   pinned: true,
                   delegate: StoreCategoriesDelegate(
                     selectedCategoryId: _selectedCategoryId,
                     topPadding: MediaQuery.of(context).padding.top,
+                    userName: userName,
+                    userImage: userImage,
+                    isLoadingUserData: _isLoadingUserData,
+                    onUserDataUpdated: _loadUserData,
+                    addressTitle: _addressTitle,
+                    addressSubtitle: _addressSubtitle,
+                    onAddressUpdated: () {
+                      _loadAddressData();
+                    },
                     onCategorySelected: (categoryId) {
                       setState(() {
                         _selectedCategoryId = categoryId;
@@ -258,8 +254,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.only(
                       left: 16,
                       right: 16,
-                      top: 4, // Reduced from 16
-                      bottom: 110, // Increased for new static bottom bar
+                      top: 24, // Increased padding for better separation
+                      bottom: 0, // Removed bottom padding (handled by footer)
                     ),
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate((context, index) {
@@ -283,6 +279,102 @@ class _HomeScreenState extends State<HomeScreen> {
                       }, childCount: _stores.length + (_isMoreLoading ? 1 : 0)),
                     ),
                   ),
+
+                // 3. Footer Branding - Classical Minimalist Design
+                SliverToBoxAdapter(
+                  child: Container(
+                    height: 320,
+                    margin: const EdgeInsets.only(top: 40),
+                    child: Stack(
+                      children: [
+                        // 1. Background "Silk" Art
+                        Positioned.fill(
+                          child: ClipRect(
+                            child: CustomPaint(
+                              painter: _SilkWavePainter(
+                                color: theme.colorScheme.onSurface,
+                                isDark: theme.brightness == Brightness.dark,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // 2. Gradient Fade (Top) - Seamless blend
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          height: 100,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  theme.colorScheme.surface,
+                                  theme.colorScheme.surface.withOpacity(0.0),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // 3. Content
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // "Classical" Tagline
+                            Text(
+                              "India's last minute app",
+                              style: TextStyle(
+                                fontFamily: 'serif', // Fallback to system serif
+                                fontSize: 22,
+                                height: 1.0,
+                                fontStyle: FontStyle.italic,
+                                fontWeight: FontWeight.w500,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.8,
+                                ),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Minimal Separator
+                            Container(
+                              width: 2,
+                              height: 24,
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.2,
+                              ),
+                            ),
+
+                            const Spacer(),
+
+                            // "EXANOR" Anchor
+                            // Using a very modern, wide stance for the brand name
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 20.0),
+                              child: Text(
+                                "EXANOR",
+                                style: TextStyle(
+                                  fontFamily: 'sans-serif',
+                                  fontSize: 56,
+                                  fontWeight: FontWeight.w900,
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.05),
+                                  letterSpacing: 14,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -760,6 +852,81 @@ class _StoreCardDashedLinePainter extends CustomPainter {
       canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
       startX += dashWidth + dashSpace;
     }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _SilkWavePainter extends CustomPainter {
+  final Color color;
+  final bool isDark;
+
+  _SilkWavePainter({required this.color, required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Elegant, subtle wave lines
+    final paint = Paint()
+      ..color = color.withOpacity(isDark ? 0.03 : 0.05)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final path = Path();
+
+    // Draw 3 layers of "silk"
+    _drawWave(
+      canvas,
+      size,
+      paint,
+      path,
+      offset: 0,
+      amplitude: 20,
+      frequency: 0.012,
+    );
+    _drawWave(
+      canvas,
+      size,
+      paint,
+      path,
+      offset: 50,
+      amplitude: 30,
+      frequency: 0.008,
+    );
+    _drawWave(
+      canvas,
+      size,
+      paint,
+      path,
+      offset: 100,
+      amplitude: 15,
+      frequency: 0.015,
+    );
+  }
+
+  void _drawWave(
+    Canvas canvas,
+    Size size,
+    Paint paint,
+    Path path, {
+    required double offset,
+    required double amplitude,
+    required double frequency,
+  }) {
+    path.reset();
+    final double startY = size.height * 0.4 + offset;
+
+    path.moveTo(0, startY);
+
+    for (double x = 0; x <= size.width; x += 5) {
+      final y =
+          startY +
+          math.sin((x) * frequency) * amplitude +
+          math.cos(x * 0.005) * (amplitude * 0.5);
+      path.lineTo(x, y);
+    }
+
+    canvas.drawPath(path, paint);
   }
 
   @override

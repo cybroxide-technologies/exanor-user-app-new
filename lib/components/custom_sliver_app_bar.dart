@@ -46,39 +46,6 @@ class CustomSliverAppBar extends StatelessWidget {
     this.isLoadingUserData = false,
   });
 
-  String _buildAddressExcerpt() {
-    if (addressSubtitle == null) {
-      return 'Set your location by clicking here.';
-    }
-
-    // Build excerpt with address subtitle + area/city context
-    List<String> excerptParts = [addressSubtitle!];
-
-    // Add area and city for additional context, avoiding duplicates
-    if (addressArea != null &&
-        addressArea!.isNotEmpty &&
-        !addressSubtitle!.toLowerCase().contains(addressArea!.toLowerCase())) {
-      excerptParts.add(addressArea!);
-    }
-
-    if (addressCity != null &&
-        addressCity!.isNotEmpty &&
-        !addressSubtitle!.toLowerCase().contains(addressCity!.toLowerCase()) &&
-        (addressArea == null ||
-            !addressArea!.toLowerCase().contains(addressCity!.toLowerCase()))) {
-      excerptParts.add(addressCity!);
-    }
-
-    String fullExcerpt = excerptParts.join(', ');
-
-    // Truncate if too long (keep under ~50 characters for mobile display)
-    if (fullExcerpt.length > 50) {
-      return '${fullExcerpt.substring(0, 47)}...';
-    }
-
-    return fullExcerpt;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -138,242 +105,13 @@ class CustomSliverAppBar extends StatelessWidget {
                       padding: const EdgeInsets.only(
                         left: 16.0,
                         right: 16.0,
-                        top: 12.0, // Increased top padding
+                        top: 12.0,
                         bottom: 0.0,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Top row with refined layout - Standalone Icon & Consistent Buttons
-                          Row(
-                            children: [
-                              // 1. Address Section (Expanded)
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () async {
-                                    final result =
-                                        await Navigator.push<
-                                          Map<String, dynamic>
-                                        >(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                const SavedAddressesScreen(),
-                                          ),
-                                        );
-
-                                    if (result != null &&
-                                        result['addressSelected'] == true &&
-                                        onAddressUpdated != null) {
-                                      onAddressUpdated!();
-                                    }
-                                  },
-                                  child: Container(
-                                    color:
-                                        Colors.transparent, // Hit test target
-                                    child: Row(
-                                      children: [
-                                        // Standalone Location Icon (No Box)
-                                        Icon(
-                                          Icons.location_on_rounded,
-                                          color: theme.colorScheme.primary,
-                                          size:
-                                              32, // Slightly larger to stand out without box
-                                        ),
-                                        const SizedBox(width: 8),
-
-                                        // Text Content
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              // Title Row
-                                              Row(
-                                                children: [
-                                                  Flexible(
-                                                    child: TranslatedText(
-                                                      addressTitle ??
-                                                          'Set Location',
-                                                      style: TextStyle(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                        color: theme
-                                                            .colorScheme
-                                                            .onSurface,
-                                                        height: 1.1,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 2),
-                                                  Icon(
-                                                    Icons
-                                                        .keyboard_arrow_down_rounded,
-                                                    color: theme
-                                                        .colorScheme
-                                                        .onSurface,
-                                                    size: 20,
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: 2),
-                                              // Subtitle
-                                              TranslatedText(
-                                                _buildAddressExcerpt(),
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurface
-                                                      .withOpacity(0.7),
-                                                  letterSpacing: 0,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(width: 8),
-
-                              // 2. Actions Row (Language + Profile)
-                              // Wrapped in a Row to keep them tight
-                              Row(
-                                children: [
-                                  // Language Button
-                                  GestureDetector(
-                                    onTap: () {
-                                      showLanguageSelector(context);
-                                    },
-                                    child: Container(
-                                      width: 44, // Fixed consistent size
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isDarkMode
-                                            ? Colors.white.withOpacity(0.1)
-                                            : Colors.white,
-                                        border: Border.all(
-                                          color: isDarkMode
-                                              ? Colors.white.withOpacity(0.1)
-                                              : Colors.grey.withOpacity(0.2),
-                                          width: 1,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withOpacity(
-                                              0.05,
-                                            ),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Icon(
-                                        Icons.translate_rounded,
-                                        color: theme.colorScheme.primary,
-                                        size: 20,
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(width: 10),
-
-                                  // Profile Button
-                                  GestureDetector(
-                                    onTap: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              const MyProfileScreen(),
-                                        ),
-                                      );
-                                      if (onUserDataUpdated != null) {
-                                        onUserDataUpdated!();
-                                      }
-                                    },
-                                    child: isLoadingUserData
-                                        ? Shimmer.fromColors(
-                                            baseColor: Colors.grey[800]!,
-                                            highlightColor: Colors.grey[700]!,
-                                            child: const CircleAvatar(
-                                              radius: 22,
-                                            ),
-                                          )
-                                        : Container(
-                                            width: 44, // Matched size
-                                            height: 44,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              border: Border.all(
-                                                color: Colors
-                                                    .white, // Clean white border acting as a ring
-                                                width: 2,
-                                              ),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.1),
-                                                  blurRadius: 4,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: CircleAvatar(
-                                              backgroundColor:
-                                                  theme.colorScheme.primary,
-                                              backgroundImage:
-                                                  (userImage != null &&
-                                                          userImage!
-                                                              .isNotEmpty) ||
-                                                      (userImgUrl != null &&
-                                                          userImgUrl!
-                                                              .isNotEmpty)
-                                                  ? NetworkImage(
-                                                      userImage ?? userImgUrl!,
-                                                    )
-                                                  : null,
-                                              child:
-                                                  (userImage == null ||
-                                                          userImage!.isEmpty) &&
-                                                      (userImgUrl == null ||
-                                                          userImgUrl!.isEmpty)
-                                                  ? TranslatedText(
-                                                      userName?.isNotEmpty ==
-                                                              true
-                                                          ? userName!
-                                                                .substring(0, 1)
-                                                                .toUpperCase()
-                                                          : 'U',
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 18,
-                                                      ),
-                                                    )
-                                                  : null,
-                                            ),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
+                          // Content moved to Sticky Header
                         ],
                       ),
                     ),
@@ -393,10 +131,28 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
   final String selectedCategoryId;
   final double topPadding;
 
+  final String? userImgUrl;
+  final String? userImage;
+  final String? userName;
+  final bool isLoadingUserData;
+  final VoidCallback? onUserDataUpdated;
+
+  final String? addressTitle;
+  final String? addressSubtitle;
+  final VoidCallback? onAddressUpdated;
+
   const StoreCategoriesDelegate({
     required this.onCategorySelected,
     required this.selectedCategoryId,
     required this.topPadding,
+    this.userImgUrl,
+    this.userImage,
+    this.userName,
+    this.isLoadingUserData = false,
+    this.onUserDataUpdated,
+    this.addressTitle,
+    this.addressSubtitle,
+    this.onAddressUpdated,
   });
 
   @override
@@ -466,11 +222,19 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
               stops: const [0.0, 1.0],
             ),
           ),
-          padding: EdgeInsets.only(top: topPadding * shrinkPercentage),
+          padding: EdgeInsets.only(top: topPadding),
           child: StoreCategoriesWidget(
             onCategorySelected: onCategorySelected,
             selectedCategoryId: selectedCategoryId,
             shrinkPercentage: shrinkPercentage,
+            userImgUrl: userImgUrl,
+            userImage: userImage,
+            userName: userName,
+            isLoadingUserData: isLoadingUserData,
+            onUserDataUpdated: onUserDataUpdated,
+            addressTitle: addressTitle,
+            addressSubtitle: addressSubtitle,
+            onAddressUpdated: onAddressUpdated,
           ),
         ),
       ),
@@ -478,15 +242,20 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  double get maxExtent => 128.0 + topPadding; // Enough room for natural scrolling transition
+  double get maxExtent => 225.0 + topPadding; // Optimized to remove excess whitespace
 
   @override
-  double get minExtent => 122.0 + topPadding; // Compact frozen state at top
+  double get minExtent => 134.0 + topPadding; // Increased to add bottom padding when collapsed
 
   @override
   bool shouldRebuild(covariant StoreCategoriesDelegate oldDelegate) {
     return oldDelegate.selectedCategoryId != selectedCategoryId ||
-        oldDelegate.topPadding != topPadding;
+        oldDelegate.topPadding != topPadding ||
+        oldDelegate.isLoadingUserData != isLoadingUserData ||
+        oldDelegate.userName != userName ||
+        oldDelegate.userImage != userImage ||
+        oldDelegate.addressTitle != addressTitle ||
+        oldDelegate.addressSubtitle != addressSubtitle;
   }
 }
 
@@ -495,11 +264,29 @@ class StoreCategoriesWidget extends StatefulWidget {
   final String selectedCategoryId;
   final double shrinkPercentage;
 
+  final String? userImgUrl;
+  final String? userImage;
+  final String? userName;
+  final bool isLoadingUserData;
+  final VoidCallback? onUserDataUpdated;
+
+  final String? addressTitle;
+  final String? addressSubtitle;
+  final VoidCallback? onAddressUpdated;
+
   const StoreCategoriesWidget({
     super.key,
     required this.onCategorySelected,
     required this.selectedCategoryId,
     this.shrinkPercentage = 0.0,
+    this.userImgUrl,
+    this.userImage,
+    this.userName,
+    this.isLoadingUserData = false,
+    this.onUserDataUpdated,
+    this.addressTitle,
+    this.addressSubtitle,
+    this.onAddressUpdated,
   });
 
   @override
@@ -566,314 +353,601 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Separator Line between Header and Search (only visible at top)
-          // Dotted Separator Line with fade effect
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 200),
-            opacity:
-                1.0 - widget.shrinkPercentage, // Fades out as you scroll down
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: CustomPaint(
-                size: const Size(double.infinity, 1),
-                painter: _DashedLinePainter(
-                  color: isDarkMode
-                      ? Colors.white.withOpacity(0.2)
-                      : Colors.grey.withOpacity(0.3),
-                ),
-              ),
-            ),
-          ),
           // Search Bar (Always visible)
           Padding(
             padding: const EdgeInsets.only(
               left: 16,
               right: 16,
-              top: 16, // Increased top padding
+              top: 12, // Restored breathing room
               bottom: 4,
             ),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const GlobalSearchScreen(),
-                  ),
-                );
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isDarkMode
-                          ? Colors.black.withOpacity(0.25)
-                          : Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isDarkMode
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.white.withOpacity(0.5),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: isDarkMode
-                              ? Colors.black.withOpacity(0.1)
-                              : const Color(
-                                  0xFF1F4C6B,
-                                ).withOpacity(0.08), // Subtle bluish shadow
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 1. Top Row: Address + Action Buttons
+                // Collapsible section
+                Container(
+                  height:
+                      54.0 * (1.0 - widget.shrinkPercentage).clamp(0.0, 1.0),
+                  clipBehavior: Clip.hardEdge,
+                  decoration: const BoxDecoration(),
+                  child: Opacity(
+                    opacity: (1.0 - (widget.shrinkPercentage * 3.0)).clamp(
+                      0.0,
+                      1.0,
                     ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 20),
-                        Icon(
-                          Icons.search,
-                          color: isDarkMode
-                              ? Colors.grey[300]!.withOpacity(0.8)
-                              : const Color(
-                                  0xFF1F4C6B,
-                                ).withOpacity(0.6), // Use brand color
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        TranslatedText(
-                          'Search "Exanor"',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isDarkMode
-                                ? Colors.grey[300]!.withOpacity(0.6)
-                                : const Color(0xFF1F4C6B).withOpacity(0.5),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () async {
-                            final result = await showModalBottomSheet<String>(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (context) => const VoiceSearchSheet(),
-                            );
-                            if (result != null && result.isNotEmpty) {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      GlobalSearchScreen(initialQuery: result),
+                    child: SingleChildScrollView(
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 6), // Spacing
+                        child: Row(
+                          children: [
+                            // Address Widget (Expanded to take available space)
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () async {
+                                  final result =
+                                      await Navigator.push<
+                                        Map<String, dynamic>
+                                      >(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const SavedAddressesScreen(),
+                                        ),
+                                      );
+
+                                  if (result != null &&
+                                      result['addressSelected'] == true &&
+                                      widget.onAddressUpdated != null) {
+                                    widget.onAddressUpdated!();
+                                  }
+                                },
+                                child: Container(
+                                  color: Colors.transparent,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.location_on_rounded,
+                                            color: theme.colorScheme.primary,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: TranslatedText(
+                                              widget.addressTitle ?? 'Home',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 18, // Larger title
+                                                color:
+                                                    theme.colorScheme.onSurface,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 2),
+                                          Icon(
+                                            Icons.keyboard_arrow_down_rounded,
+                                            color: theme.colorScheme.onSurface,
+                                            size: 20,
+                                          ),
+                                        ],
+                                      ),
+                                      if (widget.addressSubtitle != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            left: 26.0,
+                                          ),
+                                          child: Text(
+                                            widget.addressSubtitle!,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: theme.colorScheme.onSurface
+                                                  .withOpacity(0.6),
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                              );
-                            }
-                          },
-                          child: Container(
-                            height: 40,
-                            width: 40,
-                            margin: const EdgeInsets.only(right: 6),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isDarkMode
-                                  ? Colors.white.withOpacity(0.1)
-                                  : Colors.white.withOpacity(0.4),
+                              ),
                             ),
-                            child: Icon(
-                              Icons.mic_rounded,
-                              color: isDarkMode
-                                  ? Colors.white.withOpacity(0.9)
-                                  : const Color(0xFF1F4C6B),
-                              size: 22,
+
+                            // Action Buttons (Language + Profile)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Language Button
+                                GestureDetector(
+                                  onTap: () {
+                                    showLanguageSelector(context);
+                                  },
+                                  child: Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: isDarkMode
+                                          ? Colors.white.withOpacity(0.1)
+                                          : Colors.white,
+                                      border: Border.all(
+                                        color: isDarkMode
+                                            ? Colors.white.withOpacity(0.1)
+                                            : Colors.white.withOpacity(0.5),
+                                        width: 1,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Icon(
+                                      Icons.translate_rounded,
+                                      color: theme.colorScheme.primary,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(width: 10),
+
+                                // Profile Button
+                                GestureDetector(
+                                  onTap: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const MyProfileScreen(),
+                                      ),
+                                    );
+                                    if (widget.onUserDataUpdated != null) {
+                                      widget.onUserDataUpdated!();
+                                    }
+                                  },
+                                  child: widget.isLoadingUserData
+                                      ? Shimmer.fromColors(
+                                          baseColor: Colors.grey[800]!,
+                                          highlightColor: Colors.grey[700]!,
+                                          child: const CircleAvatar(radius: 20),
+                                        )
+                                      : Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: Border.all(
+                                              color: Colors.white,
+                                              width: 2,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(
+                                                  0.1,
+                                                ),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: CircleAvatar(
+                                            backgroundColor:
+                                                theme.colorScheme.primary,
+                                            backgroundImage:
+                                                (widget.userImage != null &&
+                                                        widget
+                                                            .userImage!
+                                                            .isNotEmpty) ||
+                                                    (widget.userImgUrl !=
+                                                            null &&
+                                                        widget
+                                                            .userImgUrl!
+                                                            .isNotEmpty)
+                                                ? NetworkImage(
+                                                    widget.userImage ??
+                                                        widget.userImgUrl!,
+                                                  )
+                                                : null,
+                                            child:
+                                                (widget.userImage == null ||
+                                                        widget
+                                                            .userImage!
+                                                            .isEmpty) &&
+                                                    (widget.userImgUrl ==
+                                                            null ||
+                                                        widget
+                                                            .userImgUrl!
+                                                            .isEmpty)
+                                                ? TranslatedText(
+                                                    widget
+                                                                .userName
+                                                                ?.isNotEmpty ==
+                                                            true
+                                                        ? widget.userName!
+                                                              .substring(0, 1)
+                                                              .toUpperCase()
+                                                        : 'U',
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 16,
+                                                    ),
+                                                  )
+                                                : null,
+                                          ),
+                                        ),
+                                ),
+                              ],
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+
+                // Removed SizedBox(height: 12) from here to reduce gap when expanded
+                // The gap is now enforced by the Search Bar's top padding or the layout above
+                const SizedBox(height: 10),
+
+                // 2. Search Bar (Full Width)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const GlobalSearchScreen(),
+                      ),
+                    );
+                  },
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isDarkMode
+                              ? Colors.black.withOpacity(0.25)
+                              : Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isDarkMode
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.white.withOpacity(0.5),
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: isDarkMode
+                                  ? Colors.black.withOpacity(0.1)
+                                  : const Color(
+                                      0xFF1F4C6B,
+                                    ).withOpacity(0.08), // Subtle bluish shadow
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 16),
+                            Icon(
+                              Icons.search,
+                              color: isDarkMode
+                                  ? Colors.grey[300]!.withOpacity(0.8)
+                                  : const Color(
+                                      0xFF1F4C6B,
+                                    ).withOpacity(0.6), // Use brand color
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            TranslatedText(
+                              'Search "Exanor"',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: isDarkMode
+                                    ? Colors.grey[300]!.withOpacity(0.6)
+                                    : const Color(0xFF1F4C6B).withOpacity(0.5),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: () async {
+                                final result =
+                                    await showModalBottomSheet<String>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) =>
+                                          const VoiceSearchSheet(),
+                                    );
+                                if (result != null && result.isNotEmpty) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => GlobalSearchScreen(
+                                        initialQuery: result,
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Container(
+                                height: 40,
+                                width: 40,
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isDarkMode
+                                      ? Colors.white.withOpacity(0.1)
+                                      : Colors.white.withOpacity(0.4),
+                                ),
+                                child: Icon(
+                                  Icons.mic_rounded,
+                                  color: isDarkMode
+                                      ? Colors.white.withOpacity(0.9)
+                                      : const Color(0xFF1F4C6B),
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 8), // Reduced spacing before Categories
+              ],
             ),
           ),
 
           Expanded(
-            child: widget.shrinkPercentage > 0.5
-                ? // Compact Layout (Chips)
-                  ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _categories.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      final category = _categories[index];
-                      final categoryId = category['id'];
-                      final isSelected =
-                          categoryId == widget.selectedCategoryId ||
-                          (widget.selectedCategoryId.isEmpty &&
-                              categoryId == 'all');
-
-                      return Center(
-                        child: GestureDetector(
-                          onTap: () => widget.onCategorySelected(
-                            categoryId == 'all' ? '' : categoryId,
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? (isDarkMode ? Colors.white : Colors.black)
-                                  : (isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.white.withOpacity(0.5)),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isSelected
-                                    ? Colors.transparent
-                                    : Colors.black.withOpacity(0.05),
+            child: Stack(
+              children: [
+                // 1. Expanded Layout (Compact Bubbles) - Fades OUT
+                Opacity(
+                  opacity: (1.0 - widget.shrinkPercentage * 2.0).clamp(
+                    0.0,
+                    1.0,
+                  ),
+                  child: IgnorePointer(
+                    ignoring: widget.shrinkPercentage > 0.5,
+                    child: _isLoading
+                        ? const CategorySkeleton()
+                        : MediaQuery.removePadding(
+                            context: context,
+                            removeTop: true,
+                            removeBottom: true,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
                               ),
-                            ),
-                            child: TranslatedText(
-                              category['category_name'] ?? '',
-                              style: TextStyle(
-                                color: isSelected
-                                    ? (isDarkMode ? Colors.black : Colors.white)
-                                    : (isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  )
-                : // Expanded Layout (Compact Bubbles)
-                  _isLoading
-                ? const CategorySkeleton()
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 0,
-                    ), // Minimal vertical padding
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _categories.length,
-                    separatorBuilder: (context, index) => SizedBox(
-                      width: 16.0,
-                    ), // More breathing room but tighter items
-                    itemBuilder: (context, index) {
-                      final category = _categories[index];
-                      final categoryId = category['id'];
-                      final isSelected =
-                          categoryId == widget.selectedCategoryId ||
-                          (widget.selectedCategoryId.isEmpty &&
-                              categoryId == 'all');
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _categories.length,
+                              separatorBuilder: (context, index) =>
+                                  SizedBox(width: 16.0),
+                              itemBuilder: (context, index) {
+                                final category = _categories[index];
+                                final categoryId = category['id'];
+                                final isSelected =
+                                    categoryId == widget.selectedCategoryId ||
+                                    (widget.selectedCategoryId.isEmpty &&
+                                        categoryId == 'all');
 
-                      return Center(
-                        child: GestureDetector(
-                          onTap: () => widget.onCategorySelected(
-                            categoryId == 'all' ? '' : categoryId,
-                          ),
-                          child: SizedBox(
-                            width: 56.0, // Tighter width for elegance
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Elegant Minimal Bubble
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  curve: Curves
-                                      .easeOutCubic, // Smooth, refined animation
-                                  height: 44.0, // Reduced from 52
-                                  width: 44.0,
-                                  padding: const EdgeInsets.all(
-                                    8,
-                                  ), // Tighter padding
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? theme.colorScheme.surface
-                                        : (isDarkMode
-                                              ? const Color(0xFF2C2C2C)
-                                              : const Color(0xFFF7F7F9)),
-                                    borderRadius: BorderRadius.circular(
-                                      14,
-                                    ), // Elegant soft square
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? theme.colorScheme.primary
-                                          : Colors.transparent,
-                                      width: 1.5, // Thin, precise border
+                                return Center(
+                                  child: GestureDetector(
+                                    onTap: () => widget.onCategorySelected(
+                                      categoryId == 'all' ? '' : categoryId,
                                     ),
-                                    boxShadow: isSelected
-                                        ? [
-                                            // Very subtle lift for selected only
-                                            BoxShadow(
-                                              color: theme.colorScheme.shadow
-                                                  .withOpacity(0.05),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 2),
+                                    child: SizedBox(
+                                      width: 56.0,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 200,
                                             ),
-                                          ]
-                                        : null,
+                                            curve: Curves.easeOutCubic,
+                                            height: 44.0,
+                                            width: 44.0,
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? theme.colorScheme.surface
+                                                  : (isDarkMode
+                                                        ? const Color(
+                                                            0xFF2C2C2C,
+                                                          )
+                                                        : const Color(
+                                                            0xFFF7F7F9,
+                                                          )),
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? theme.colorScheme.primary
+                                                    : Colors.transparent,
+                                                width: 1.5,
+                                              ),
+                                              boxShadow: isSelected
+                                                  ? [
+                                                      BoxShadow(
+                                                        color: theme
+                                                            .colorScheme
+                                                            .shadow
+                                                            .withOpacity(0.05),
+                                                        blurRadius: 4,
+                                                        offset: const Offset(
+                                                          0,
+                                                          2,
+                                                        ),
+                                                      ),
+                                                    ]
+                                                  : null,
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              child: Image.network(
+                                                category['category_icon'] ?? '',
+                                                fit: BoxFit.contain,
+                                                errorBuilder: (c, e, s) => Icon(
+                                                  Icons.grid_view_rounded,
+                                                  color: isSelected
+                                                      ? theme
+                                                            .colorScheme
+                                                            .primary
+                                                      : theme
+                                                            .colorScheme
+                                                            .onSurfaceVariant
+                                                            .withOpacity(0.5),
+                                                  size: 20.0,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          AnimatedDefaultTextStyle(
+                                            duration: const Duration(
+                                              milliseconds: 200,
+                                            ),
+                                            style: TextStyle(
+                                              fontFamily: theme
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.fontFamily,
+                                              color: isSelected
+                                                  ? theme.colorScheme.primary
+                                                  : theme.colorScheme.onSurface,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                              fontSize: 10.0,
+                                              letterSpacing: 0.1,
+                                              height: 1.1,
+                                            ),
+                                            child: Text(
+                                              category['category_name'] ?? '',
+                                              textAlign: TextAlign.center,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Image.network(
-                                      category['category_icon'] ?? '',
-                                      fit: BoxFit.contain,
-                                      // Minimalist: Don't tint icons, trust the asset quality.
-                                      // If user insists on tint, we can re-add, but minimal means clean assets.
-                                      errorBuilder: (c, e, s) => Icon(
-                                        Icons.grid_view_rounded,
+                                );
+                              },
+                            ),
+                          ),
+                  ),
+                ),
+
+                // 2. Compact Layout (Chips) - Fades IN
+                Opacity(
+                  opacity: (widget.shrinkPercentage * 2.0 - 1.0).clamp(
+                    0.0,
+                    1.0,
+                  ),
+                  child: IgnorePointer(
+                    ignoring: widget.shrinkPercentage <= 0.5,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Container(
+                        height: 50, // Fixed height for chips container
+                        padding: EdgeInsets.only(
+                          bottom: 10,
+                        ), // Added bottom padding
+                        child: MediaQuery.removePadding(
+                          context: context,
+                          removeTop: true,
+                          removeBottom: true,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _categories.length,
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (context, index) {
+                              final category = _categories[index];
+                              final categoryId = category['id'];
+                              final isSelected =
+                                  categoryId == widget.selectedCategoryId ||
+                                  (widget.selectedCategoryId.isEmpty &&
+                                      categoryId == 'all');
+
+                              return Center(
+                                child: GestureDetector(
+                                  onTap: () => widget.onCategorySelected(
+                                    categoryId == 'all' ? '' : categoryId,
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? (isDarkMode
+                                                ? Colors.white
+                                                : Colors.black)
+                                          : (isDarkMode
+                                                ? Colors.white.withOpacity(0.1)
+                                                : Colors.white.withOpacity(
+                                                    0.5,
+                                                  )),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
                                         color: isSelected
-                                            ? theme.colorScheme.primary
-                                            : theme.colorScheme.onSurfaceVariant
-                                                  .withOpacity(0.5),
-                                        size: 20.0,
+                                            ? Colors.transparent
+                                            : Colors.black.withOpacity(0.05),
+                                      ),
+                                    ),
+                                    child: TranslatedText(
+                                      category['category_name'] ?? '',
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? (isDarkMode
+                                                  ? Colors.black
+                                                  : Colors.white)
+                                            : (isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 6), // Tighter spacing
-                                AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 200),
-                                  style: TextStyle(
-                                    fontFamily:
-                                        theme.textTheme.bodyMedium?.fontFamily,
-                                    color: isSelected
-                                        ? theme.colorScheme.primary
-                                        : theme
-                                              .colorScheme
-                                              .onSurface, // Standard text color
-                                    fontWeight: isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                    fontSize: 10.0, // Small, clean font
-                                    letterSpacing: 0.1,
-                                    height: 1.1,
-                                  ),
-                                  child: Text(
-                                    category['category_name'] ?? '',
-                                    textAlign: TextAlign.center,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
                         ),
-                      );
-                    },
+                      ),
+                    ),
                   ),
+                ),
+              ],
+            ),
           ),
           // Cinematic Fade Line
           Container(
@@ -907,32 +981,4 @@ Color _hexToColor(String hex) {
   } catch (e) {
     return Colors.transparent;
   }
-}
-
-class _DashedLinePainter extends CustomPainter {
-  final Color color;
-  _DashedLinePainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width == 0) return;
-
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-
-    const dashWidth = 1.0;
-    const dashSpace = 5.0;
-    double startX = 0;
-
-    while (startX < size.width) {
-      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
-      startX += dashWidth + dashSpace;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

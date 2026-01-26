@@ -54,6 +54,11 @@ class FirebaseRemoteConfigService {
   static const String _themeGradientDarkStartKey = 'themeGradientDarkStart';
   static const String _themeGradientDarkEndKey = 'themeGradientDarkEnd';
 
+  // Button Color Configuration
+  static const String _trackOrderButtonColorKey = 'trackOrderButtonColor';
+  static const String _rateExperienceButtonColorKey =
+      'rateExperienceButtonColor';
+
   // Default values
   static const Map<String, dynamic> _defaults = {
     _baseUrlKey: 'https://development.api.exanor.com/api/v1',
@@ -185,6 +190,10 @@ class FirebaseRemoteConfigService {
     _themeGradientLightEndKey: '#F7F9FC',
     _themeGradientDarkStartKey: '#0F3D3E',
     _themeGradientDarkEndKey: '#0F172A',
+
+    // Button Color defaults
+    _trackOrderButtonColorKey: '#0F3D3E',
+    _rateExperienceButtonColorKey: '#FF8C00',
   };
 
   /// Initialize Firebase Remote Config
@@ -1017,7 +1026,10 @@ class FirebaseRemoteConfigService {
       if (!_isInitialized || _remoteConfig == null) {
         return _defaults[_themeGradientLightStartKey] as String;
       }
-      return _remoteConfig!.getString(_themeGradientLightStartKey);
+      final value = _remoteConfig!.getString(_themeGradientLightStartKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientLightStartKey] as String;
     } catch (e) {
       return _defaults[_themeGradientLightStartKey] as String;
     }
@@ -1029,7 +1041,10 @@ class FirebaseRemoteConfigService {
       if (!_isInitialized || _remoteConfig == null) {
         return _defaults[_themeGradientLightEndKey] as String;
       }
-      return _remoteConfig!.getString(_themeGradientLightEndKey);
+      final value = _remoteConfig!.getString(_themeGradientLightEndKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientLightEndKey] as String;
     } catch (e) {
       return _defaults[_themeGradientLightEndKey] as String;
     }
@@ -1041,7 +1056,10 @@ class FirebaseRemoteConfigService {
       if (!_isInitialized || _remoteConfig == null) {
         return _defaults[_themeGradientDarkStartKey] as String;
       }
-      return _remoteConfig!.getString(_themeGradientDarkStartKey);
+      final value = _remoteConfig!.getString(_themeGradientDarkStartKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientDarkStartKey] as String;
     } catch (e) {
       return _defaults[_themeGradientDarkStartKey] as String;
     }
@@ -1053,9 +1071,55 @@ class FirebaseRemoteConfigService {
       if (!_isInitialized || _remoteConfig == null) {
         return _defaults[_themeGradientDarkEndKey] as String;
       }
-      return _remoteConfig!.getString(_themeGradientDarkEndKey);
+      final value = _remoteConfig!.getString(_themeGradientDarkEndKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientDarkEndKey] as String;
     } catch (e) {
       return _defaults[_themeGradientDarkEndKey] as String;
+    }
+  }
+
+  /// Get Track Order Button Color
+  static String getTrackOrderButtonColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        developer.log(
+          '⚠️ Track Order Button Color: Using default (not initialized) - ${_defaults[_trackOrderButtonColorKey]}',
+          name: 'RemoteConfig',
+        );
+        return _defaults[_trackOrderButtonColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_trackOrderButtonColorKey);
+      final result = value.isNotEmpty
+          ? value
+          : _defaults[_trackOrderButtonColorKey] as String;
+      developer.log(
+        '🎨 Track Order Button Color: Fetched from backend - $result (raw value: "$value")',
+        name: 'RemoteConfig',
+      );
+      return result;
+    } catch (e) {
+      developer.log(
+        '❌ Track Order Button Color: Error fetching - $e, using default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_trackOrderButtonColorKey] as String;
+    }
+  }
+
+  /// Get Rate Experience Button Color
+  static String getRateExperienceButtonColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_rateExperienceButtonColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_rateExperienceButtonColorKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_rateExperienceButtonColorKey] as String;
+    } catch (e) {
+      return _defaults[_rateExperienceButtonColorKey] as String;
     }
   }
 

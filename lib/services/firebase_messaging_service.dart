@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:exanor/services/api_service.dart';
 
 /// Firebase Cloud Messaging Service
 /// Handles FCM token management, message receiving, and notifications
@@ -268,6 +269,49 @@ class FirebaseMessagingService {
 
   /// Get Firebase Messaging instance
   static FirebaseMessaging? get messaging => _messaging;
+
+  /// Send FCM token to backend server
+  /// Call this after successful user authentication
+  static Future<void> sendTokenToServer() async {
+    try {
+      _log('📤 FirebaseMessagingService: Sending FCM token to server...');
+
+      // Get current token
+      String? token = _currentToken ?? await getStoredToken();
+
+      if (token == null) {
+        _log('❌ FirebaseMessagingService: No FCM token available to send');
+        return;
+      }
+
+      // Get platform data
+      final platformData = _getPlatformData();
+
+      // Send token to backend
+      await ApiService.post(
+        '/create-notification-token/',
+        body: {'fcm_token': token, ...platformData},
+        useBearerToken: true,
+      );
+
+      _log('✅ FirebaseMessagingService: FCM token sent successfully');
+    } catch (e) {
+      _log('❌ FirebaseMessagingService: Failed to send token to server: $e');
+      // Don't throw - token submission failure shouldn't break auth flow
+    }
+  }
+
+  /// Get platform detection data
+  static Map<String, bool> _getPlatformData() {
+    return {
+      'is_android': !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+      'is_ios': !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
+      'is_web': kIsWeb,
+      'is_macos': !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS,
+      'is_windows': !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
+      'is_linux': !kIsWeb && defaultTargetPlatform == TargetPlatform.linux,
+    };
+  }
 
   /// Manually refresh FCM token
   static Future<String?> refreshToken() async {

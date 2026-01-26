@@ -260,21 +260,30 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // 1. Scrollable Content
-          _isLoading
-              ? _buildShimmerList(theme, bgGradient)
-              : _buildOrderList(theme, isDark, bgGradient),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _init();
+          await _fetchOrders();
+        },
+        child: Stack(
+          children: [
+            // 1. Scrollable Content
+            _isLoading
+                ? _buildShimmerList(theme, bgGradient)
+                : _buildOrderList(theme, isDark, bgGradient),
 
-          // 2. Fixed Header (Pinned at top)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildHeader(theme, isDark),
-          ),
-        ],
+            // 2. Fixed Header (Pinned at top)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                ignoring: false,
+                child: _buildHeader(theme, isDark),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -328,7 +337,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     final isDelivered =
         status.toLowerCase() == 'order_completed' ||
         status.toLowerCase() == 'delivered';
-
+    
     String? imageUrl;
     if (order['product_details'] != null &&
         (order['product_details'] as List).isNotEmpty) {
@@ -529,7 +538,14 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                                     theme.textTheme.bodyLarge?.fontFamily,
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
-                                color: theme.colorScheme.primary,
+                                color: () {
+                                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                                  final hexColor = isDark
+                                      ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
+                                      : FirebaseRemoteConfigService.getThemeGradientLightStart();
+                                  final baseColor = _hexToColor(hexColor);
+                                  return _lightenColor(baseColor, 0.15);
+                                }(),
                               ),
                             ),
                             Container(
@@ -576,8 +592,23 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
               },
               label: "Rate Experience",
               icon: Icons.star_rate_rounded,
-              baseColors: const [Color(0xFFFF8C00), Color(0xFFFF4500)],
-              glowColor: const Color(0xFFFF4500),
+              baseColors: [
+                _hexToColor(
+                  FirebaseRemoteConfigService.getRateExperienceButtonColor(),
+                  defaultColor: const Color(0xFFFF8C00),
+                ),
+                _lightenColor(
+                  _hexToColor(
+                    FirebaseRemoteConfigService.getRateExperienceButtonColor(),
+                    defaultColor: const Color(0xFFFF8C00),
+                  ),
+                  0.1,
+                ),
+              ],
+              glowColor: _hexToColor(
+                FirebaseRemoteConfigService.getRateExperienceButtonColor(),
+                defaultColor: const Color(0xFFFF8C00),
+              ),
             )
           else
             buildArtisticButton(
@@ -594,8 +625,36 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
               },
               label: "Track Live Order",
               icon: Icons.near_me_rounded,
-              baseColors: const [Color(0xFF2E86DE), Color(0xFF54A0FF)],
-              glowColor: const Color(0xFF2E86DE),
+              baseColors: [
+                () {
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final hexColor = isDark
+                      ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
+                      : FirebaseRemoteConfigService.getThemeGradientLightStart();
+                  print(
+                    '🎨 Track Order Button - Mode: ${isDark ? "DARK" : "LIGHT"}, Hex: $hexColor',
+                  );
+                  final baseColor = _hexToColor(hexColor);
+                  return _lightenColor(baseColor, 0.2);
+                }(),
+                () {
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final hexColor = isDark
+                      ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
+                      : FirebaseRemoteConfigService.getThemeGradientLightStart();
+                  final baseColor = _hexToColor(hexColor);
+                  return _lightenColor(baseColor, 0.35);
+                }(),
+              ],
+              glowColor: () {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final hexColor = isDark
+                    ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
+                    : FirebaseRemoteConfigService.getThemeGradientLightStart();
+                return _hexToColor(hexColor);
+              }(),
             ),
         ],
       ),
@@ -710,7 +769,10 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
             ),
             child: ClipRect(
               child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+                filter: ui.ImageFilter.blur(
+                  sigmaX: blurSigma,
+                  sigmaY: blurSigma,
+                ),
                 child: Container(
                   height:
                       topPadding +
@@ -899,12 +961,27 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     );
   }
 
-  Color _hexToColor(String hex) {
+  Color _hexToColor(String hex, {Color defaultColor = Colors.transparent}) {
     try {
-      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+      String cleanHex = hex
+          .trim()
+          .toUpperCase()
+          .replaceAll('#', '')
+          .replaceAll('0X', '');
+      if (cleanHex.length == 6) {
+        cleanHex = 'FF$cleanHex';
+      }
+      return Color(int.parse('0x$cleanHex'));
     } catch (e) {
-      return Colors.transparent;
+      return defaultColor;
     }
+  }
+
+  /// Creates a lighter shade of the given color by blending with white
+  /// [amount] ranges from 0.0 (original color) to 1.0 (white)
+  Color _lightenColor(Color color, [double amount = 0.3]) {
+    assert(amount >= 0 && amount <= 1);
+    return Color.lerp(color, Colors.white, amount)!;
   }
 
   Widget _buildBackButton(ThemeData theme, bool isDark) {

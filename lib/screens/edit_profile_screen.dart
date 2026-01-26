@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/user_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -19,6 +21,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _phoneController = TextEditingController();
   String _selectedGender = 'male'; // Default gender
   String? _userImage;
+  File? _selectedImageFile;
+  final ImagePicker _picker = ImagePicker();
   bool _isLoading = true;
 
   @override
@@ -38,10 +42,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _loadUserData({bool forceRefresh = false}) async {
     try {
-      if (forceRefresh) {
-        // Use new endpoint to fetch user data
-        await UserService.viewUserData();
-      }
+      // Always fetch from API to get latest data including profile image
+      await UserService.viewUserData();
 
       final prefs = await SharedPreferences.getInstance();
       if (mounted) {
@@ -71,16 +73,42 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _isLoading = false;
         });
 
-        if (forceRefresh) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: TranslatedText(
-                'Failed to refresh data: ${e.toString()}',
-              ),
-              backgroundColor: Colors.red,
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: TranslatedText(
+              'Failed to load user data: ${e.toString()}',
             ),
-          );
-        }
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedFile = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImageFile = File(pickedFile.path);
+        });
+
+        // Upload deferred to save button
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: TranslatedText('Failed to pick image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -92,6 +120,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       });
 
       try {
+        // 1. Upload Profile Image if selected
+        Map<String, dynamic>? uploadResponse;
+        if (_selectedImageFile != null) {
+          try {
+            print('📸 EDIT PROFILE: Starting image upload...');
+            uploadResponse = await UserService.uploadProfileImage(
+              imagePath: _selectedImageFile!.path,
+            );
+            print('📸 EDIT PROFILE: Upload response: $uploadResponse');
+          } catch (e) {
+            print('❌ EDIT PROFILE: Upload error: $e');
+            throw ApiException('Failed to upload image: ${e.toString()}');
+          }
+        }
+
+        // 2. Update Profile Details
         final response = await UserService.updateUserProfile(
           firstName: _firstNameController.text,
           lastName: _lastNameController.text,
@@ -109,7 +153,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             await prefs.setString('first_name', userData['first_name'] ?? '');
             await prefs.setString('last_name', userData['last_name'] ?? '');
             await prefs.setString('user_email', userData['email'] ?? '');
-            // Note: phone_number in response might be int or string, safe handling:
             if (userData['phone_number'] != null) {
               await prefs.setString(
                 'user_phone',
@@ -128,6 +171,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             await prefs.setString('csrf_token', tokens['csrf_token'] ?? '');
           }
 
+          // Handle Image Update
+          if (uploadResponse != null) {
+            String? newImgUrl = uploadResponse['img_url'];
+            if (newImgUrl == null && uploadResponse['data'] != null) {
+              newImgUrl = uploadResponse['data']['img_url'];
+            }
+
+            if (newImgUrl != null) {
+              await prefs.setString('user_image', newImgUrl);
+            }
+          }
+
+          // Force a reload of user data to ensure everything is synced including image url if changed
+          print('🔄 EDIT PROFILE: Calling viewUserData...');
+          await UserService.viewUserData();
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -135,7 +194,34 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 backgroundColor: Colors.green,
               ),
             );
-            Navigator.of(context).pop();
+
+            setState(() {
+              _selectedImageFile = null;
+
+              if (uploadResponse != null) {
+                String? newImgUrl = uploadResponse['img_url'];
+                if (newImgUrl == null && uploadResponse['data'] != null) {
+                  newImgUrl = uploadResponse['data']['img_url'];
+                }
+                if (newImgUrl != null) {
+                  _userImage = newImgUrl;
+                }
+              }
+            });
+
+            if (_userImage != null && _userImage!.isNotEmpty) {
+              try {
+                await NetworkImage(_userImage!).evict();
+              } catch (e) {
+                print('Error evicting image cache: $e');
+              }
+            }
+
+            print('🔄 EDIT PROFILE: Reloading user data...');
+            await _loadUserData(forceRefresh: true);
+            print(
+              '✅ EDIT PROFILE: Data reloaded. Current _userImage: $_userImage',
+            );
           }
         } else {
           throw ApiException(response['response'] ?? 'Update failed');
@@ -207,15 +293,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   color: theme.colorScheme.primary,
                                   width: 3,
                                 ),
-                                image:
-                                    _userImage != null && _userImage!.isNotEmpty
+                                image: _selectedImageFile != null
                                     ? DecorationImage(
-                                        image: NetworkImage(_userImage!),
+                                        image: FileImage(_selectedImageFile!),
                                         fit: BoxFit.cover,
                                       )
-                                    : null,
+                                    : (_userImage != null &&
+                                              _userImage!.isNotEmpty
+                                          ? DecorationImage(
+                                              image: NetworkImage(_userImage!),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null),
                               ),
-                              child: _userImage == null || _userImage!.isEmpty
+                              child:
+                                  (_selectedImageFile == null &&
+                                      (_userImage == null ||
+                                          _userImage!.isEmpty))
                                   ? Icon(
                                       Icons.person_rounded,
                                       size: 60,
@@ -226,20 +320,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             Positioned(
                               bottom: 0,
                               right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: theme.colorScheme.surface,
-                                    width: 3,
+                              child: GestureDetector(
+                                onTap: _pickImage,
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: theme.colorScheme.surface,
+                                      width: 3,
+                                    ),
                                   ),
-                                ),
-                                child: const Icon(
-                                  Icons.camera_alt_rounded,
-                                  size: 20,
-                                  color: Colors.white,
+                                  child: const Icon(
+                                    Icons.camera_alt_rounded,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
@@ -249,15 +346,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       const SizedBox(height: 12),
                       Center(
                         child: TextButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: TranslatedText(
-                                  'Change photo - Coming Soon',
-                                ),
-                              ),
-                            );
-                          },
+                          onPressed: _pickImage,
                           icon: const Icon(Icons.edit_rounded),
                           label: const TranslatedText('Change Photo'),
                         ),

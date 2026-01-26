@@ -25,6 +25,7 @@ class CustomSliverAppBar extends StatelessWidget {
   final VoidCallback? onRefreshNeeded;
   final Function(String, String?, String?)? onSubCategorySelected;
   final String? userImgUrl;
+  final String? userImage; // Added for HomeScreen compatibility
   final String? userName;
   final bool isLoadingUserData;
 
@@ -40,6 +41,7 @@ class CustomSliverAppBar extends StatelessWidget {
     this.onRefreshNeeded,
     this.onSubCategorySelected,
     this.userImgUrl,
+    this.userImage,
     this.userName,
     this.isLoadingUserData = false,
   });
@@ -88,13 +90,12 @@ class CustomSliverAppBar extends StatelessWidget {
       floating: false,
       pinned: false,
       elevation: 0,
-      backgroundColor: isDarkMode
-          ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkStart())
-          : _hexToColor(
-              FirebaseRemoteConfigService.getThemeGradientLightStart(),
-            ), // Match gradient start
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      stretch: true,
       automaticallyImplyLeading: false,
       flexibleSpace: FlexibleSpaceBar(
+        stretchModes: const [StretchMode.zoomBackground, StretchMode.fadeTitle],
         background: RepaintBoundary(
           child: Container(
             decoration: BoxDecoration(
@@ -113,11 +114,12 @@ class CustomSliverAppBar extends StatelessWidget {
                     : [
                         _hexToColor(
                           FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                        ),
+                        ).withOpacity(0.12), // Unified strong tint
                         _hexToColor(
                           FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                        ), // Solid Blue to match top
+                        ).withOpacity(0.12), // Consistent opacity
                       ],
+                stops: isDarkMode ? null : const [0.0, 1.0],
               ),
             ),
             child: SafeArea(
@@ -213,8 +215,8 @@ class CustomSliverAppBar extends StatelessWidget {
                           },
                           child: isLoadingUserData
                               ? Shimmer.fromColors(
-                                  baseColor: Colors.grey[300]!,
-                                  highlightColor: Colors.grey[100]!,
+                                  baseColor: Colors.grey[800]!,
+                                  highlightColor: Colors.grey[800]!,
                                   child: CircleAvatar(
                                     radius: 20,
                                     backgroundColor: Colors.grey[300],
@@ -224,12 +226,17 @@ class CustomSliverAppBar extends StatelessWidget {
                                   radius: 20,
                                   backgroundColor: Colors.orange,
                                   backgroundImage:
-                                      userImgUrl != null &&
-                                          userImgUrl!.isNotEmpty
-                                      ? NetworkImage(userImgUrl!)
+                                      (userImage != null &&
+                                              userImage!.isNotEmpty) ||
+                                          (userImgUrl != null &&
+                                              userImgUrl!.isNotEmpty)
+                                      ? NetworkImage(userImage ?? userImgUrl!)
                                       : null,
                                   child:
-                                      userImgUrl == null || userImgUrl!.isEmpty
+                                      (userImage == null ||
+                                              userImage!.isEmpty) &&
+                                          (userImgUrl == null ||
+                                              userImgUrl!.isEmpty)
                                       ? TranslatedText(
                                           userName?.isNotEmpty == true
                                               ? userName!
@@ -319,50 +326,60 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
     final double shrinkPercentage = (shrinkOffset / (maxExtent - minExtent))
         .clamp(0.0, 1.0);
 
-    // Glassmorphism effect
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: isDarkMode
-                  ? [
-                      _hexToColor(
-                        FirebaseRemoteConfigService.getThemeGradientDarkStart(),
-                      ),
-                      _hexToColor(
-                        FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
-                      ),
-                    ]
-                  : [
-                      _hexToColor(
-                        FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                      ),
-                      Colors.white,
-                    ],
-              stops: const [0.0, 1.0],
-            ),
+    // Solid background with subtle tint
+    // Solid background with subtle tint
+    return Material(
+      color: isDarkMode
+          ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkStart())
+          : Colors.white, // Strictly opaque background
+      elevation: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDarkMode
+                ? [
+                    _hexToColor(
+                      FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+                    ),
+                    _hexToColor(
+                      FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+                    ),
+                  ]
+                : [
+                    _hexToColor(
+                      FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                    ).withOpacity(0.12), // Consistent tint with top bar
+                    Colors.white, // Solid white end (strictly opaque)
+                  ],
+            stops: const [0.0, 1.0],
           ),
-          // Add top padding dynamically to avoid status bar overlap
-          padding: EdgeInsets.only(top: topPadding * shrinkPercentage),
-          child: StoreCategoriesWidget(
-            onCategorySelected: onCategorySelected,
-            selectedCategoryId: selectedCategoryId,
-            shrinkPercentage: shrinkPercentage,
-          ),
+          boxShadow: [
+            if (!isDarkMode)
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+          ],
+        ),
+        // Add top padding dynamically to avoid status bar overlap
+        padding: EdgeInsets.only(top: topPadding * shrinkPercentage),
+        child: StoreCategoriesWidget(
+          onCategorySelected: onCategorySelected,
+          selectedCategoryId: selectedCategoryId,
+          shrinkPercentage: shrinkPercentage,
         ),
       ),
     );
   }
 
   @override
-  double get maxExtent => 145.0 + topPadding; // Tighter spacing
+  double get maxExtent => 128.0 + topPadding; // Enough room for natural scrolling transition
 
   @override
-  double get minExtent => 108.0 + topPadding; // Search (58) + Chips (34) + spacing
+  double get minExtent => 122.0 + topPadding; // Compact frozen state at top
 
   @override
   bool shouldRebuild(covariant StoreCategoriesDelegate oldDelegate) {
@@ -447,9 +464,32 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Separator Line between Header and Search (only visible at top)
+          // Dotted Separator Line with fade effect
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 200),
+            opacity:
+                1.0 - widget.shrinkPercentage, // Fades out as you scroll down
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: CustomPaint(
+                size: const Size(double.infinity, 1),
+                painter: _DashedLinePainter(
+                  color: isDarkMode
+                      ? Colors.white.withOpacity(0.2)
+                      : Colors.grey.withOpacity(0.3),
+                ),
+              ),
+            ),
+          ),
           // Search Bar (Always visible)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 14, // Pushed down further
+              bottom: 4,
+            ),
             child: GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -459,79 +499,99 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                   ),
                 );
               },
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.shadowColor.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                  border: Border.all(
-                    color: isDarkMode
-                        ? Colors.white.withOpacity(0.1)
-                        : theme.colorScheme.outline.withOpacity(0.1),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const SizedBox(width: 20),
-                    Icon(
-                      Icons.search,
-                      color: isDarkMode ? Colors.grey[400] : Colors.black87,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 12),
-                    TranslatedText(
-                      'Search "Exanor"',
-                      style: theme.textTheme.bodyMedium?.copyWith(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isDarkMode
+                          ? Colors.black.withOpacity(0.25)
+                          : Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
                         color: isDarkMode
-                            ? Colors.grey[400]
-                            : Colors.grey.shade600,
-                        fontSize: 16,
+                            ? Colors.white.withOpacity(0.1)
+                            : Colors.white.withOpacity(0.5),
+                        width: 1,
                       ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () async {
-                        final result = await showModalBottomSheet<String>(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => const VoiceSearchSheet(),
-                        );
-                        if (result != null && result.isNotEmpty) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  GlobalSearchScreen(initialQuery: result),
-                            ),
-                          );
-                        }
-                      },
-                      child: Container(
-                        height: 40,
-                        width: 40,
-                        margin: const EdgeInsets.only(right: 6),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
                           color: isDarkMode
-                              ? theme.colorScheme.primary.withOpacity(0.2)
-                              : const Color(0xFFFFF0EC),
+                              ? Colors.black.withOpacity(0.1)
+                              : const Color(
+                                  0xFF1F4C6B,
+                                ).withOpacity(0.08), // Subtle bluish shadow
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
                         ),
-                        child: Icon(
-                          Icons.mic_rounded,
-                          color: theme.colorScheme.primary,
-                          size: 22,
-                        ),
-                      ),
+                      ],
                     ),
-                  ],
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 20),
+                        Icon(
+                          Icons.search,
+                          color: isDarkMode
+                              ? Colors.grey[300]!.withOpacity(0.8)
+                              : const Color(
+                                  0xFF1F4C6B,
+                                ).withOpacity(0.6), // Use brand color
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        TranslatedText(
+                          'Search "Exanor"',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: isDarkMode
+                                ? Colors.grey[300]!.withOpacity(0.6)
+                                : const Color(0xFF1F4C6B).withOpacity(0.5),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () async {
+                            final result = await showModalBottomSheet<String>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => const VoiceSearchSheet(),
+                            );
+                            if (result != null && result.isNotEmpty) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      GlobalSearchScreen(initialQuery: result),
+                                ),
+                              );
+                            }
+                          },
+                          child: Container(
+                            height: 40,
+                            width: 40,
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isDarkMode
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.white.withOpacity(0.4),
+                            ),
+                            child: Icon(
+                              Icons.mic_rounded,
+                              color: isDarkMode
+                                  ? Colors.white.withOpacity(0.9)
+                                  : const Color(0xFF1F4C6B),
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -561,8 +621,8 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                           ),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
+                              horizontal: 12,
+                              vertical: 6,
                             ),
                             decoration: BoxDecoration(
                               color: isSelected
@@ -594,14 +654,19 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                       );
                     },
                   )
-                : // Expanded Layout (Bubbles)
+                : // Expanded Layout (Compact Bubbles)
                   _isLoading
                 ? const CategorySkeleton()
                 : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 0,
+                    ), // Minimal vertical padding
                     scrollDirection: Axis.horizontal,
                     itemCount: _categories.length,
-                    separatorBuilder: (context, index) => SizedBox(width: 12.0),
+                    separatorBuilder: (context, index) => SizedBox(
+                      width: 16.0,
+                    ), // More breathing room but tighter items
                     itemBuilder: (context, index) {
                       final category = _categories[index];
                       final categoryId = category['id'];
@@ -616,73 +681,89 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                             categoryId == 'all' ? '' : categoryId,
                           ),
                           child: SizedBox(
-                            width: 70.0,
+                            width: 56.0, // Tighter width for elegance
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Standard Bubble
-                                Container(
-                                  height: 52.0,
-                                  width: 52.0,
-                                  padding: const EdgeInsets.all(12),
+                                // Elegant Minimal Bubble
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves
+                                      .easeOutCubic, // Smooth, refined animation
+                                  height: 44.0, // Reduced from 52
+                                  width: 44.0,
+                                  padding: const EdgeInsets.all(
+                                    8,
+                                  ), // Tighter padding
                                   decoration: BoxDecoration(
-                                    color: isDarkMode
-                                        ? const Color(0xFF1E1E1E)
-                                        : Colors.white,
-                                    shape: BoxShape.circle,
-                                    border: isSelected
-                                        ? Border.all(
-                                            color: theme.colorScheme.primary,
-                                            width: 2,
-                                          )
-                                        : Border.all(
-                                            color: isDarkMode
-                                                ? Colors.white.withOpacity(0.1)
-                                                : Colors.transparent,
-                                            width: 1,
-                                          ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.08),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
-                                        spreadRadius: 0,
-                                      ),
-                                    ],
+                                    color: isSelected
+                                        ? theme.colorScheme.surface
+                                        : (isDarkMode
+                                              ? const Color(0xFF2C2C2C)
+                                              : const Color(0xFFF7F7F9)),
+                                    borderRadius: BorderRadius.circular(
+                                      14,
+                                    ), // Elegant soft square
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? theme.colorScheme.primary
+                                          : Colors.transparent,
+                                      width: 1.5, // Thin, precise border
+                                    ),
+                                    boxShadow: isSelected
+                                        ? [
+                                            // Very subtle lift for selected only
+                                            BoxShadow(
+                                              color: theme.colorScheme.shadow
+                                                  .withOpacity(0.05),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ]
+                                        : null,
                                   ),
-                                  child: ClipOval(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
                                     child: Image.network(
                                       category['category_icon'] ?? '',
                                       fit: BoxFit.contain,
+                                      // Minimalist: Don't tint icons, trust the asset quality.
+                                      // If user insists on tint, we can re-add, but minimal means clean assets.
                                       errorBuilder: (c, e, s) => Icon(
-                                        Icons.category_outlined,
+                                        Icons.grid_view_rounded,
                                         color: isSelected
                                             ? theme.colorScheme.primary
-                                            : theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                        size: 24.0,
+                                            : theme.colorScheme.onSurfaceVariant
+                                                  .withOpacity(0.5),
+                                        size: 20.0,
                                       ),
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                TranslatedText(
-                                  category['category_name'] ?? '',
-                                  textAlign: TextAlign.center,
+                                const SizedBox(height: 6), // Tighter spacing
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 200),
                                   style: TextStyle(
+                                    fontFamily:
+                                        theme.textTheme.bodyMedium?.fontFamily,
                                     color: isSelected
                                         ? theme.colorScheme.primary
-                                        : theme.colorScheme.onSurface,
+                                        : theme
+                                              .colorScheme
+                                              .onSurface, // Standard text color
                                     fontWeight: isSelected
                                         ? FontWeight.w700
                                         : FontWeight.w500,
-                                    fontSize: 11.0,
-                                    letterSpacing: 0.2,
+                                    fontSize: 10.0, // Small, clean font
+                                    letterSpacing: 0.1,
                                     height: 1.1,
                                   ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                                  child: Text(
+                                    category['category_name'] ?? '',
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             ),
@@ -692,7 +773,6 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                     },
                   ),
           ),
-          const SizedBox(height: 4),
           // Cinematic Fade Line
           Container(
             height: 1.5,
@@ -717,8 +797,40 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
 
 Color _hexToColor(String hex) {
   try {
-    return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    String cleanHex = hex.replaceAll('#', '');
+    if (cleanHex.length == 6) {
+      cleanHex = 'FF$cleanHex';
+    }
+    return Color(int.parse('0x$cleanHex'));
   } catch (e) {
     return Colors.transparent;
   }
+}
+
+class _DashedLinePainter extends CustomPainter {
+  final Color color;
+  _DashedLinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width == 0) return;
+
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    const dashWidth = 1.0;
+    const dashSpace = 5.0;
+    double startX = 0;
+
+    while (startX < size.width) {
+      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -12,9 +12,11 @@ import 'package:exanor/models/store_model.dart';
 import 'package:exanor/models/product_model.dart';
 
 import 'package:exanor/components/custom_cached_network_image.dart';
-import 'package:exanor/components/product_variant_sheet.dart'; // Added
+import 'package:exanor/components/product_variant_sheet.dart';
+import 'package:exanor/components/ticket_painter.dart'; // Added
 import 'package:exanor/screens/order_details_screen.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:exanor/components/peel_button.dart';
 
 class CartScreen extends StatefulWidget {
   final String storeId;
@@ -1462,196 +1464,156 @@ class _CartScreenState extends State<CartScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) {
         final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
         return Container(
-          height: MediaQuery.of(context).size.height * 0.7,
+          height: MediaQuery.of(context).size.height * 0.75,
           decoration: BoxDecoration(
             color: theme.scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
           ),
           child: Column(
             children: [
-              // Handle
+              // 1. Artistic Header
               Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+                  color: theme.cardColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(32),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.shadowColor.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
                 ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                child: Row(
+                child: Column(
                   children: [
-                    Expanded(
-                      child: TranslatedText(
-                        "Available Coupons",
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.dividerColor.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.orange[300]!, Colors.red[300]!],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.local_activity_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TranslatedText(
+                                "Unlock Exclusive Savings",
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 18,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              TranslatedText(
+                                "Tap a ticket to claim your offer",
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.textTheme.bodySmall?.color
+                                      ?.withOpacity(0.6),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => Navigator.pop(context),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.black.withOpacity(0.05),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 20,
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.6,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
 
-              const Divider(),
-
+              // 2. Coupons List
               Expanded(
                 child: _storeCoupons.isEmpty
                     ? Center(
-                        child: TranslatedText(
-                          "No coupons available",
-                          style: TextStyle(color: Colors.grey[600]),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.confirmation_number_outlined,
+                              size: 64,
+                              color: theme.disabledColor.withOpacity(0.2),
+                            ),
+                            const SizedBox(height: 16),
+                            TranslatedText(
+                              "No coupons available yet",
+                              style: TextStyle(
+                                color: theme.disabledColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       )
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(20),
                         itemCount: _storeCoupons.length,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: 16),
                         itemBuilder: (context, index) {
                           final coupon = _storeCoupons[index];
                           final isSelected =
                               _selectedCouponCode == coupon.couponCode;
 
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: theme.cardColor,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected
-                                    ? Colors.green
-                                    : theme.dividerColor,
-                                width: isSelected ? 2 : 1,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.shadowColor.withOpacity(0.05),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(16),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(16),
-                                onTap: () {
-                                  setState(() {
-                                    _selectedCouponCode = coupon.couponCode;
-                                  });
-                                  Navigator.pop(context);
-
-                                  // Re-fetch cart data with new coupon
-                                  _fetchCartData(forceLoading: true);
-                                  _initializeOrder();
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: TranslatedText(
-                                        'Coupon "${coupon.couponCode}" applied!',
-                                      ),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Row(
-                                    children: [
-                                      // Coupon Icon / Image
-                                      Container(
-                                        width: 50,
-                                        height: 50,
-                                        decoration: BoxDecoration(
-                                          color: Colors.orange.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.percent_rounded,
-                                          color: Colors.orange,
-                                          size: 28,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              coupon.couponCode.toUpperCase(),
-                                              style: theme.textTheme.titleMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.bold,
-                                                    letterSpacing: 1.0,
-                                                  ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              coupon.description,
-                                              style: theme.textTheme.bodyMedium
-                                                  ?.copyWith(
-                                                    color: theme
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.color
-                                                        ?.withOpacity(0.7),
-                                                  ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    theme.brightness ==
-                                                        Brightness.dark
-                                                    ? Colors.grey[800]
-                                                    : Colors.grey[200],
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                              ),
-                                              child: Text(
-                                                "Min Order: ₹${coupon.minimumAmount}",
-                                                style: theme.textTheme.bodySmall
-                                                    ?.copyWith(
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (isSelected)
-                                        const Icon(
-                                          Icons.check_circle,
-                                          color: Colors.green,
-                                          size: 24,
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: _buildArtisticCouponTicket(
+                              context,
+                              coupon,
+                              isSelected,
+                              theme,
+                              isDark,
                             ),
                           );
                         },
@@ -1661,6 +1623,178 @@ class _CartScreenState extends State<CartScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildArtisticCouponTicket(
+    BuildContext context,
+    dynamic coupon,
+    bool isSelected,
+    ThemeData theme,
+    bool isDark,
+  ) {
+    // Ticket Colors
+    final bgColor = theme.cardColor;
+    final accentColor = isSelected ? Colors.green : theme.colorScheme.primary;
+    final borderColor = isSelected
+        ? Colors.green
+        : theme.dividerColor.withOpacity(0.6);
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedCouponCode = coupon.couponCode;
+        });
+        Navigator.pop(context);
+        _fetchCartData(forceLoading: true);
+        _initializeOrder();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: TranslatedText('Coupon "${coupon.couponCode}" applied!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: SizedBox(
+        height: 110,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Precise split calculation used by painter
+            final double splitX = constraints.maxWidth * (2 / 3);
+
+            return CustomPaint(
+              painter: TicketPainter(
+                color: bgColor,
+                borderColor: borderColor,
+                borderWidth: isSelected ? 2.0 : 1.0,
+                holeRadius: 10,
+                cornerRadius: 16,
+                splitX: splitX,
+              ),
+              child: Row(
+                children: [
+                  // LEFT SIDE (Info)
+                  Expanded(
+                    flex: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        20,
+                        16,
+                        24,
+                        16,
+                      ), // Extra right padding for dash clearance
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: accentColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    coupon.couponCode.toUpperCase(),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 13,
+                                      color: accentColor,
+                                      letterSpacing: 1.0,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected) ...[
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: Colors.green,
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          TranslatedText(
+                            coupon.description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontSize: 13,
+                              height: 1.3,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // RIGHT SIDE (Action)
+                  Expanded(
+                    flex: 1,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(
+                        16,
+                        12,
+                        12,
+                        12,
+                      ), // Extra left padding for dash clearance
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TranslatedText(
+                            "Save up to",
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: theme.disabledColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "₹${coupon.minimumAmount}",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            isSelected ? "APPLIED" : "APPLY",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: isSelected
+                                  ? Colors.green
+                                  : theme.colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -1726,12 +1860,12 @@ class _CartScreenState extends State<CartScreen> {
     }
 
     return Container(
-      height: 40,
+      height: 48,
       decoration: BoxDecoration(
         color: isDark
             ? Colors.black.withOpacity(0.2)
             : Colors.white.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark
               ? Colors.white.withOpacity(0.1)
@@ -1820,7 +1954,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildHeader(ThemeData theme, bool isDark) {
     final topPadding = MediaQuery.of(context).padding.top;
-    final totalHeaderHeight = topPadding + 100;
+    final totalHeaderHeight = topPadding + 130;
 
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 200),
@@ -1908,14 +2042,14 @@ class _CartScreenState extends State<CartScreen> {
                         child: Column(
                           children: [
                             SizedBox(
-                              height: 46,
+                              height: 60,
                               child: Stack(
                                 children: [
                                   Center(
                                     child: TranslatedText(
                                       "My Cart",
                                       style: TextStyle(
-                                        fontSize: 20,
+                                        fontSize: 24,
                                         fontWeight: FontWeight.w900,
                                         color: theme.colorScheme.onSurface,
                                         letterSpacing: -0.5,
@@ -2970,8 +3104,6 @@ class _CartScreenState extends State<CartScreen> {
                     ],
                   ),
                 ),
-                // Spacer for Glassy Bottom Bar
-                SliverToBoxAdapter(child: SizedBox(height: 140)),
               ],
             ),
           ),
@@ -2983,15 +3115,174 @@ class _CartScreenState extends State<CartScreen> {
             right: 0,
             child: _buildHeader(theme, isDark),
           ),
-
-          // Glassy Bottom Bar
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildGlassyBottomBar(theme),
-          ),
         ],
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.cardColor, // Use card color for bottom bar
+          boxShadow: [
+            BoxShadow(
+              color: theme.shadowColor.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Payment Method Selector
+              if (_selectedPaymentMethod != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: InkWell(
+                    onTap: _showPaymentMethodSelector,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.scaffoldBackgroundColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: theme.dividerColor),
+                      ),
+                      child: Row(
+                        children: [
+                          const TranslatedText(
+                            "Pay using",
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                          const Spacer(),
+                          if (_selectedPaymentMethod!['img_url'] != null)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Image.network(
+                                _selectedPaymentMethod!['img_url'],
+                                width: 24,
+                                height: 24,
+                                errorBuilder: (c, e, s) =>
+                                    const SizedBox.shrink(),
+                              ),
+                            ),
+                          TranslatedText(
+                            _selectedPaymentMethod!['payment_method_name'] ??
+                                '',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.keyboard_arrow_up,
+                            size: 20,
+                            color: Colors.grey,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TranslatedText(
+                          'Total',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                        TranslatedText(
+                          '₹${((_cartData!['grand_total'] ?? 0) as num).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  if (_selectedOrderMethodId == null)
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.5),
+                          ),
+                        ),
+                        child: Center(
+                          child: TranslatedText(
+                            "Select Order Method",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red[700],
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_orderInitMessage.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: TranslatedText(
+                                _orderInitMessage,
+                                style: TextStyle(
+                                  color: _isOrderPlaceable
+                                      ? Colors.green[700]
+                                      : Colors.red[700],
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          SizedBox(
+                            width: double.infinity,
+                            child: Stack(
+                              children: [
+                                // Main button
+                                PeelButton(
+                                  onTap: _startOrderCountdown,
+                                  text: 'PLACE ORDER',
+                                  isLoading:
+                                      _isInitializingOrder || _isCountingDown,
+                                  isEnabled:
+                                      _isOrderPlaceable &&
+                                      !_isInitializingOrder &&
+                                      !_isCountingDown,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -3311,30 +3602,15 @@ class _CartScreenState extends State<CartScreen> {
                       ),
 
                       // ADD Button
-                      InkWell(
-                        onTap: onTapAdd,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: theme.colorScheme.primary,
-                              width: 1,
-                            ),
-                          ),
-                          child: TranslatedText(
-                            "ADD",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 11,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
+                      SizedBox(
+                        width: 70,
+                        child: PeelButton(
+                          height: 30,
+                          borderRadius: 8,
+                          onTap: onTapAdd,
+                          text: "ADD",
+                          color: theme.colorScheme.primary,
+                          isEnabled: true,
                         ),
                       ),
                     ],
@@ -3437,234 +3713,6 @@ class _CartScreenState extends State<CartScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildGlassyBottomBar(ThemeData theme) {
-    final isDark = theme.brightness == Brightness.dark;
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          padding: const EdgeInsets.only(
-            left: 16,
-            right: 16,
-            bottom: 24, // Extra padding for safety
-            top: 12,
-          ),
-          decoration: BoxDecoration(
-            color: theme.scaffoldBackgroundColor.withOpacity(0.85),
-            border: Border(
-              top: BorderSide(
-                color: theme.dividerColor.withOpacity(0.1),
-                width: 0.5,
-              ),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 20,
-                offset: const Offset(0, -5),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Payment Method Selector
-              if (_selectedPaymentMethod != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12.0),
-                  child: InkWell(
-                    onTap: _showPaymentMethodSelector,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.black.withOpacity(0.03),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.dividerColor.withOpacity(0.5),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          TranslatedText(
-                            "Pay with",
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.6,
-                              ),
-                              fontSize: 12,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          if (_selectedPaymentMethod!['img_url'] != null)
-                            Image.network(
-                              _selectedPaymentMethod!['img_url'],
-                              width: 20,
-                              height: 20,
-                              errorBuilder: (c, e, s) =>
-                                  const SizedBox.shrink(),
-                            ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: TranslatedText(
-                              _selectedPaymentMethod!['payment_method_name'] ??
-                                  '',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const Icon(
-                            Icons.keyboard_arrow_up,
-                            size: 16,
-                            color: Colors.grey,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TranslatedText(
-                          'Total',
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        TranslatedText(
-                          '₹${((_cartData!['grand_total'] ?? 0) as num).toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  if (_selectedOrderMethodId == null)
-                    Expanded(
-                      flex: 2,
-                      child: Container(
-                        height: 50,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.red.withOpacity(0.5),
-                          ),
-                        ),
-                        child: Center(
-                          child: TranslatedText(
-                            "Select Method",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red[700],
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    Expanded(
-                      flex: 2,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_orderInitMessage.isNotEmpty &&
-                              false) // Hide message to save space, show in snackbar if failed? Or keep tiny?
-                            // Let's keep it but very small
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 4.0),
-                              child: TranslatedText(
-                                _orderInitMessage,
-                                style: TextStyle(
-                                  color: _isOrderPlaceable
-                                      ? Colors.green[700]
-                                      : Colors.red[700],
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed:
-                                  _isOrderPlaceable &&
-                                      !_isInitializingOrder &&
-                                      !_isCountingDown
-                                  ? _startOrderCountdown
-                                  : null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: theme.colorScheme.primary,
-                                disabledBackgroundColor: theme.disabledColor,
-                                foregroundColor: Colors.white,
-                                shadowColor: theme.colorScheme.primary
-                                    .withOpacity(0.5),
-                                elevation: 8,
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              child: _isInitializingOrder
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
-                                      ),
-                                    )
-                                  : const TranslatedText(
-                                      'Place Order',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

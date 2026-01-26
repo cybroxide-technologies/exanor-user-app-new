@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/components/home_screen_skeleton.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:exanor/services/api_service.dart';
 import 'package:exanor/components/custom_sliver_app_bar.dart';
 import 'package:exanor/components/professional_bottom_nav.dart';
 import 'package:exanor/screens/store_screen.dart';
+import 'package:exanor/screens/refer_and_earn_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   // User Data
   String? userName;
+  String? userImage;
   bool _isLoadingUserData = true;
 
   // Navigation
@@ -115,9 +118,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final prefs = await SharedPreferences.getInstance();
       final firstName = prefs.getString('first_name') ?? '';
       final lastName = prefs.getString('last_name') ?? '';
+      final image = prefs.getString('user_image');
 
       setState(() {
         userName = '$firstName $lastName'.trim();
+        userImage = image;
         _isLoadingUserData = false;
       });
     } catch (e) {
@@ -220,6 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   addressTitle: _addressTitle,
                   addressSubtitle: _addressSubtitle,
                   userName: userName,
+                  userImage: userImage,
                   isLoadingUserData: _isLoadingUserData,
                   onAddressUpdated: () {
                     print("Address updated callback received");
@@ -306,15 +312,26 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(
+          20,
+        ), // Slightly reduced from 24 for tighter feel
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-            spreadRadius: 0,
+            color: isDark
+                ? Colors.black.withOpacity(0.4)
+                : const Color(0xFF1F4C6B).withOpacity(0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+            spreadRadius: -4,
+          ),
+          BoxShadow(
+            color: isDark ? Colors.white.withOpacity(0.02) : Colors.white,
+            blurRadius: 0,
+            offset: const Offset(0, 0),
+            spreadRadius: 0, // Inner highlight simulated
           ),
         ],
       ),
@@ -333,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Image Section with Prominent Overlay
+              // 1. Image Section with Glassmorphic Elements
               Stack(
                 children: [
                   ClipRRect(
@@ -341,17 +358,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       top: Radius.circular(20),
                     ),
                     child: AspectRatio(
-                      aspectRatio: 21 / 10, // Slightly improved aspect ratio
+                      aspectRatio: 1.85,
                       child: Image.network(
                         store.storeBannerImgUrl,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
                             color: theme.colorScheme.surfaceContainerHighest,
-                            child: const Center(
+                            child: Center(
                               child: Icon(
-                                Icons.image_not_supported,
-                                color: Colors.grey,
+                                Icons.image_not_supported_rounded,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.2,
+                                ),
+                                size: 32,
                               ),
                             ),
                           );
@@ -359,7 +379,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  // Gradient Overlay for Text Visibility
+
+                  // Gradient Overlay (Subtle)
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
@@ -371,79 +392,92 @@ class _HomeScreenState extends State<HomeScreen> {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.transparent,
-                            Colors.black.withOpacity(0.6),
+                            Colors.black.withOpacity(
+                              0.6,
+                            ), // Increased darkness for better contrast
                           ],
-                          stops: const [0.6, 1.0],
+                          stops: const [
+                            0.5,
+                            1.0,
+                          ], // Start gradient earlier for a smoother, deeper look
                         ),
                       ),
                     ),
                   ),
-                  // Sponsored Tag
-                  if (store.isSponsored)
+
+                  // Top Tags (Sponsored / Featured)
+                  if (store.isSponsored || store.isFeatured)
                     Positioned(
-                      top: 12,
-                      right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.2),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: const Text(
-                          'Ad',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  // featured Tag
-                  if (store.isFeatured)
-                    Positioned(
-                      top: 12,
+                      top: 12, // Tighter placement
                       left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'FEATURED',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
+                      child: Row(
+                        children: [
+                          if (store.isFeatured) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: theme.colorScheme.primary
+                                        .withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                'FEATURED',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8, // Smaller text
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          if (store.isSponsored)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.3),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: const Text(
+                                'Ad',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
 
-                  // Time & Distance Pill (Bottom Right of Image)
+                  // Heart / Favorite Icon
                   Positioned(
-                    bottom: 12,
+                    top: 12,
                     right: 12,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.all(6), // Smaller padding
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.85),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.1),
@@ -451,41 +485,96 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.access_time_filled_rounded,
-                            size: 14,
-                            color: theme.colorScheme.primary,
+                      child: Icon(
+                        Icons.favorite_border_rounded,
+                        size: 18, // Smaller icon
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+
+                  // Bottom Glass Info Bar (Time & Rating) - Tighter & Cleaner
+                  Positioned(
+                    bottom: 12,
+                    left: 12,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            store.fulfillmentSpeed,
-                            style: const TextStyle(
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.1),
+                              width: 0.5,
                             ),
                           ),
-                        ],
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 14,
+                                color: Color(0xFFFFB800),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                store.averageRating.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
+                                width: 1,
+                                height: 10,
+                                color: Colors.white.withOpacity(0.4),
+                              ),
+                              Text(
+                                store.fulfillmentSpeed, // e.g. "30-40 min"
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
 
-              // 2. Content Info
+              // Dashed Line Separator
+              CustomPaint(
+                painter: _StoreCardDashedLinePainter(
+                  color: theme.dividerColor.withOpacity(0.5),
+                ),
+                size: const Size(double.infinity, 1),
+              ),
+
+              // 2. Info Section - Reduced Padding
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Title & Area
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Name and Categories
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,61 +582,24 @@ class _HomeScreenState extends State<HomeScreen> {
                               TranslatedText(
                                 store.storeName,
                                 style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 17, // Reduce from huge 20
                                   height: 1.2,
+                                  letterSpacing: -0.3,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green[700],
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(
-                                      Icons.star,
-                                      size: 10,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    store.averageRating.toStringAsFixed(1),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    width: 3,
-                                    height: 3,
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.onSurface
-                                          .withOpacity(0.3),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      '${store.category} • ${store.area}',
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: theme.colorScheme.onSurface
-                                                .withOpacity(0.6),
-                                            fontSize: 12,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                '${store.category} • ${store.area}',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.5),
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
@@ -557,102 +609,115 @@ class _HomeScreenState extends State<HomeScreen> {
 
                     const SizedBox(height: 12),
 
-                    // 3. Offers Section (Compact & Premium)
+                    // 3. Coupons / Offers (Refined & subtle)
                     if (store.coupons.isNotEmpty &&
                         store.coupons.any((c) => c.amount > 0)) ...[
-                      Container(
-                        height: 1,
-                        width: double.infinity,
-                        color: theme.colorScheme.outline.withOpacity(0.1),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.discount_rounded,
-                            size: 18,
-                            color: theme.colorScheme.secondary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Builder(
-                              builder: (context) {
-                                final validCoupons = store.coupons
-                                    .where((c) => c.amount > 0)
-                                    .toList();
-                                if (validCoupons.isEmpty)
-                                  return const SizedBox();
-                                final coupon =
-                                    validCoupons.first; // Show main offer
+                      const SizedBox(height: 14),
 
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: store.coupons
+                              .where((c) => c.amount > 0)
+                              .take(2)
+                              .map((coupon) {
                                 final isPercent = coupon.isPercentDiscountType;
                                 final amount = coupon.amount.toInt();
-                                final offerText = isPercent
+                                final label = isPercent
                                     ? '$amount% OFF'
-                                    : 'Save ₹$amount';
+                                    : '₹$amount SAVED';
 
-                                String subText = "";
-                                if (isPercent &&
-                                    coupon.maximumDiscountAmountLimit > 0) {
-                                  subText =
-                                      "up to ₹${coupon.maximumDiscountAmountLimit.toInt()}";
-                                } else if (coupon.minimumAmount > 0) {
-                                  subText =
-                                      "on orders above ₹${coupon.minimumAmount.toInt()}";
-                                }
-
-                                return RichText(
-                                  text: TextSpan(
-                                    style: TextStyle(
-                                      fontFamily: theme
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.fontFamily,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : Colors.black87,
-                                      fontSize: 12,
-                                    ),
+                                return Container(
+                                  margin: const EdgeInsets.only(right: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFFE3F2FD,
+                                    ).withOpacity(0.5), // Very light airy blue
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      TextSpan(
-                                        text: offerText,
+                                      // Coupon Icon
+                                      if (coupon.imgUrl.isNotEmpty)
+                                        Image.network(
+                                          coupon.imgUrl,
+                                          width: 20,
+                                          height: 20,
+                                          fit: BoxFit.contain,
+                                          errorBuilder: (_, __, ___) => Icon(
+                                            Icons.local_offer_rounded,
+                                            size: 18,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        )
+                                      else
+                                        Icon(
+                                          Icons.local_offer_rounded,
+                                          size: 18,
+                                          color: theme.colorScheme.primary,
+                                        ),
+
+                                      const SizedBox(width: 8),
+
+                                      // Coupon Text
+                                      Text(
+                                        label,
                                         style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          color: theme.colorScheme.secondary,
+                                          color: theme.colorScheme.primary,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12,
+                                          letterSpacing: -0.2,
                                         ),
                                       ),
-                                      if (subText.isNotEmpty)
-                                        TextSpan(text: " $subText"),
+                                      if (isPercent &&
+                                          coupon.maximumDiscountAmountLimit >
+                                              0) ...[
+                                        const SizedBox(width: 4),
+                                        Container(
+                                          width: 1,
+                                          height: 10,
+                                          color: theme.colorScheme.primary
+                                              .withOpacity(0.3),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "Up to ₹${coupon.maximumDiscountAmountLimit.toInt()}",
+                                          style: TextStyle(
+                                            color: theme.colorScheme.primary
+                                                .withOpacity(0.8),
+                                            fontWeight: FontWeight.w500,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
                                 );
-                              },
-                            ),
-                          ),
-                        ],
+                              })
+                              .toList(),
+                        ),
                       ),
                     ] else if (store.bottomOfferTitle.isNotEmpty) ...[
-                      Container(
-                        height: 1,
-                        width: double.infinity,
-                        color: theme.colorScheme.outline.withOpacity(0.1),
-                      ),
-                      const SizedBox(height: 12),
+                      // Bottom Offer Fallback
+                      const SizedBox(height: 10),
                       Row(
                         children: [
                           Icon(
-                            Icons.stars_rounded,
-                            size: 18,
-                            color: theme.colorScheme.primary,
+                            Icons.verified_rounded,
+                            size: 16,
+                            color: theme.colorScheme.secondary,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
+                          const SizedBox(width: 6),
+                          Flexible(
                             child: Text(
                               store.bottomOfferTitle,
                               style: TextStyle(
-                                color: theme.colorScheme.primary,
+                                color: theme.colorScheme.secondary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 12,
                               ),
@@ -672,4 +737,31 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+class _StoreCardDashedLinePainter extends CustomPainter {
+  final Color color;
+  _StoreCardDashedLinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width == 0) return;
+
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    const dashWidth = 4.0;
+    const dashSpace = 4.0;
+    double startX = 0;
+
+    while (startX < size.width) {
+      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

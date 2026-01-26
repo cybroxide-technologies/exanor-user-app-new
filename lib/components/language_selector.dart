@@ -154,39 +154,30 @@ class _LanguageSelectorState extends State<LanguageSelector>
     try {
       setState(() {
         _downloadedLanguages[language.code] = false;
+        // Use 0.0 as a marker that downloading is in progress.
+        // The UI will show an indeterminate indicator (spinner/loader)
+        // because the ML Kit library does not provide real-time progress percentages.
         _downloadProgress[language.code] = 0.0;
       });
 
-      // Simulate download progress for better UX (only to 90%)
-      for (int i = 0; i <= 90; i += 10) {
-        if (mounted) {
-          setState(() {
-            _downloadProgress[language.code] = i / 100.0;
-          });
-          await Future.delayed(const Duration(milliseconds: 50));
-        }
-      }
-
-      // Complete progress to 95% before actual download
+      // Show user immediate feedback that it has started
       if (mounted) {
-        setState(() {
-          _downloadProgress[language.code] = 0.95;
-        });
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Downloading ${language.name} model... Please wait.'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
 
+      // Start actual download
       final success = await _translationService.downloadLanguageModel(
         language.code,
       );
 
       if (mounted) {
-        // Set progress to 100% briefly to show completion
-        setState(() {
-          _downloadProgress[language.code] = 1.0;
-        });
-
-        // Small delay to show 100% completion
-        await Future.delayed(const Duration(milliseconds: 200));
-
         // Now update final state atomically
         setState(() {
           _downloadedLanguages[language.code] = success;
@@ -939,27 +930,15 @@ class _LanguageSelectorState extends State<LanguageSelector>
                       ),
                       if (downloadProgress != null) ...[
                         const SizedBox(height: 8),
-                        Container(
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: isDarkMode
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            minHeight: 4,
+                            backgroundColor: isDarkMode
                                 ? Colors.white.withOpacity(0.1)
                                 : Colors.black.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: downloadProgress,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    theme.colorScheme.primary,
-                                    theme.colorScheme.primary.withOpacity(0.7),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              theme.colorScheme.primary,
                             ),
                           ),
                         ),
@@ -1031,7 +1010,7 @@ class _LanguageSelectorState extends State<LanguageSelector>
       );
     }
 
-    // If download is in progress, show progress indicator
+    // If download is in progress, show indeterminate progress indicator
     if (downloadProgress != null) {
       return Container(
         width: 40,
@@ -1045,7 +1024,7 @@ class _LanguageSelectorState extends State<LanguageSelector>
             width: 24,
             height: 24,
             child: CircularProgressIndicator(
-              value: downloadProgress,
+              value: null, // INDETERMINATE
               strokeWidth: 3,
               valueColor: AlwaysStoppedAnimation<Color>(
                 theme.colorScheme.primary,

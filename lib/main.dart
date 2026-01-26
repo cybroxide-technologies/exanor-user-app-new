@@ -39,6 +39,7 @@ import 'package:exanor/services/analytics_service.dart';
 import 'package:exanor/services/crashlytics_service.dart';
 import 'package:exanor/services/performance_service.dart';
 import 'package:exanor/components/navigation_performance_tracker.dart';
+import 'package:exanor/screens/refer_and_earn_screen.dart';
 
 /// Top-level function to handle background messages
 /// This must be a top-level function, not a class method
@@ -551,8 +552,24 @@ class _MyAppState extends State<MyApp> {
   }
 
   /// Send FCM token to server
-  void _sendTokenToServer(String token) {
+  void _sendTokenToServer(String token) async {
     try {
+      developer.log(
+        '📤 Checking authentication before sending FCM token...',
+        name: 'FCM',
+      );
+
+      // Check if user is authenticated before sending token
+      final isAuthenticated = await ApiService.isLoggedIn();
+
+      if (!isAuthenticated) {
+        developer.log(
+          '⚠️ User not authenticated, skipping FCM token submission',
+          name: 'FCM',
+        );
+        return;
+      }
+
       developer.log('📤 Sending FCM token to server...', name: 'FCM');
 
       // Detect platform
@@ -625,6 +642,7 @@ class _MyAppState extends State<MyApp> {
               '/remote_config_debug': (context) =>
                   const RemoteConfigDebugScreen(),
               '/orders': (context) => const OrdersListScreen(),
+              '/refer_and_earn': (context) => const ReferAndEarnScreen(),
               '/restart_app': (context) => const SplashScreen(),
               // REMOVED: Routes for deleted screens (profiles, chat, subscription, etc.)
             },

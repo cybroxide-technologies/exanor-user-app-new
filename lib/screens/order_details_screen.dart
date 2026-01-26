@@ -216,29 +216,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Premium Gradient
-    final bgGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: isDark
-          ? [
-              _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
-                defaultColor: const Color(0xFF1A1A1A),
-              ),
-              _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
-                defaultColor: Colors.black,
-              ),
-            ]
-          : [
-              _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                defaultColor: const Color(0xFFE3F2FD),
-              ),
-              Colors.white,
-            ],
-    );
+    // Premium Gradient (Unused now, simplified for other usages if needed, or removed)
+    // removed bgGradient definition
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -255,147 +234,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // 1. CREATIVE HERO SECTION
-                SliverToBoxAdapter(
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      gradient: bgGradient,
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(40),
-                        bottomRight: Radius.circular(40),
-                      ),
-                    ),
-                    // Padding top ensures content starts below the fixed header
-                    padding: EdgeInsets.fromLTRB(
-                      24,
-                      MediaQuery.of(context).padding.top + 70,
-                      24,
-                      40,
-                    ),
-                    margin: const EdgeInsets.only(bottom: 24),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // Watermark Icon
-                        Positioned(
-                          right: -20,
-                          top: -20,
-                          child: Transform.rotate(
-                            angle: -0.2,
-                            child: Icon(
-                              Icons.receipt_long_rounded,
-                              size: 140,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.05,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Content
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // "Order" Label
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withOpacity(
-                                  0.1,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: theme.colorScheme.primary.withOpacity(
-                                    0.2,
-                                  ),
-                                ),
-                              ),
-                              child: Text(
-                                "ORDER RECEIPT",
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-
-                            // ID
-                            Text(
-                              _orderData?['order_id'] != null
-                                  ? '#${_orderData!['order_id']}'
-                                  : 'Loading...',
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                                color: theme.colorScheme.onSurface,
-                                height: 1.0,
-                              ),
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Date Row
-                            if (_orderData?['created_at'] != null)
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: theme.colorScheme.onSurface
-                                          .withOpacity(0.05),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      Icons.event_note_rounded,
-                                      size: 16,
-                                      color: theme.colorScheme.onSurface
-                                          .withOpacity(0.7),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        "Placed On",
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: theme.colorScheme.onSurface
-                                              .withOpacity(0.5),
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                      TranslatedText(
-                                        _orderData!['created_at']
-                                            .toString()
-                                            .split('T')[0],
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w600,
-                                              color: theme.colorScheme.onSurface
-                                                  .withOpacity(0.8),
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
                 // Content or Loading/Error States
                 if (_errorMessage != null)
                   SliverFillRemaining(child: _buildErrorView(theme))
@@ -407,42 +245,50 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        // Status Card (Vertical Gradient)
+                        // 1. STATUS CARD FIRST (Top priority)
+                        SizedBox(
+                          height: MediaQuery.of(context).padding.top + 90,
+                        ),
+                        // 1. STATUS CARD (Top priority)
                         _buildStatusCard(theme),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
+
+                        // 2. Order Quick Info (ID, Date)
+                        _buildOrderMetadataCard(theme),
+                        const SizedBox(height: 32),
 
                         // Products List
                         _buildSectionHeader(
                           theme,
-                          "Items Ordered",
-                          Icons.fastfood_rounded,
+                          "Your Items",
+                          Icons.shopping_bag_outlined,
                         ),
                         const SizedBox(height: 16),
                         _buildProductsList(theme),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 32),
 
-                        // Bill Summary
+                        // Bill Summary (Receipt Style)
                         _buildSectionHeader(
                           theme,
-                          "Bill Summary",
-                          Icons.receipt_long_rounded,
+                          "Payment Summary",
+                          Icons.receipt_long_outlined,
                         ),
                         const SizedBox(height: 16),
-                        _buildBillSummary(theme),
-                        const SizedBox(height: 30),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: _buildBillSummary(theme),
+                        ),
+                        const SizedBox(height: 32),
 
-                        // Store Info (Revamped)
+                        // Combined Store & Order Info
                         _buildSectionHeader(
                           theme,
-                          "Store Details",
-                          Icons.store_rounded,
+                          "Order Details",
+                          Icons.info_outline_rounded,
                         ),
                         const SizedBox(height: 16),
-                        _buildStoreInfo(theme),
-                        const SizedBox(height: 30),
-
-                        // Order Details Grid
-                        _buildOrderMetaGrid(theme),
+                        _buildCombinedOrderInfo(theme),
                         const SizedBox(height: 120), // Bottom padding
                       ]),
                     ),
@@ -469,113 +315,155 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   Widget _buildHeader(ThemeData theme, bool isDark) {
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOutCubic,
-      tween: Tween<double>(begin: 0.0, end: _isScrolled ? 1.0 : 0.0),
-      builder: (context, value, child) {
-        final double blurSigma = value * 20.0;
-        final double opacity = value;
+    // Persistent Header
+    final startColor = isDark
+        ? _hexToColor(
+            FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+            defaultColor: const Color(0xFF1A1A1A),
+          )
+        : _hexToColor(
+            FirebaseRemoteConfigService.getThemeGradientLightStart(),
+            defaultColor: const Color(0xFFE3F2FD),
+          );
+    final endColor = isDark
+        ? _hexToColor(
+            FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+            defaultColor: Colors.black,
+          )
+        : Colors.white;
 
-        final startColor = isDark
-            ? _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
-                defaultColor: const Color(0xFF1A1A1A),
-              )
-            : _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                defaultColor: const Color(0xFFE3F2FD),
-              );
-        final endColor = isDark
-            ? _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
-                defaultColor: Colors.black,
-              )
-            : Colors.white;
-
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(24),
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 18, // Softer blur
+            offset: const Offset(0, 8),
+            spreadRadius: 1,
           ),
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-            child: Container(
-              height:
-                  MediaQuery.of(context).padding.top + 70, // Increased height
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    startColor.withOpacity(opacity * 0.95),
-                    endColor.withOpacity(opacity * 0.95),
-                  ],
+        ],
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            height: MediaQuery.of(context).padding.top + 80,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  startColor.withOpacity(0.95),
+                  endColor.withOpacity(0.95),
+                ],
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: theme.dividerColor.withOpacity(0.1),
+                  width: 0.5,
                 ),
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(24),
-                ),
-                border: Border(
-                  bottom: BorderSide(
-                    color: theme.dividerColor.withOpacity(opacity * 0.1),
-                    width: 0.5,
+              ),
+            ),
+            child: Stack(
+              children: [
+                // Flowing Background Image (Watermark)
+                Positioned(
+                  right: -30,
+                  bottom: -20,
+                  child: Transform.rotate(
+                    angle: -0.2,
+                    child: Icon(
+                      Icons.receipt_long_rounded,
+                      size: 100,
+                      color: theme.colorScheme.onSurface.withOpacity(0.05),
+                    ),
                   ),
                 ),
-              ),
-              padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + 10,
-                bottom: 10,
-                left: 20,
-                right: 20,
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Back Button
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: theme.colorScheme.onSurface.withOpacity(0.1),
-                          width: 1,
+
+                // Content
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + 15,
+                    left: 20,
+                    right: 20,
+                    bottom: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      // Back Button
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.1)
+                              : Colors.black.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: theme.colorScheme.onSurface.withOpacity(0.1),
+                            width: 1,
+                          ),
                         ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: InkWell(
-                            onTap: () => Navigator.pop(context),
-                            child: Icon(
-                              Icons.arrow_back_ios_new_rounded,
-                              size: 22,
-                              color: theme.colorScheme.onSurface,
-                            ),
+                        child: InkWell(
+                          onTap: () => Navigator.pop(context),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            size: 22,
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  // Title (Always Visible)
-                  TranslatedText(
-                    "Order Details",
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                      const SizedBox(width: 16),
+                      // Title (Always Visible)
+                      Expanded(
+                        child: TranslatedText(
+                          "Order Details",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      const SizedBox(
+                        width: 48,
+                      ), // Balance back button (48 width)
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderMetadataCard(ThemeData theme) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: SelectableText(
+          "Ref: #${_orderData?['order_id'] ?? widget.orderId}",
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
     );
   }
 
@@ -597,206 +485,163 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       if (mainStatus != null) title = _formatStatus(mainStatus.toString());
     }
 
-    // Determine status flavor color for accents, but card will use main theme gradient
-    Color statusAccentColor = theme.colorScheme.primary;
+    Color statusColor = theme.colorScheme.primary;
     if (title.toLowerCase().contains('cancelled') ||
         title.toLowerCase().contains('failed')) {
-      statusAccentColor = theme.colorScheme.error;
+      statusColor = theme.colorScheme.error;
     } else if (title.toLowerCase().contains('delivered') ||
         title.toLowerCase().contains('completed')) {
-      statusAccentColor = Colors.green;
+      statusColor = const Color(0xFF00C853); // Vibrant Green
+    } else if (title.toLowerCase().contains('ready') ||
+        title.toLowerCase().contains('prepared')) {
+      statusColor = Colors.orange.shade700;
     }
 
-    final isDark = theme.brightness == Brightness.dark;
-    final startColor = isDark
-        ? _hexToColor(
-            FirebaseRemoteConfigService.getThemeGradientDarkStart(),
-            defaultColor: const Color(0xFF1A1A1A),
-          )
-        : _hexToColor(
-            FirebaseRemoteConfigService.getThemeGradientLightStart(),
-            defaultColor: const Color(0xFFE3F2FD),
-          );
-    final endColor = isDark
-        ? _hexToColor(
-            FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
-            defaultColor: Colors.black,
-          )
-        : Colors.white;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(24), // Increased padding
-          decoration: BoxDecoration(
-            // Vertical Gradient as requested
-            gradient: LinearGradient(
-              colors: [startColor.withOpacity(0.9), endColor.withOpacity(0.9)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: statusAccentColor.withOpacity(0.3),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: statusAccentColor.withOpacity(0.15),
-                blurRadius: 25,
-                offset: const Offset(0, 10),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: statusColor.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: -2,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.cardColor.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.2),
-                        width: 1,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.timelapse_rounded,
-                      color: theme.colorScheme.onSurface,
-                      size: 32,
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TranslatedText(
-                          title,
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 22,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        TranslatedText(
-                          description,
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurface.withOpacity(0.7),
-                            fontSize: 14,
-                            height: 1.4,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              // Modern Progress Bar
-              Stack(
-                children: [
-                  Container(
-                    height: 6,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.onSurface.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  FractionallySizedBox(
-                    widthFactor: 0.6,
-                    alignment: Alignment.centerLeft,
-                    child: Container(
-                      height: 6,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            statusAccentColor,
-                            statusAccentColor.withOpacity(0.6),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: statusAccentColor.withOpacity(0.4),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+        ],
+        border: Border.all(color: statusColor.withOpacity(0.2), width: 1),
+      ),
+      child: Column(
+        children: [
+          TranslatedText(
+            title,
+            style: TextStyle(
+              color: statusColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 24,
+              letterSpacing: -0.5,
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
+          const SizedBox(height: 8),
+          TranslatedText(
+            description,
+            style: TextStyle(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: LinearProgressIndicator(
+              value: 0.5,
+              minHeight: 4,
+              backgroundColor: statusColor.withOpacity(0.1),
+              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildSectionHeader(ThemeData theme, String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: theme.colorScheme.primary),
-        const SizedBox(width: 8),
-        TranslatedText(
-          title,
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 16, color: theme.colorScheme.primary),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          TranslatedText(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildProductsList(ThemeData theme) {
     if (_isLoadingProducts) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(),
-        ),
+      return Center(
+        child: CircularProgressIndicator(color: theme.colorScheme.primary),
       );
     }
     if (_products.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(20),
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
-          color: theme.cardColor,
+          color: theme.cardColor.withOpacity(0.5),
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
         ),
-        child: const Center(child: TranslatedText("No items found")),
+        child: Column(
+          children: [
+            Icon(
+              Icons.remove_shopping_cart_outlined,
+              size: 40,
+              color: theme.disabledColor,
+            ),
+            const SizedBox(height: 12),
+            TranslatedText(
+              "No items found",
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: theme.shadowColor.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 5),
           ),
         ],
+        border: Border.all(
+          color: theme.dividerColor.withOpacity(0.5),
+          width: 0.5,
+        ),
       ),
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         itemCount: _products.length,
-        separatorBuilder: (_, __) => const Divider(height: 24),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        separatorBuilder: (_, __) => Divider(
+          height: 1,
+          thickness: 0.5,
+          color: theme.dividerColor.withOpacity(0.3),
+          indent: 16,
+          endIndent: 16,
+        ),
         itemBuilder: (context, index) {
           final product = _products[index];
           final quantity = product['quantity'] ?? 0;
@@ -806,70 +651,114 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               ) ??
               0.0;
           final total = price * quantity;
+          final variant = product['variant_name'];
+          final imageUrl = product['image_url'];
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                  image: product['image_url'] != null
-                      ? DecorationImage(
-                          image: NetworkImage(product['image_url']),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // 1. Image (Small & Rounded)
+                Container(
+                  height: 50,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: theme.dividerColor.withOpacity(0.6),
+                      width: 0.5,
+                    ),
+                    color: isDark ? Colors.grey[800] : Colors.white,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(9),
+                    child: imageUrl != null
+                        ? Image.network(imageUrl, fit: BoxFit.cover)
+                        : Icon(
+                            Icons.image_outlined,
+                            size: 20,
+                            color: theme.disabledColor,
+                          ),
+                  ),
                 ),
-                child: product['image_url'] == null
-                    ? Icon(
-                        Icons.fastfood,
-                        color: theme.colorScheme.onSurface.withOpacity(0.2),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                const SizedBox(width: 16),
+
+                // 2. Name & Variant (Left Aligned)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      TranslatedText(
+                        product['product_name'] ?? 'Item',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                          height: 1.2,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (variant != null && variant.toString().isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            variant.toString(),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.5,
+                              ),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 16),
+
+                // 3. Price & Qty (Right Aligned - Symmetrical)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    TranslatedText(
-                      product['product_name'] ?? 'Item',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                    Text(
+                      "₹${total.toStringAsFixed(0)}",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 8,
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
+                        color: theme.colorScheme.onSurface.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '${quantity}x',
+                        "x$quantity",
                         style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurface.withOpacity(0.8),
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              Text(
-                '₹${total.toStringAsFixed(2)}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -877,110 +766,187 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   Widget _buildBillSummary(ThemeData theme) {
-    final cartTotal = _orderData!['cart_total'] as List? ?? [];
-    final platformFees = _orderData!['platform_fees'] as List? ?? [];
-    final grandTotal = _orderData!['grand_total'] ?? 0.0;
+    // Data Loading
+    final cartTotal = _orderData != null && _orderData!['cart_total'] is List
+        ? _orderData!['cart_total'] as List
+        : [];
+    final platformFees =
+        _orderData != null && _orderData!['platform_fees'] is List
+        ? _orderData!['platform_fees'] as List
+        : [];
+    final grandTotal = _orderData?['grand_total'] != null
+        ? double.tryParse(_orderData!['grand_total'].toString()) ?? 0.0
+        : 0.0;
 
+    Widget buildRow(
+      String label,
+      dynamic value, {
+      bool isBold = false,
+      Color? color,
+      double? fontSize,
+    }) {
+      String displayValue = "₹0.00";
+      if (value is num) {
+        displayValue = "₹${value.toStringAsFixed(2)}";
+      } else if (value is String) {
+        if (double.tryParse(value) != null) {
+          displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
+        } else {
+          displayValue = value;
+        }
+      }
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TranslatedText(
+              label,
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withOpacity(
+                  isBold ? 1.0 : 0.6,
+                ),
+                fontSize: fontSize ?? (isBold ? 16 : 14),
+                fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+            Text(
+              displayValue,
+              style: TextStyle(
+                color:
+                    color ??
+                    theme.colorScheme.onSurface.withOpacity(isBold ? 1.0 : 0.8),
+                fontSize: fontSize ?? (isBold ? 16 : 14),
+                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+                fontFamily: isBold ? null : 'RobotoMono',
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Simplified Modern Bill Card
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: theme.shadowColor.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ...cartTotal.map(
-            (item) => _buildBillRow(theme, item['title'] ?? '', item['value']),
-          ),
-          if (platformFees.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            ...platformFees.map(
-              (item) => _buildBillRow(
-                theme,
-                item['title'] ?? '',
-                item['value'],
-                isFee: true,
-              ),
+          TranslatedText(
+            "Payment Summary",
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
             ),
-          ],
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Divider(color: theme.dividerColor.withOpacity(0.5)),
           ),
+          const SizedBox(height: 20),
+
+          // Items
+          if (cartTotal.isNotEmpty)
+            ...cartTotal.map(
+              (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
+            ),
+
+          if (cartTotal.isEmpty && _orderData != null) ...[
+            buildRow("Item Total", _orderData!['sub_total'] ?? 0),
+            buildRow("Tax", _orderData!['total_tax_amount'] ?? 0),
+            buildRow("Delivery", _orderData!['delivery_charges'] ?? 0),
+          ],
+
+          if (platformFees.isNotEmpty)
+            ...platformFees.map(
+              (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
+            ),
+
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Divider(height: 1),
+          ),
+
+          // Total
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               TranslatedText(
-                "Grand Total",
-                style: theme.textTheme.titleMedium?.copyWith(
+                "Order Total",
+                style: TextStyle(
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
               Text(
                 "₹${grandTotal.toStringAsFixed(2)}",
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
                   color: theme.colorScheme.primary,
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildBillRow(
-    ThemeData theme,
-    String label,
-    dynamic value, {
-    bool isFee = false,
-  }) {
-    if (value == null) return const SizedBox.shrink();
-    double numericValue = 0.0;
-    if (value is num) {
-      numericValue = value.toDouble();
-    } else if (value is String) {
-      numericValue = double.tryParse(value) ?? 0.0;
-    } else {
-      return const SizedBox.shrink();
-    }
+          const SizedBox(height: 12),
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          TranslatedText(
-            label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: isFee
-                  ? theme.colorScheme.onSurface.withOpacity(0.6)
-                  : theme.colorScheme.onSurface.withOpacity(0.8),
-              fontSize: isFee ? 13 : 14,
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
             ),
-          ),
-          Text(
-            "₹${numericValue.toStringAsFixed(2)}",
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface,
-              fontWeight: isFee ? FontWeight.normal : FontWeight.w500,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.payment, size: 14, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  "${_orderData?['payment_method'] ?? 'Card'}".toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  // Helper method removed as it is now inside _buildBillSummary for better local scope or we can keep it if needed.
+  // I'll replace _buildBillRow with nothing (or if other things use it, I should keep it but I think only summary uses it).
+  // Checking file usage: _buildBillSummary calls it. Since I overwrote _buildBillSummary to use local helper or I can implement it there.
+  // The replacement above uses a local 'buildRow'. So I should remove the old _buildBillRow to avoid duplication/confusion,
+  // or I can just update _buildBillRow and use it.
+  // I will replace _buildBillRow with a dummy or empty widget if it's not used, OR I'll just map the space.
+  // Actually, I'll just replace the whole block of functions.
 
   Widget _buildStoreInfo(ThemeData theme) {
+    if (_orderData == null) return const SizedBox.shrink();
+
+    final storeName = _orderData!['store_name'] ?? 'Store';
+    final storeAddress = _orderData!['store_address'] ?? 'No Address Provided';
+    final storeImage = _orderData!['store_image_url'];
+
     return Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
@@ -992,170 +958,321 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () {
-            // Can add navigation to store functionality here later
-          },
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+      child: Row(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: theme.colorScheme.surfaceContainerHighest,
+              image: storeImage != null
+                  ? DecorationImage(
+                      image: NetworkImage(storeImage),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            child: storeImage == null
+                ? Icon(
+                    Icons.store,
+                    color: theme.colorScheme.onSurface.withOpacity(0.4),
+                  )
+                : null,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Store Logo / Avatar
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Icon(
-                    Icons.storefront_rounded,
-                    color: theme.colorScheme.primary,
-                    size: 28,
+                Text(
+                  storeName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 16),
-
-                // Details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TranslatedText(
-                        _orderData!['store_name'] ?? 'Store Name',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.verified_rounded,
-                            size: 14,
-                            color: Colors.green,
-                          ),
-                          const SizedBox(width: 4),
-                          TranslatedText(
-                            "Verified Partner",
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                const SizedBox(height: 4),
+                Text(
+                  storeAddress,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
                   ),
-                ),
-
-                // Action
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    border: Border.all(
-                      color: theme.dividerColor.withOpacity(0.5),
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: TranslatedText(
-                    "View",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
           ),
-        ),
+          // Action Button
+          Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              icon: Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: theme.colorScheme.primary,
+              ),
+              onPressed: () {
+                // Navigate to store
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildOrderMetaGrid(ThemeData theme) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildMetaCard(
-            theme,
-            "Payment",
-            _orderData!['payment_details']?['payment_method_name'] ?? 'N/A',
-            Icons.payment_rounded,
-            Colors.blue,
-          ),
+    final paymentData = _orderData?['payment_details'];
+    String paymentMethod = 'Unknown';
+    if (paymentData is Map) {
+      paymentMethod = paymentData['payment_method_name'] ?? 'Unknown';
+    } else {
+      paymentMethod = _orderData?['payment_method'] ?? 'Unknown';
+    }
+
+    final orderType =
+        _orderData?['order_method_name'] ??
+        _orderData?['order_type'] ??
+        'Delivery';
+
+    Widget buildTile(String label, String value, IconData icon, Color accent) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildMetaCard(
-            theme,
-            "Type",
-            _orderData!['order_method_name'] ?? 'N/A',
-            Icons.delivery_dining_rounded,
-            Colors.orange,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: accent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 20, color: accent),
+            ),
+            const Spacer(),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurface.withOpacity(0.5),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.6,
+      children: [
+        buildTile(
+          "Payment Method",
+          _formatStatus(paymentMethod),
+          Icons.payment_rounded,
+          Colors.purple,
+        ),
+        buildTile(
+          "Order Type",
+          _formatStatus(orderType),
+          Icons.category_rounded,
+          Colors.blue,
         ),
       ],
     );
   }
 
-  Widget _buildMetaCard(
-    ThemeData theme,
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildCombinedOrderInfo(ThemeData theme) {
+    if (_orderData == null) return const SizedBox.shrink();
+
+    final storeName = _orderData!['store_name'] ?? 'Store';
+    final storeAddress = _orderData!['store_address'] ?? 'No Address';
+    final paymentData = _orderData?['payment_details'];
+    String paymentMethod = 'Unknown';
+    if (paymentData is Map) {
+      paymentMethod = paymentData['payment_method_name'] ?? 'Unknown';
+    } else {
+      paymentMethod = _orderData?['payment_method'] ?? 'Unknown';
+    }
+
+    final orderType =
+        _orderData?['order_method_name'] ??
+        _orderData?['order_type'] ??
+        'Delivery';
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, size: 20, color: color),
+          Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  Icons.storefront_outlined,
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Order from",
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    Text(
+                      storeName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      storeAddress,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          TranslatedText(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
-            ),
-          ),
-          const SizedBox(height: 4),
-          TranslatedText(
-            value,
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.scaffoldBackgroundColor,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.payment_outlined,
+                        size: 20,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Payment",
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatStatus(paymentMethod),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.scaffoldBackgroundColor,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.directions_bike_outlined,
+                        size: 20,
+                        color: theme.colorScheme.secondary,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Type",
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatStatus(orderType),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1176,18 +1293,31 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         ],
       ),
       child: SafeArea(
-        child: ElevatedButton.icon(
-          onPressed: _launchInvoice,
-          icon: const Icon(Icons.download_rounded),
-          label: const TranslatedText("Download Invoice"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: theme.colorScheme.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _launchInvoice,
+            icon: Icon(
+              Icons.download_rounded,
+              size: 20,
+              color: theme.colorScheme.primary,
             ),
-            elevation: 0,
+            label: Text(
+              "Download Invoice",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              side: BorderSide(
+                color: theme.colorScheme.primary.withOpacity(0.2),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           ),
         ),
       ),
@@ -1230,4 +1360,61 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       ),
     );
   }
+}
+
+// Custom receipt clipper
+class ReceiptClipper extends CustomClipper<Path> {
+  final int holeCount;
+
+  ReceiptClipper({this.holeCount = 20});
+
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height);
+
+    final double d = size.width / holeCount;
+
+    // Zigzag/Triangle bottom
+    for (int i = 0; i < holeCount; i++) {
+      // Creates a sawtooth pattern
+      double x = i * d;
+      // The midpoint of the tooth
+      path.lineTo(x + d / 2, size.height - 10);
+      // The end of the tooth (back to full height)
+      path.lineTo(x + d, size.height);
+    }
+
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+
+class DottedLinePainter extends CustomPainter {
+  final Color color;
+
+  DottedLinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+
+    const dashWidth = 5.0;
+    const dashSpace = 3.0;
+    double startX = 0;
+
+    while (startX < size.width) {
+      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

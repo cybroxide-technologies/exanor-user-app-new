@@ -86,272 +86,342 @@ class _PhoneRegistrationScreenState extends State<PhoneRegistrationScreen> {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: UniversalTranslationWrapper(
-        excludePatterns: [
-          '+',
-          '@',
-          '.com',
-          'API',
-        ], // Don't translate phone numbers, technical terms
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 40),
+      body: Stack(
+        children: [
+          // Dynamic Background
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.primary.withOpacity(0.2),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -50,
+            left: -50,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.secondary.withOpacity(0.15),
+              ),
+            ),
+          ),
+          // Blur effect for glassmorphism
+          Positioned.fill(
+            child: Container(color: theme.colorScheme.surface.withOpacity(0.9)),
+          ),
 
-                  // Header Icon
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/icon/exanor_icon_512x512px.png',
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Title
-                  TranslatedText(
-                    'Enter your phone number',
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  TranslatedText(
-                    "We'll send you a verification code",
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // Phone Number Input
-                  Column(
+          UniversalTranslationWrapper(
+            excludePatterns: [
+              '+',
+              '@',
+              '.com',
+              'API',
+            ], // Don't translate phone numbers, technical terms
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TranslatedText(
-                        'Phone Number',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: theme.colorScheme.onSurface,
+                      const SizedBox(height: 60),
+
+                      // Header with Logo
+                      Center(
+                        child: Hero(
+                          tag: 'app_logo',
+                          child: Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.colorScheme.primary.withOpacity(
+                                    0.2,
+                                  ),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            padding: const EdgeInsets.all(16),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/icon/exanor_icon_512x512px.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[0-9]')),
-                        ],
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your phone number';
-                          }
-                          if (value.length != 10) {
-                            return 'Please enter a valid 10-digit phone number';
-                          }
-                          return null;
-                        },
-                        decoration: InputDecoration(
-                          hintText: '9876543210',
-                          hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.5),
-                          ),
-                          prefixIcon: CountryCodePicker(
-                            onChanged: (CountryCode countryCode) {
-                              setState(() {
-                                _selectedCountry = countryCode;
-                              });
-                            },
-                            initialSelection: 'IN',
-                            favorite: const ['+91', 'IN'],
-                            showCountryOnly: false,
-                            showOnlyCountryWhenClosed: false,
-                            alignLeft: false,
-                            showFlag: true,
-                            showFlagMain: true,
-                            flagWidth: 25,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            textStyle: theme.textTheme.bodyLarge?.copyWith(
-                              color: theme.colorScheme.onSurface,
-                              fontWeight: FontWeight.w500,
+
+                      const SizedBox(height: 48),
+
+                      // Welcome Text
+                      FadeTransition(
+                        opacity: const AlwaysStoppedAnimation(1),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TranslatedText(
+                              'Welcome Back',
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
                             ),
-                            dialogTextStyle: theme.textTheme.bodyMedium,
-                            searchStyle: theme.textTheme.bodyMedium,
-                            searchDecoration: InputDecoration(
-                              hintText: 'Search country',
-                              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                            const SizedBox(height: 8),
+                            TranslatedText(
+                              'Enter your number to continue',
+                              style: theme.textTheme.bodyLarge?.copyWith(
                                 color: theme.colorScheme.onSurface.withOpacity(
-                                  0.5,
+                                  0.6,
                                 ),
                               ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
                             ),
-                            countryFilter: const [
-                              'IN',
-                              'US',
-                              'GB',
-                              'CA',
-                              'AU',
-                            ], // Common countries for easier access
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: theme.colorScheme.outline.withOpacity(0.3),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: theme.colorScheme.outline.withOpacity(0.3),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: theme.colorScheme.primary,
-                              width: 2,
-                            ),
-                          ),
-                          errorBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: theme.colorScheme.error,
-                            ),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surface,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
 
-                  const SizedBox(height: 32),
+                      const SizedBox(height: 40),
 
-                  // Continue Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _submitPhoneNumber,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        disabledBackgroundColor: theme.colorScheme.outline
-                            .withOpacity(0.3),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : TranslatedText(
-                              'Continue',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Language Selection Button
-                  Center(
-                    child: GestureDetector(
-                      onTap: () async {
-                        await showLanguageSelector(
-                          context,
-                          navigateToSplashOnSelection: false,
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
-                        ),
+                      // Glassmorphic Input Container
+                      Container(
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(25),
+                          borderRadius: BorderRadius.circular(24),
                           border: Border.all(
-                            color: theme.colorScheme.outline.withOpacity(0.3),
+                            color: theme.colorScheme.outline.withOpacity(0.1),
                           ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
                             ),
                           ],
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              Icons.language,
-                              size: 18,
-                              color: theme.colorScheme.primary,
-                            ),
-                            const SizedBox(width: 8),
                             TranslatedText(
-                              'Select your language',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w500,
+                              'Phone Number',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.8,
+                                ),
                               ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                // Country Code Picker
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surfaceContainer
+                                        .withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: theme.colorScheme.outline
+                                          .withOpacity(0.2),
+                                    ),
+                                  ),
+                                  child: CountryCodePicker(
+                                    onChanged: (CountryCode countryCode) {
+                                      setState(() {
+                                        _selectedCountry = countryCode;
+                                      });
+                                    },
+                                    initialSelection: 'IN',
+                                    favorite: const ['+91', 'IN'],
+                                    showCountryOnly: false,
+                                    showOnlyCountryWhenClosed: false,
+                                    alignLeft: false,
+                                    showFlag: true,
+                                    showFlagMain: true,
+                                    flagWidth: 24,
+                                    padding: EdgeInsets.zero,
+                                    textStyle: theme.textTheme.bodyLarge
+                                        ?.copyWith(
+                                          color: theme.colorScheme.onSurface,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                    searchDecoration: InputDecoration(
+                                      hintText: 'Search country',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // Phone Number Field
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: _phoneController,
+                                    keyboardType: TextInputType.phone,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w600),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.allow(
+                                        RegExp(r'[0-9]'),
+                                      ),
+                                    ],
+                                    validator: (value) {
+                                      if (value == null || value.isEmpty) {
+                                        return 'Required';
+                                      }
+                                      if (value.length != 10) {
+                                        return 'Invalid number';
+                                      }
+                                      return null;
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText: '98765 43210',
+                                      hintStyle: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            color: theme.colorScheme.onSurface
+                                                .withOpacity(0.3),
+                                          ),
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
 
-                  const SizedBox(height: 40),
-                ],
+                      const SizedBox(height: 48),
+
+                      // Continue Button
+                      Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withOpacity(0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _submitPhoneNumber,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: EdgeInsets.zero,
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    TranslatedText(
+                                      'Continue',
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.5,
+                                          ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Icon(
+                                      Icons.arrow_forward_rounded,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // Language Selection
+                      Center(
+                        child: GestureDetector(
+                          onTap: () async {
+                            await showLanguageSelector(
+                              context,
+                              navigateToSplashOnSelection: false,
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surfaceContainer
+                                  .withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.language,
+                                  size: 16,
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.6),
+                                ),
+                                const SizedBox(width: 8),
+                                TranslatedText(
+                                  'Change Language',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.8),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:intl/intl.dart';
 import 'dart:ui' as ui;
 import 'package:exanor/components/translation_widget.dart';
 import 'package:flutter/material.dart';
@@ -7,25 +6,22 @@ import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:exanor/screens/order_rating_screen.dart';
 
-class OrderDetailsScreen extends StatefulWidget {
+class ReturnDetailsScreen extends StatefulWidget {
   final String orderId;
   final String storeId;
 
-  const OrderDetailsScreen({
+  const ReturnDetailsScreen({
     super.key,
     required this.orderId,
     required this.storeId,
   });
 
   @override
-  State<OrderDetailsScreen> createState() => _OrderDetailsScreenState();
+  State<ReturnDetailsScreen> createState() => _ReturnDetailsScreenState();
 }
 
-class _OrderDetailsScreenState extends State<OrderDetailsScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _iconAnimationController;
+class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _isLoadingOrder = true;
   bool _isLoadingProducts = true;
@@ -41,10 +37,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
   @override
   void initState() {
     super.initState();
-    _iconAnimationController = AnimationController(
-      duration: const Duration(seconds: 3), // Smooth continuous rotation
-      vsync: this,
-    )..repeat();
     _scrollController.addListener(_onScroll);
     _fetchOrderDetails();
     _fetchOrderProducts();
@@ -53,7 +45,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
 
   @override
   void dispose() {
-    _iconAnimationController.dispose();
     _scrollController.dispose();
     _stopStatusPolling();
     super.dispose();
@@ -236,18 +227,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             onRefresh: () async {
               await Future.wait([_fetchOrderDetails(), _fetchOrderProducts()]);
             },
-            edgeOffset: 120, // Push refresh circle down below header
+            edgeOffset: 120,
             child: CustomScrollView(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // Content or Loading/Error States
                 if (_errorMessage != null)
                   SliverFillRemaining(child: _buildErrorView(theme))
                 else if (_isLoadingOrder && _orderData == null)
                   SliverFillRemaining(child: _buildLoadingView(theme))
                 else ...[
-                  // Rest of the content
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                       16,
@@ -257,12 +246,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                     ),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        // 1. Status Banner (Floating above)
+                        // 1. Status Banner
                         _buildStatusBanner(theme, isDark),
 
                         const SizedBox(height: 24),
 
-                        // 2. Order ID & Date Card
+                        // 2. Order ID & Date
                         _buildOrderIdCard(theme, isDark),
 
                         const SizedBox(height: 24),
@@ -272,15 +261,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
 
                         const SizedBox(height: 24),
 
-                        // 4. Payment Details
+                        // 4. Refund Summary
                         _buildPaymentSlip(theme, isDark),
 
                         const SizedBox(height: 24),
 
-                        // 5. Fulfillment Details (Store/Method)
+                        // 5. Fulfillment/Return Details
                         _buildFulfillmentDetails(theme, isDark),
 
-                        const SizedBox(height: 120), // Bottom padding
+                        const SizedBox(height: 120),
                       ]),
                     ),
                   ),
@@ -289,7 +278,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             ),
           ),
 
-          // 2. Fixed Sticky Header (Always Visible Title)
+          // 2. Fixed Sticky Header
           Positioned(
             top: 0,
             left: 0,
@@ -298,18 +287,17 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
           ),
         ],
       ),
-      bottomNavigationBar: _buildBottomBar(theme),
+      bottomNavigationBar:
+          _orderData != null && _orderData!['invoice_url'] != null
+          ? _buildBottomBar(theme)
+          : null,
     );
   }
 
   Widget _buildHeader(ThemeData theme, bool isDark) {
-    // Determine Gradient Colors based on Theme (Matching OrdersListScreen logic)
     final topPadding = MediaQuery.of(context).padding.top;
-
-    // Fixed opacity, unlike scrollable header in list
     const double opacity = 1.0;
 
-    // Calculate Light Mode Colors (Immersive Light: Theme + White Blend)
     final lightStartBase = _hexToColor(
       FirebaseRemoteConfigService.getThemeGradientLightStart(),
     );
@@ -334,7 +322,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.transparent, // Ensure container itself is transparent
+        color: Colors.transparent,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
         // No Shadow on Header
       ),
@@ -362,21 +350,18 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             ),
             child: Stack(
               children: [
-                // Flowing Background Image (Watermark)
                 Positioned(
                   right: -30,
                   bottom: -20,
                   child: Transform.rotate(
                     angle: -0.2,
                     child: Icon(
-                      Icons.receipt_long_rounded,
+                      Icons.assignment_return_rounded,
                       size: 100,
                       color: theme.colorScheme.onSurface.withOpacity(0.05),
                     ),
                   ),
                 ),
-
-                // Content
                 Padding(
                   padding: EdgeInsets.only(
                     top: MediaQuery.of(context).padding.top + 15,
@@ -386,7 +371,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                   ),
                   child: Row(
                     children: [
-                      // Back Button
                       Container(
                         width: 48,
                         height: 48,
@@ -410,12 +394,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                           ),
                         ),
                       ),
-
                       const SizedBox(width: 16),
-                      // Title (Always Visible)
                       Expanded(
                         child: TranslatedText(
-                          "Order Details",
+                          "Return Details",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 24,
@@ -426,9 +408,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                         ),
                       ),
                       const SizedBox(width: 16),
-                      const SizedBox(
-                        width: 48,
-                      ), // Balance back button (48 width)
+                      const SizedBox(width: 48),
                     ],
                   ),
                 ),
@@ -441,67 +421,52 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
   }
 
   Widget _buildStatusBanner(ThemeData theme, bool isDark) {
-    String title = 'Processing';
-    String description = 'Order is being processed';
+    String title = 'Return Requested';
+    String description = 'Your return request is currently being processed.';
 
-    // Priority: Check main Order Data first for final states
+    // Priority Check
     if (_orderData != null) {
       final mainStatus = _orderData!['status']?.toString().toLowerCase() ?? '';
       final mainTitle = _orderData!['order_status_title']?.toString() ?? '';
 
-      if (mainStatus.contains('delivered') ||
-          mainStatus.contains('completed') ||
+      if (mainStatus.contains('returned') ||
+          mainStatus.contains('refunded') ||
           mainStatus.contains('cancelled') ||
-          mainStatus.contains('failed') ||
-          mainStatus.contains('returned')) {
+          mainStatus.contains('failed')) {
         title = _formatStatus(mainStatus);
         if (mainTitle.isNotEmpty && mainTitle != 'Unknown') title = mainTitle;
       }
     }
 
-    // If title is still default 'Processing', check history for granular updates
-    if (title == 'Processing' && _orderStatuses.isNotEmpty) {
+    if (_orderStatuses.isNotEmpty) {
       final latest = _orderStatuses.first;
-      title = latest['order_status_title'] ?? title;
-      description = latest['order_status_description'] ?? description;
-
+      if (title == 'Return Requested' || title == 'Processing Returns') {
+        title = latest['order_status_title'] ?? title;
+        description = latest['order_status_description'] ?? description;
+      }
       if (title == 'Unknown' || title.isEmpty) {
         final raw = latest['order_status'];
         if (raw != null) title = _formatStatus(raw.toString());
       }
-    } else if (title == 'Processing' && _orderData != null) {
-      // Fallback to order data if statuses are empty
-      final mainStatus = _orderData!['status'];
-      if (mainStatus != null) title = _formatStatus(mainStatus.toString());
     }
 
     Color statusColor;
     IconData statusIcon = Icons.hourglass_top_rounded;
 
-    final processingColorHex =
-        FirebaseRemoteConfigService.getOrderProcessingStatusColor();
-    final processingColor = _hexToColor(
-      processingColorHex,
-      defaultColor: theme.colorScheme.primary,
-    );
-
     if (title.toLowerCase().contains('cancelled') ||
         title.toLowerCase().contains('failed')) {
       statusColor = theme.colorScheme.error;
       statusIcon = Icons.cancel_rounded;
-    } else if (title.toLowerCase().contains('delivered') ||
+    } else if (title.toLowerCase().contains('refunded') ||
+        title.toLowerCase().contains('returned') ||
         title.toLowerCase().contains('completed')) {
       statusColor = const Color(0xFF00C853);
       statusIcon = Icons.check_circle_rounded;
-    } else if (title.toLowerCase().contains('ready') ||
-        title.toLowerCase().contains('prepared')) {
-      statusColor = Colors.orange.shade700;
-      statusIcon = Icons.restaurant_rounded;
     } else {
-      statusColor = processingColor;
+      statusColor = Colors.orange;
+      statusIcon = Icons.assignment_return_rounded;
     }
 
-    // New "Timeline" Style Banner
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -527,12 +492,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         child: Stack(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(
-                16,
-                24,
-                24,
-                24,
-              ), // Adjusted padding left
+              padding: const EdgeInsets.fromLTRB(16, 24, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -560,8 +520,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                                 color: theme.colorScheme.onSurface,
                               ),
                             ),
-                            if (description.isNotEmpty &&
-                                description != 'Order is being processed')
+                            if (description.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4.0),
                                 child: Text(
@@ -580,7 +539,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                     ],
                   ),
 
-                  // Visual Timeline Bar (Simulated)
+                  // Return Timeline
                   const SizedBox(height: 24),
                   Row(
                     children: [
@@ -588,19 +547,20 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                       _buildTimelineLine(theme, true, statusColor),
                       _buildTimelineStep(
                         theme,
-                        !title.toLowerCase().contains('pending'),
+                        !title.toLowerCase().contains('requested'),
                         statusColor,
                       ),
                       _buildTimelineLine(
                         theme,
-                        title.toLowerCase().contains('out_for_delivery') ||
-                            title.toLowerCase().contains('delivered') ||
+                        title.toLowerCase().contains('refunded') ||
+                            title.toLowerCase().contains('returned') ||
                             title.toLowerCase().contains('completed'),
                         statusColor,
                       ),
                       _buildTimelineStep(
                         theme,
-                        title.toLowerCase().contains('delivered') ||
+                        title.toLowerCase().contains('refunded') ||
+                            title.toLowerCase().contains('returned') ||
                             title.toLowerCase().contains('completed'),
                         statusColor,
                       ),
@@ -610,9 +570,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text("Placed", style: _timelineTextStyle(theme)),
+                      Text("Requested", style: _timelineTextStyle(theme)),
                       Text("Processing", style: _timelineTextStyle(theme)),
-                      Text("Completed", style: _timelineTextStyle(theme)),
+                      Text("Refunded", style: _timelineTextStyle(theme)),
                     ],
                   ),
                 ],
@@ -658,23 +618,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
     );
   }
 
-  // 2. Order ID & Date Widget (Refined Sizing & Shadows)
   Widget _buildOrderIdCard(ThemeData theme, bool isDark) {
-    String dateStr = "Date not available";
-    if (_orderData != null) {
-      final timestamp = _orderData!['timestamp'] ?? _orderData!['created_at'];
-      if (timestamp != null) {
-        try {
-          final DateTime parsed = DateTime.parse(timestamp.toString());
-          dateStr = DateFormat('dd MMM yyyy, hh:mm a').format(parsed);
-        } catch (e) {
-          dateStr = timestamp.toString();
-        }
-      }
-    }
-
     return Container(
-      padding: const EdgeInsets.all(20), // Reduced loading
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
@@ -695,7 +641,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       ),
       child: Row(
         children: [
-          // Icon Container
           Container(
             width: 48,
             height: 48,
@@ -710,15 +655,14 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             ),
           ),
           const SizedBox(width: 16),
-          // Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Order #${_orderData?['order_id'] ?? widget.orderId}",
+                  "Return Ref #${_orderData?['order_id'] ?? widget.orderId}",
                   style: TextStyle(
-                    fontSize: 16, // Smaller, professional size
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: theme.colorScheme.onSurface,
                     letterSpacing: -0.3,
@@ -726,7 +670,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  dateStr,
+                  _orderData?['created_at'] ?? "Date not available",
                   style: TextStyle(
                     fontSize: 13,
                     color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -768,7 +712,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
             child: Text(
-              "ITEMS ORDERED",
+              "ITEMS RETURNED",
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -820,7 +764,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                     0.0;
                 final total = price * quantity;
                 final variant = product['variant_name'];
-                // Check multiple keys for image, or default to null
                 final imageUrl =
                     product['image'] ??
                     product['product_image'] ??
@@ -855,14 +798,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                           child:
                               (imageUrl == null || imageUrl.toString().isEmpty)
                               ? Icon(
-                                  Icons.fastfood_rounded,
+                                  Icons.assignment_return_outlined,
                                   color: theme.colorScheme.onSurface
                                       .withOpacity(0.2),
                                   size: 24,
                                 )
                               : null,
                         ),
-                        // Quantity Badge
                         if (quantity > 1)
                           Positioned(
                             bottom: -6,
@@ -896,7 +838,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                       ],
                     ),
                     const SizedBox(width: 16),
-                    // Details
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -914,7 +855,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 6),
-                          // Systematic Description lines
                           Wrap(
                             spacing: 8,
                             runSpacing: 4,
@@ -951,50 +891,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-
-                              // Rating Badge (New Addition)
-                              if (product['is_rated'] == true)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 8),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: Colors.amber.withOpacity(0.35),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.star_rounded,
-                                        size: 10,
-                                        color: Colors.amber,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        "${product['rating'] ?? 0}",
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                             ],
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Price
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -1031,7 +933,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
 
     // Build all line items
     List<Map<String, dynamic>> lineItems = [];
-
     if (cartTotal.isNotEmpty) {
       lineItems.addAll(
         cartTotal.map(
@@ -1048,11 +949,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         'title': 'Tax',
         'value': _orderData!['total_tax_amount'] ?? 0,
       });
-      lineItems.add({
-        'title': 'Delivery Charges',
-        'value': _orderData!['delivery_charges'] ?? 0,
-      });
     }
+
+    // Add Platform Fees
     if (platformFees.isNotEmpty) {
       lineItems.addAll(
         platformFees.map(
@@ -1083,7 +982,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.all(20),
             child: Row(
@@ -1102,7 +1000,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  "PAYMENT BREAKDOWN",
+                  "REFUND BREAKDOWN",
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -1113,18 +1011,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
               ],
             ),
           ),
-
           Divider(
             height: 1,
             thickness: 1,
             color: theme.dividerColor.withOpacity(0.08),
           ),
-
-          // Line Items
           ...lineItems.asMap().entries.map((entry) {
-            // final isLast = entry.key == lineItems.length - 1; // Unused for clean cart style
             final item = entry.value;
-
             String displayValue = "₹0.00";
             final value = item['value'];
             if (value is num) {
@@ -1132,10 +1025,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             } else if (value is String && double.tryParse(value) != null) {
               displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
             }
-
-            final isDiscount =
-                (value is num && value < 0) ||
-                (value is String && value.startsWith('-'));
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -1148,9 +1037,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: isDiscount
-                            ? Colors.green
-                            : theme.colorScheme.onSurface.withOpacity(0.7),
+                        color: theme.colorScheme.onSurface.withOpacity(0.7),
                         letterSpacing: 0.2,
                       ),
                     ),
@@ -1159,24 +1046,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                     displayValue,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: isDiscount
-                          ? Colors.green
-                          : theme.colorScheme.onSurface,
-                      letterSpacing: 0.3,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
                 ],
               ),
             );
           }),
-
           const SizedBox(height: 12),
-
-          // Bold Divider before Total
           Container(height: 2, color: theme.dividerColor.withOpacity(0.1)),
-
-          // Total Paid Section with Gradient
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -1208,7 +1087,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          "TOTAL PAID",
+                          "TOTAL REFUND",
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
@@ -1217,15 +1096,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Inclusive of all taxes",
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                        fontWeight: FontWeight.w500,
-                      ),
                     ),
                   ],
                 ),
@@ -1246,7 +1116,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
     );
   }
 
-  // 5. Fulfillment & Store Details (Symmetrical Layout)
+  // 5. Fulfillment & Store Details
   Widget _buildFulfillmentDetails(ThemeData theme, bool isDark) {
     if (_orderData == null) return const SizedBox.shrink();
 
@@ -1254,24 +1124,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
     final storeAddress = _orderData!['store_address'] ?? 'No Address';
     final storeImage = _orderData!['store_image_url'];
 
-    // Payment & Type
-    final paymentData = _orderData?['payment_details'];
-    String paymentMethod = 'Unknown';
-    if (paymentData is Map) {
-      paymentMethod = paymentData['payment_method_name'] ?? 'Unknown';
-    } else {
-      paymentMethod = _orderData?['payment_method'] ?? 'Unknown';
-    }
-
-    // Attempt to determine order Type generically
-    final orderType =
-        _orderData?['order_method_name'] ??
-        _orderData?['order_type'] ??
-        'Order';
-
-    final isPaid =
-        _orderData?['payment_status'] == 'paid' ||
-        _orderData?['payment_status'] == 'Paid';
+    // Determine Refund Status
+    String status =
+        _orderData!['order_status_title'] ?? _orderData!['status'] ?? '';
+    bool isRefunded =
+        status.toLowerCase().contains('refunded') ||
+        status.toLowerCase().contains('completed') ||
+        status.toLowerCase().contains('returned');
 
     return Container(
       decoration: BoxDecoration(
@@ -1294,7 +1153,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       ),
       child: Column(
         children: [
-          // Added Header for Symmetry
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
             child: Row(
@@ -1313,7 +1171,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  "ORDER FULFILLMENT",
+                  "RETURN FULFILLMENT",
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -1324,10 +1182,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
               ],
             ),
           ),
-
           Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
-
-          // Store Header
           Padding(
             padding: const EdgeInsets.all(24),
             child: Row(
@@ -1384,66 +1239,26 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
               ],
             ),
           ),
-
           Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
-
-          // Info Grid - Symmetrical Boxes
           Padding(
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
                 _buildDetailBox(
                   theme,
-                  "METHOD",
-                  paymentMethod.toUpperCase(),
-                  Icons.payment_rounded,
-                ),
-                const SizedBox(width: 12),
-                _buildDetailBox(
-                  theme,
-                  "TYPE",
-                  orderType.toString().toUpperCase(),
-                  Icons.category_rounded,
+                  "ACTION",
+                  "RETURN",
+                  Icons.assignment_return_rounded,
                 ),
                 const SizedBox(width: 12),
                 _buildDetailBox(
                   theme,
                   "STATUS",
-                  (() {
-                    final status =
-                        _orderData?['order_status_title'] ??
-                        _orderData?['status'] ??
-                        '';
-                    final isDelivered =
-                        status.toString().toLowerCase().contains('delivered') ||
-                        status.toString().toLowerCase().contains('completed');
-                    if (isDelivered) return "COMPLETED";
-                    return isPaid ? "PAID" : "PENDING";
-                  })(),
-                  (() {
-                    final status =
-                        _orderData?['order_status_title'] ??
-                        _orderData?['status'] ??
-                        '';
-                    final isDelivered =
-                        status.toString().toLowerCase().contains('delivered') ||
-                        status.toString().toLowerCase().contains('completed');
-                    if (isDelivered) return Icons.check_circle_rounded;
-                    return isPaid
-                        ? Icons.check_circle_rounded
-                        : Icons.pending_rounded;
-                  })(),
-                  valueColor: (() {
-                    final status =
-                        _orderData?['order_status_title'] ??
-                        _orderData?['status'] ??
-                        '';
-                    final isDelivered =
-                        status.toString().toLowerCase().contains('delivered') ||
-                        status.toString().toLowerCase().contains('completed');
-                    if (isDelivered) return Colors.green;
-                    return isPaid ? Colors.green : Colors.orange;
-                  })(),
+                  isRefunded ? "REFUNDED" : "PENDING",
+                  isRefunded
+                      ? Icons.check_circle_rounded
+                      : Icons.pending_rounded,
+                  valueColor: isRefunded ? Colors.green : Colors.orange,
                 ),
               ],
             ),
@@ -1453,7 +1268,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
     );
   }
 
-  // Helper for symmetrical Detail Boxes
+  // Helper for symetrical Detail Boxes
   Widget _buildDetailBox(
     ThemeData theme,
     String label,
@@ -1463,7 +1278,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
   }) {
     return Expanded(
       child: Container(
-        height: 100, // Fixed height for perfect symmetry
+        height: 100,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
@@ -1507,17 +1322,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
   }
 
   Widget _buildBottomBar(ThemeData theme) {
-    if (_orderData == null) return const SizedBox.shrink();
-
-    final status =
-        _orderData!['order_status_title'] ?? _orderData!['status'] ?? '';
-    final isDelivered =
-        status.toString().toLowerCase().contains('delivered') ||
-        status.toString().toLowerCase().contains('completed');
-    final hasInvoice = _orderData!['invoice_url'] != null;
-
-    if (!isDelivered && !hasInvoice) return const SizedBox.shrink();
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1531,132 +1335,32 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         ],
       ),
       child: SafeArea(
-        child: Row(
-          children: [
-            if (hasInvoice)
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _launchInvoice,
-                  icon: Icon(
-                    Icons.download_rounded,
-                    size: 20,
-                    color: theme.colorScheme.primary,
-                  ),
-                  label: Text(
-                    "Invoice",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    side: BorderSide(
-                      color: theme.colorScheme.primary.withOpacity(0.2),
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _launchInvoice,
+            icon: Icon(
+              Icons.download_rounded,
+              size: 20,
+              color: theme.colorScheme.primary,
+            ),
+            label: Text(
+              "Download Invoice",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
               ),
-            if (hasInvoice && isDelivered) const SizedBox(width: 12),
-            if (isDelivered)
-              Expanded(
-                child: _orderData!['is_rated'] == true
-                    ? Container(
-                        height: 52, // Match standard button height
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A1A1A), // Premium Dark
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.amber.withOpacity(0.35),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.amber.withOpacity(0.15),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "RATED",
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.5,
-                                color: Colors.white.withOpacity(0.6),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              height: 16,
-                              width: 1,
-                              color: Colors.white.withOpacity(0.2),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.star_rounded,
-                              size: 18,
-                              color: Colors.amber,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "${_orderData!['rating'] ?? 0}",
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => OrderRatingScreen(
-                                orderId: widget.orderId,
-                                storeName: _orderData!['store_name'],
-                              ),
-                            ),
-                          ).then((value) {
-                            if (value != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Thank you for rating!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              // Refresh details to show updated rating
-                              _fetchOrderDetails();
-                            }
-                          });
-                        },
-                        icon: const Icon(Icons.star_rounded, size: 20),
-                        label: const Text(
-                          "Rate Order",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: theme.colorScheme.onPrimary,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
-                      ),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              side: BorderSide(
+                color: theme.colorScheme.primary.withOpacity(0.2),
               ),
-          ],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -33,6 +33,14 @@ class FirebaseRemoteConfigService {
   static const String _deleteAccountKey = 'deleteAccount';
   static const String _contactUsKey = 'contactUs';
 
+  // Visibility control keys for profile section elements
+  static const String _showAboutUsKey = 'showAboutUs';
+  static const String _showDeleteAccountKey = 'showDeleteAccount';
+  static const String _showDisclaimerKey = 'showDisclaimer';
+  static const String _showPrivacyPolicyKey = 'showPrivacyPolicy';
+  static const String _showRefundPolicyKey = 'showRefundPolicy';
+  static const String _showTermsAndConditionsKey = 'showTermsAndConditions';
+
   // App download URL
   static const String _appDownloadUrlKey = 'app_download_url';
 
@@ -47,6 +55,27 @@ class FirebaseRemoteConfigService {
 
   // Dashboard section configuration
   static const String _dashboardSectionKey = 'dashboardSection';
+
+  // Theme Gradient Configuration
+  static const String _themeGradientLightStartKey = 'themeGradientLightStart';
+  static const String _themeGradientLightEndKey = 'themeGradientLightEnd';
+  static const String _themeGradientDarkStartKey = 'themeGradientDarkStart';
+  static const String _themeGradientDarkEndKey = 'themeGradientDarkEnd';
+
+  // Button Color Configuration
+  static const String _trackOrderButtonColorKey = 'trackOrderButtonColor';
+  static const String _rateExperienceButtonColorKey =
+      'rateExperienceButtonColor';
+  static const String _orderProcessingStatusColorKey =
+      'orderProcessingStatusColor';
+
+  // Refer and Earn Banner Configuration
+  static const String _referAndEarnBannerVisibleKey =
+      'refer_and_earn_banner_visible';
+  static const String _referAndEarnBannerTitleKey =
+      'refer_and_earn_banner_title';
+  static const String _referAndEarnBannerSubtitleKey =
+      'refer_and_earn_banner_subtitle';
 
   // Default values
   static const Map<String, dynamic> _defaults = {
@@ -76,6 +105,14 @@ class FirebaseRemoteConfigService {
     _disclaimerKey: 'https://exanor.com/disclaimer',
     _deleteAccountKey: 'https://exanor.com/delete-account',
     _contactUsKey: 'https://exanor.com/contact-us',
+
+    // Visibility control defaults (all visible by default)
+    _showAboutUsKey: true,
+    _showDeleteAccountKey: true,
+    _showDisclaimerKey: true,
+    _showPrivacyPolicyKey: true,
+    _showRefundPolicyKey: true,
+    _showTermsAndConditionsKey: true,
 
     // App download URL default
     _appDownloadUrlKey: 'https://exanor.com/download',
@@ -173,6 +210,22 @@ class FirebaseRemoteConfigService {
         "order": 2
       }
     ]''',
+
+    // Theme Gradient defaults
+    _themeGradientLightStartKey: '#B9FBC0',
+    _themeGradientLightEndKey: '#F7F9FC',
+    _themeGradientDarkStartKey: '#0F3D3E',
+    _themeGradientDarkEndKey: '#0F172A',
+
+    // Button Color defaults
+    _trackOrderButtonColorKey: '#0F3D3E',
+    _rateExperienceButtonColorKey: '#FF8C00',
+    _orderProcessingStatusColorKey: '#2196F3',
+
+    // Refer and Earn Banner defaults
+    _referAndEarnBannerVisibleKey: true,
+    _referAndEarnBannerTitleKey: 'Refer & Earn',
+    _referAndEarnBannerSubtitleKey: 'Invite friends & get rewards',
   };
 
   /// Initialize Firebase Remote Config
@@ -861,6 +914,104 @@ class FirebaseRemoteConfigService {
     }
   }
 
+  // --- Visibility Control Methods ---
+
+  /// Check if About Us should be shown in profile
+  static bool shouldShowAboutUs() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showAboutUsKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showAboutUsKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showAboutUs: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showAboutUsKey] as bool;
+    }
+  }
+
+  /// Check if Delete Account should be shown in profile
+  static bool shouldShowDeleteAccount() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showDeleteAccountKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showDeleteAccountKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showDeleteAccount: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showDeleteAccountKey] as bool;
+    }
+  }
+
+  /// Check if Disclaimer should be shown in profile
+  static bool shouldShowDisclaimer() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showDisclaimerKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showDisclaimerKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showDisclaimer: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showDisclaimerKey] as bool;
+    }
+  }
+
+  /// Check if Privacy Policy should be shown in profile
+  static bool shouldShowPrivacyPolicy() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showPrivacyPolicyKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showPrivacyPolicyKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showPrivacyPolicy: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showPrivacyPolicyKey] as bool;
+    }
+  }
+
+  /// Check if Refund Policy should be shown in profile
+  static bool shouldShowRefundPolicy() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showRefundPolicyKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showRefundPolicyKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showRefundPolicy: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showRefundPolicyKey] as bool;
+    }
+  }
+
+  /// Check if Terms and Conditions should be shown in profile
+  static bool shouldShowTermsAndConditions() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showTermsAndConditionsKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showTermsAndConditionsKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showTermsAndConditions: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showTermsAndConditionsKey] as bool;
+    }
+  }
+
   /// Get App Download URL
   static String getAppDownloadUrl() {
     try {
@@ -996,6 +1147,166 @@ class FirebaseRemoteConfigService {
       return List<Map<String, dynamic>>.from(
         jsonDecode(_defaults[_dashboardSectionKey] as String),
       );
+    }
+  }
+
+  /// Get Theme Gradient Light Start Color
+  static String getThemeGradientLightStart() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientLightStartKey] as String;
+      }
+      final value = _remoteConfig!.getString(_themeGradientLightStartKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientLightStartKey] as String;
+    } catch (e) {
+      return _defaults[_themeGradientLightStartKey] as String;
+    }
+  }
+
+  /// Get Theme Gradient Light End Color
+  static String getThemeGradientLightEnd() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientLightEndKey] as String;
+      }
+      final value = _remoteConfig!.getString(_themeGradientLightEndKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientLightEndKey] as String;
+    } catch (e) {
+      return _defaults[_themeGradientLightEndKey] as String;
+    }
+  }
+
+  /// Get Theme Gradient Dark Start Color
+  static String getThemeGradientDarkStart() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientDarkStartKey] as String;
+      }
+      final value = _remoteConfig!.getString(_themeGradientDarkStartKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientDarkStartKey] as String;
+    } catch (e) {
+      return _defaults[_themeGradientDarkStartKey] as String;
+    }
+  }
+
+  /// Get Theme Gradient Dark End Color
+  static String getThemeGradientDarkEnd() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_themeGradientDarkEndKey] as String;
+      }
+      final value = _remoteConfig!.getString(_themeGradientDarkEndKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_themeGradientDarkEndKey] as String;
+    } catch (e) {
+      return _defaults[_themeGradientDarkEndKey] as String;
+    }
+  }
+
+  /// Get Track Order Button Color
+  static String getTrackOrderButtonColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        developer.log(
+          '⚠️ Track Order Button Color: Using default (not initialized) - ${_defaults[_trackOrderButtonColorKey]}',
+          name: 'RemoteConfig',
+        );
+        return _defaults[_trackOrderButtonColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_trackOrderButtonColorKey);
+      final result = value.isNotEmpty
+          ? value
+          : _defaults[_trackOrderButtonColorKey] as String;
+      developer.log(
+        '🎨 Track Order Button Color: Fetched from backend - $result (raw value: "$value")',
+        name: 'RemoteConfig',
+      );
+      return result;
+    } catch (e) {
+      developer.log(
+        '❌ Track Order Button Color: Error fetching - $e, using default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_trackOrderButtonColorKey] as String;
+    }
+  }
+
+  /// Get Rate Experience Button Color
+  static String getRateExperienceButtonColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_rateExperienceButtonColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_rateExperienceButtonColorKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_rateExperienceButtonColorKey] as String;
+    } catch (e) {
+      return _defaults[_rateExperienceButtonColorKey] as String;
+    }
+  }
+
+  /// Get Order Processing Status Color
+  static String getOrderProcessingStatusColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_orderProcessingStatusColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_orderProcessingStatusColorKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_orderProcessingStatusColorKey] as String;
+    } catch (e) {
+      return _defaults[_orderProcessingStatusColorKey] as String;
+    }
+  }
+
+  /// Get Refer and Earn Banner Visibility
+  static bool getReferAndEarnBannerVisible() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_referAndEarnBannerVisibleKey] as bool;
+      }
+      return _remoteConfig!.getBool(_referAndEarnBannerVisibleKey);
+    } catch (e) {
+      return _defaults[_referAndEarnBannerVisibleKey] as bool;
+    }
+  }
+
+  /// Get Refer and Earn Banner Title
+  static String getReferAndEarnBannerTitle() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_referAndEarnBannerTitleKey] as String;
+      }
+      final value = _remoteConfig!.getString(_referAndEarnBannerTitleKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_referAndEarnBannerTitleKey] as String;
+    } catch (e) {
+      return _defaults[_referAndEarnBannerTitleKey] as String;
+    }
+  }
+
+  /// Get Refer and Earn Banner Subtitle
+  static String getReferAndEarnBannerSubtitle() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_referAndEarnBannerSubtitleKey] as String;
+      }
+      final value = _remoteConfig!.getString(_referAndEarnBannerSubtitleKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_referAndEarnBannerSubtitleKey] as String;
+    } catch (e) {
+      return _defaults[_referAndEarnBannerSubtitleKey] as String;
     }
   }
 

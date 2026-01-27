@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:in_app_update/in_app_update.dart';
+import 'package:flutter/foundation.dart';
 
 class InAppUpdateService {
   static InAppUpdateService? _instance;
@@ -36,6 +37,13 @@ class InAppUpdateService {
       // Check if platform is supported
       if (!isSupported) {
         debugPrint('🔄 In-app updates only supported on Android');
+        return;
+      }
+
+      // Skip update checks in debug mode to prevent interference with development
+      // and "app not owned" errors from the Play Store API
+      if (kDebugMode) {
+        debugPrint('🐛 Debug mode detected: Skipping in-app update check');
         return;
       }
 

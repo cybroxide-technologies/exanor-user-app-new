@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:exanor/models/product_model.dart';
 import 'package:exanor/services/api_service.dart';
+import 'package:exanor/services/firebase_remote_config_service.dart';
+import 'package:exanor/components/peel_button.dart';
 
 class ProductVariantSheet extends StatefulWidget {
   final List<dynamic> variants;
@@ -193,104 +194,219 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
     });
   }
 
+  // Helper to parse hex color from config
+  Color _hexToColor(String hex) {
+    try {
+      String cleanHex = hex.replaceAll('#', '');
+      if (cleanHex.length == 6) {
+        cleanHex = 'FF$cleanHex';
+      }
+      return Color(int.parse('0x$cleanHex'));
+    } catch (e) {
+      return Colors.transparent;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = theme.primaryColor;
+    final isDarkMode = theme.brightness == Brightness.dark;
+
+    // Get gradient colors from Central Config (Remote Config)
+    // Matching logic from CustomSliverAppBar (Top Banner)
+    final List<Color> buttonGradient = isDarkMode
+        ? [
+            _hexToColor(
+              FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+            ),
+            _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkEnd()),
+          ]
+        : [
+            _hexToColor(
+              FirebaseRemoteConfigService.getThemeGradientLightStart(),
+            ),
+            _hexToColor(
+              FirebaseRemoteConfigService.getThemeGradientLightStart(),
+            ),
+          ];
+
+    // Ensure visibility generally by checking if transparent
+    final effectiveGradient = (buttonGradient.first == Colors.transparent)
+        ? [theme.primaryColor, theme.primaryColor]
+        : buttonGradient;
 
     return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            const Color(0xFFF5F5F7), // Very subtle grey-white
+          ],
+          // If user wants "Linear Grafing" maybe they mean a literal graph paper? Unlikely.
+          // Maybe "Linear Gradient" with strong direction.
         ),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
       ),
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        top: 20,
-        left: 0,
-        right: 0,
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        top: 24,
+      ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Title Header with Padding
+          // Handle Bar for visual cue
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // Title Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Text(
-                    widget.product.productName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.product.productName,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          height: 1.2,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Price display here if available/static for base
+                      // For now, simpler is better
+                    ],
                   ),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 20),
+                  ),
+                  color: Colors.black54,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
               ],
             ),
           ),
-          const Divider(height: 24),
 
+          const SizedBox(height: 24),
+
+          // Error Message
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                _error!,
-                style: const TextStyle(color: Colors.red, fontSize: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red[100]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, size: 20, color: Colors.red[700]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Colors.red[700],
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
 
-          // Variants List
+          // Variants List - LINEAR Layout (Horizontal Scroll) instead of Wrap
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.only(bottom: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: widget.variants.map((variantGroup) {
                   if (variantGroup is! Map) return const SizedBox.shrink();
 
                   final name = variantGroup['variation_name'] ?? 'Option';
-                  final values =
-                      variantGroup['variation_value']
-                          as List?; // 'variation_value' from sample
+                  final values = variantGroup['variation_value'] as List?;
 
                   if (values == null || values.isEmpty)
                     return const SizedBox.shrink();
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24.0,
+                          vertical: 12,
+                        ),
+                        child: Text(
                           name.toString().toUpperCase(),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
-                            color: Colors.grey[600],
-                            letterSpacing: 1.0,
+                            color: Colors.grey[500],
+                            letterSpacing: 1.2,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: values.map((val) {
+                      ),
+
+                      // Horizontal List (Linear)
+                      SizedBox(
+                        height: 50,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: values.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 12),
+                          itemBuilder: (context, index) {
+                            final val = values[index];
                             final valId = val['id'];
                             final valName =
-                                val['variation_value_name'] ??
-                                'Unknown'; // from sample
+                                val['variation_value_name'] ?? 'Unknown';
                             final isSelected =
                                 _selectedVariationIds[name] == valId;
 
@@ -299,181 +415,192 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
                                 setState(() {
                                   _selectedVariationIds[name] = valId;
                                 });
-                                _validateAvailability(); // Re-validate on change
+                                _validateAvailability();
                               },
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
+                                  horizontal: 20,
                                 ),
+                                alignment: Alignment.center,
                                 decoration: BoxDecoration(
+                                  // Linear Gradient for selected item too? or smooth solid color
                                   color: isSelected
-                                      ? primaryColor.withOpacity(0.1)
+                                      ? Colors.black
                                       : Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: isSelected
-                                        ? primaryColor
-                                        : Colors.grey[300]!,
-                                    width: isSelected ? 1.5 : 1.0,
+                                        ? Colors.black
+                                        : Colors.grey[200]!,
+                                    width: isSelected ? 0 : 1.5,
                                   ),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(
+                                              0.2,
+                                            ),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ]
+                                      : [],
                                 ),
                                 child: Text(
                                   valName,
                                   style: TextStyle(
                                     color: isSelected
-                                        ? primaryColor
+                                        ? Colors.white
                                         : Colors.black87,
                                     fontWeight: isSelected
                                         ? FontWeight.bold
-                                        : FontWeight.normal,
+                                        : FontWeight.w600,
                                     fontSize: 14,
                                   ),
                                 ),
                               ),
                             );
-                          }).toList(),
+                          },
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                   );
                 }).toList(),
               ),
             ),
           ),
 
-          const Divider(height: 1),
-
-          // Bottom Bar: Quantity + Add Button
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                // Quantity Stepper
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Row(
-                    children: [
-                      InkWell(
-                        onTap: () => _updateQuantity(-1),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Icon(
-                            Icons.remove,
-                            size: 20,
-                            color: _quantity > 1 ? primaryColor : Colors.grey,
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        width: 30,
-                        child: Text(
-                          '$_quantity',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () => _updateQuantity(1),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Icon(Icons.add, size: 20, color: primaryColor),
-                        ),
-                      ),
-                    ],
-                  ),
+          // Bottom Section with Quantity and Add Button
+          // Using a subtle surface elevation
+          Container(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 20,
+                  offset: const Offset(0, -10),
                 ),
-
-                const SizedBox(width: 16),
-
-                // Add Item Button
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: (_isAdding || !_isAvailable)
-                          ? null
-                          : _addToCart,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            primaryColor, // Matching 'Add Item' style often used
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+              ],
+              border: Border(top: BorderSide(color: Colors.grey[50]!)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Price Display - Separate from button
+                if (_isAvailable && _currentPrice > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total Price',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[600],
+                          ),
                         ),
-                        elevation: 0,
-                      ),
-                      child: _isAdding || _isValidating
-                          ? Shimmer.fromColors(
-                              baseColor: Colors.white.withOpacity(0.4),
-                              highlightColor: Colors.white,
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const Text(
-                                    'ADD ITEM',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '₹${_currentPrice.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : !_isAvailable
-                          ? const Text(
-                              'Item Unavailable',
-                              style: TextStyle(
-                                // Disabled text color is usually handled by theme, but explicit here ensures visibility if needed
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text(
-                                  'ADD ITEM',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '₹${_currentPrice.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
+                        Text(
+                          '₹${_currentPrice.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1A1A1A),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+
+                // Quantity and Add to Cart Button Row
+                Row(
+                  children: [
+                    // Quantity Stepper - Linear Design
+                    Container(
+                      height: 56,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: const Color(0xFFF5F5F7), // Subtle grey
+                        border: Border.all(color: const Color(0xFFEEEEEE)),
+                      ),
+                      child: Row(
+                        children: [
+                          _buildQtyBtn(
+                            icon: Icons.remove,
+                            onTap: () => _updateQuantity(-1),
+                            isEnabled: _quantity > 1,
+                          ),
+                          Container(
+                            width: 40,
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$_quantity',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                          ),
+                          _buildQtyBtn(
+                            icon: Icons.add,
+                            onTap: () => _updateQuantity(1),
+                            isEnabled: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Add Button using PeelButton (Price removed)
+                    Expanded(
+                      child: PeelButton(
+                        onTap: _addToCart,
+                        text: !_isAvailable ? 'UNAVAILABLE' : 'ADD TO CART',
+                        price: null, // Price is now displayed separately above
+                        isLoading: _isAdding || _isValidating,
+                        isEnabled: _isAvailable && !_isAdding && !_isValidating,
+                        color: theme.primaryColor,
+                        gradientColors: effectiveGradient,
+                        height: 56,
+                        borderRadius: 16, // Matching Qty Button
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQtyBtn({
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isEnabled,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isEnabled ? onTap : null,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 40,
+          height: 56,
+          alignment: Alignment.center,
+          child: Icon(
+            icon,
+            size: 20,
+            color: isEnabled ? Colors.black87 : Colors.grey[300],
+          ),
+        ),
       ),
     );
   }

@@ -1,7 +1,10 @@
 import 'dart:ui' as ui;
+import 'package:intl/intl.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/screens/order_details_screen.dart';
 import 'package:exanor/screens/return_details_screen.dart';
+import 'package:exanor/screens/order_rating_screen.dart';
+
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:flutter/material.dart';
@@ -19,8 +22,8 @@ class OrdersListScreen extends StatefulWidget {
 
 class _OrdersListScreenState extends State<OrdersListScreen> {
   // Tab State
-  int _selectedTabIndex = 0; // 0: Processing, 1: Delivered, 2: Cancelled
-  final List<String> _tabs = ['Processing', 'Delivered', 'Cancelled'];
+  int _selectedTabIndex = 0; // 0: Processing, 1: Completed, 2: Others
+  final List<String> _tabs = ['Processing', 'Completed', 'Others'];
 
   // Scroll & Data State
   final ScrollController _scrollController = ScrollController();
@@ -180,10 +183,10 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
                     status != 'order_partially_returned' &&
                     status != 'order_returned');
             break;
-          case 1: // Delivered - only completed orders
+          case 1: // Completed - only completed orders
             statusMatch = status == 'order_completed' || status == 'delivered';
             break;
-          case 2: // Cancelled - includes order_partially_returned, fully_cancelled and other cancelled statuses
+          case 2: // Others - includes order_partially_returned, fully_cancelled and other cancelled statuses
             statusMatch =
                 status == 'partially_returned' ||
                 status == 'order_partially_returned' ||
@@ -249,173 +252,27 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     return '₹${double.tryParse(amount.toString())?.toStringAsFixed(2) ?? '0.00'}';
   }
 
-  String _formatStatusLabel(String status, String statusTitle) {
-    final lowerStatus = status.toLowerCase();
-
-    // Special formatting for specific statuses
-    if (lowerStatus == 'partially_paid') {
-      return 'PARTIAL PAYMENT';
-    } else if (lowerStatus == 'partially_returned') {
-      return 'PARTIAL RETURN';
-    } else if (lowerStatus == 'fully_cancelled') {
-      return 'CANCELLED';
-    } else if (lowerStatus == 'order_completed') {
-      return 'COMPLETED';
-    } else if (lowerStatus == 'out_for_delivery') {
-      return 'OUT FOR DELIVERY';
-    }
-
-    return statusTitle.toUpperCase();
-  }
-
   void _showRatingDialog(dynamic order) {
-    int rating = 0;
-    final TextEditingController reviewController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: Theme.of(context).brightness == Brightness.dark
-                        ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
-                        : [Colors.white, const Color(0xFFF8FAFC)],
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.star_rounded,
-                      size: 60,
-                      color: Colors.amber,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Rate Your Experience',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Order #${order['id']}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (index) {
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              rating = index + 1;
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Icon(
-                              index < rating
-                                  ? Icons.star_rounded
-                                  : Icons.star_border_rounded,
-                              size: 40,
-                              color: index < rating
-                                  ? Colors.amber
-                                  : Colors.grey.withOpacity(0.3),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 24),
-                    TextField(
-                      controller: reviewController,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: 'Write your review (optional)',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        filled: true,
-                        fillColor:
-                            Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.grey.withOpacity(0.1),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text('Cancel'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: rating > 0
-                                ? () {
-                                    // TODO: Submit rating to backend
-                                    Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Thank you for rating! $rating stars',
-                                        ),
-                                        backgroundColor: Colors.green,
-                                      ),
-                                    );
-                                  }
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              backgroundColor: Colors.amber,
-                              foregroundColor: Colors.black,
-                            ),
-                            child: const Text(
-                              'Submit',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OrderRatingScreen(
+          orderId: order['id']?.toString() ?? '',
+          storeName: order['store_name'],
+        ),
+      ),
+    ).then((ratingValue) {
+      if (ratingValue != null && ratingValue is double) {
+        // Handle rating submission if needed here or inside the screen
+        // The screen currently just returns the value
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Thank you for rating!'),
+            backgroundColor: Colors.green,
+          ),
         );
-      },
-    );
+      }
+    });
   }
 
   @override
@@ -498,6 +355,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
     return ListView.separated(
       controller: _scrollController,
+      physics: const AlwaysScrollableScrollPhysics(), // Enable pull-to-refresh
       padding: EdgeInsets.only(top: totalHeaderHeight + 10, bottom: 30),
       itemCount: _filteredOrders.length + (_isLoadingMore ? 1 : 0),
       separatorBuilder: (context, index) => const SizedBox(height: 20),
@@ -521,384 +379,475 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
   Widget _buildPremiumOrderCard(ThemeData theme, dynamic order, bool isDark) {
     final status = order['status'] ?? 'Unknown';
-    final statusTitle = order['order_status_title'] ?? status;
     final isDelivered =
         status.toLowerCase() == 'order_completed' ||
         status.toLowerCase() == 'delivered';
+    final isProcessing =
+        !isDelivered &&
+        !status.toLowerCase().contains('cancelled') &&
+        !status.toLowerCase().contains('returned');
 
-    String? imageUrl;
+    // Store Info
+    final storeName = order['store_name'] ?? 'Store Name';
+    // Use store image if available, else fallback to first product image or icon
+    final storeImage =
+        order['store_image'] ??
+        (order['product_details'] != null &&
+                (order['product_details'] as List).isNotEmpty
+            ? order['product_details'][0]['image_url']
+            : null);
+
+    // Items
+    // Items: Try structured details first, fallback to parsing names string
+    var items = [];
     if (order['product_details'] != null &&
         (order['product_details'] as List).isNotEmpty) {
-      imageUrl = order['product_details'][0]['image_url'];
+      items = order['product_details'] as List;
+    } else if (order['product_names'] != null) {
+      // Fallback: Create items from comma-separated names string
+      // This ensures we always show WHAT was ordered
+      final names = order['product_names'].toString().split(',');
+      items = names
+          .where((n) => n.trim().isNotEmpty)
+          .map(
+            (name) => {
+              'product_name': name.trim(),
+              'quantity': 1, // Default assumption when detail is missing
+              'image_url': null,
+            },
+          )
+          .toList();
     }
 
-    // Da Vinci Button: Glass + Gradient + Gloss Overlay
-    Widget buildArtisticButton({
-      required VoidCallback onTap,
-      required String label,
-      required IconData icon,
-      required List<Color> baseColors,
-      required Color glowColor,
-    }) {
-      return Container(
-        height: 52, // Slightly more compact
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14), // Reduced curve
-          boxShadow: [
-            BoxShadow(
-              color: glowColor.withOpacity(0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Stack(
-            children: [
-              // 1. Base Gradient
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: baseColors,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-              ),
-              // 2. Glass Overlay
-              BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 0, sigmaY: 0),
-                child: Container(
+    // Date & Total
+    final timestamp = order['timestamp'] ?? order['created_at'];
+    String date = 'Date Unknown';
+    if (timestamp != null) {
+      try {
+        final DateTime parsed = DateTime.parse(timestamp.toString());
+        date = DateFormat('dd MMM yyyy, hh:mm a').format(parsed);
+      } catch (e) {
+        date = timestamp.toString();
+      }
+    }
+    final total = _formatCurrency(order['grand_total']);
+
+    // Colors
+    final cardBg = theme.cardColor;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          // Ambient Shadow (Soft, large spread)
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
+          ),
+          // Key Shadow (Sharper, defines edge)
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
+          ),
+        ],
+        // Removed border to avoid "whitish" outline; shadow provides definition now
+      ),
+      child: Column(
+        children: [
+          // 1. Header: Store Image + Name + Status
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Store Image (Large Square)
+                Container(
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.white.withOpacity(0.2),
-                        Colors.white.withOpacity(0.0),
-                        Colors.black.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    image: storeImage != null
+                        ? DecorationImage(
+                            image: NetworkImage(storeImage),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
+                  ),
+                  child: storeImage == null
+                      ? Icon(
+                          Icons.store_rounded,
+                          color: theme.colorScheme.onSurface.withOpacity(0.4),
+                          size: 28,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 6),
+                // Store Details
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      top: 4.0,
+                    ), // Push down slightly
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          storeName,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                            letterSpacing: -0.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          order['store_address'] ?? 'Location',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurface.withOpacity(0.5),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
-                      stops: const [0.0, 0.5, 1.0],
                     ),
                   ),
                 ),
-              ),
-              // 3. Inner Border
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.2),
-                    width: 1,
+                // Status Badge (Top Right)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(status).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: _getStatusColor(status).withOpacity(0.2),
+                      ),
+                    ),
+                    child: Text(
+                      isDelivered ? 'COMPLETED' : status.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: _getStatusColor(status),
+                        letterSpacing: 0.5,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
+              ],
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildDashedLine(theme),
+          ),
+
+          // 2. Items List
+          if (items.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                children: [
+                  ...items.take(3).map<Widget>((item) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        children: [
+                          // Custom bullet point style
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: theme.dividerColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "${item['quantity'] ?? 1} x ${item['product_name'] ?? item['name']}",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.8,
+                                ),
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  if (items.length > 3)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, left: 18),
+                      child: Text(
+                        "+ ${items.length - 3} more items",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              // 4. Content
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onTap,
-                  splashColor: Colors.white.withOpacity(0.2),
-                  child: Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icon, color: Colors.white, size: 20),
-                        const SizedBox(width: 10),
-                        Text(
-                          label,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black26,
-                                blurRadius: 2,
-                                offset: Offset(0, 1),
+            ),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildDashedLine(theme),
+          ),
+
+          // 3. Ratings removed as per user request
+
+          // 4. Footer: Date, Total, and Action Buttons
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Info Column (Date & Total)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      date,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      total,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(width: 16),
+
+                // Action Buttons
+                if (isDelivered)
+                  Row(
+                    children: [
+                      // Valid Details Button
+                      SizedBox(
+                        height: 36,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            // Navigate to details (reusing OrderDetailsScreen which shows completed state)
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => OrderDetailsScreen(
+                                  orderId: order['id'],
+                                  storeId:
+                                      order['store_id'] ??
+                                      _effectiveStoreId ??
+                                      '',
+                                ),
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: theme.dividerColor),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: Text(
+                            "Details",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Rate Button or Rating Display
+                      if (order['is_rated'] == true) ...[
+                        Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1A1A), // Premium Dark
+                            borderRadius: BorderRadius.circular(
+                              8,
+                            ), // Rectangular
+                            border: Border.all(
+                              color: Colors.amber.withOpacity(0.35),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amber.withOpacity(0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 16,
+                                color: Colors.amber,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "${order['rating'] ?? 0}",
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(20), // Reduced from 32
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.5)
-                : const Color(0xFF2C3E50).withOpacity(0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-            spreadRadius: -4,
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Upper Visuals
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Image Window
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16), // Reduced from 24
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                  image: imageUrl != null
-                      ? DecorationImage(
-                          image: NetworkImage(imageUrl),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                  color: theme.colorScheme.surfaceContainerHighest,
-                ),
-                child: imageUrl == null
-                    ? Icon(
-                        Icons.restaurant_menu_rounded,
-                        color: theme.colorScheme.onSurface.withOpacity(0.15),
-                        size: 36,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 16),
-
-              // Typographic Details - Symmetric Layout
-              Expanded(
-                child: SizedBox(
-                  height: 88, // Match image height for symmetry
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween, // Pin top/bottom
-                    children: [
-                      // Product Name (Top)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          order['product_names'] ?? 'Gourmet Order',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w600, // Reduced from w800
-                            fontSize: 17,
-                            height: 1.2,
-                            letterSpacing: -0.3,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-
-                      // Price & Status (Bottom)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Row(
-                          children: [
-                            Text(
-                              _formatCurrency(order['grand_total']),
+                      ] else ...[
+                        SizedBox(
+                          height: 36,
+                          child: ElevatedButton(
+                            onPressed: () => _showRatingDialog(order),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              "Rate",
                               style: TextStyle(
-                                fontFamily:
-                                    theme.textTheme.bodyLarge?.fontFamily,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: () {
-                                  final isDark =
-                                      Theme.of(context).brightness ==
-                                      Brightness.dark;
-                                  final hexColor = isDark
-                                      ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
-                                      : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                                  final baseColor = _hexToColor(hexColor);
-                                  return _lightenColor(baseColor, 0.15);
-                                }(),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: () {
-                                    final isDark =
-                                        Theme.of(context).brightness ==
-                                        Brightness.dark;
-                                    final hexColor = isDark
-                                        ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
-                                        : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                                    final baseColor = _hexToColor(hexColor);
-                                    return baseColor.withOpacity(0.15);
-                                  }(),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: () {
-                                      final isDark =
-                                          Theme.of(context).brightness ==
-                                          Brightness.dark;
-                                      final hexColor = isDark
-                                          ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
-                                          : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                                      return _hexToColor(
-                                        hexColor,
-                                      ).withOpacity(0.3);
-                                    }(),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  _formatStatusLabel(status, statusTitle),
-                                  style: TextStyle(
-                                    color: () {
-                                      final isDark =
-                                          Theme.of(context).brightness ==
-                                          Brightness.dark;
-                                      final hexColor = isDark
-                                          ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
-                                          : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                                      return _hexToColor(hexColor);
-                                    }(),
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.3,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  )
+                else
+                  // Processing / Other Status Button
+                  SizedBox(
+                    height: 40,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (status.toLowerCase().contains('returned')) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ReturnDetailsScreen(
+                                orderId: order['id'],
+                                storeId:
+                                    order['store_id'] ??
+                                    _effectiveStoreId ??
+                                    '',
                               ),
                             ),
-                          ],
+                          );
+                        } else {
+                          // Track Order
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => OrderDetailsScreen(
+                                orderId: order['id'],
+                                storeId:
+                                    order['store_id'] ??
+                                    _effectiveStoreId ??
+                                    '',
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // Action Button
-          // Action Button
-          if (isDelivered)
-            buildArtisticButton(
-              onTap: () {
-                _showRatingDialog(order);
-              },
-              label: "Rate Experience",
-              icon: Icons.star_rate_rounded,
-              baseColors: [
-                _hexToColor(
-                  FirebaseRemoteConfigService.getRateExperienceButtonColor(),
-                  defaultColor: const Color(0xFFFF8C00),
-                ),
-                _lightenColor(
-                  _hexToColor(
-                    FirebaseRemoteConfigService.getRateExperienceButtonColor(),
-                    defaultColor: const Color(0xFFFF8C00),
-                  ),
-                  0.1,
-                ),
-              ],
-              glowColor: _hexToColor(
-                FirebaseRemoteConfigService.getRateExperienceButtonColor(),
-                defaultColor: const Color(0xFFFF8C00),
-              ),
-            )
-          else if (status.toLowerCase().contains('returned'))
-            buildArtisticButton(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ReturnDetailsScreen(
-                      orderId: order['id'],
-                      storeId: order['store_id'] ?? _effectiveStoreId ?? '',
+                      child: Text(
+                        status.toLowerCase().contains('returned')
+                            ? "View Return"
+                            : "Track Order",
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
-                );
-              },
-              label: "View Return Details",
-              icon: Icons.assignment_return_rounded,
-              baseColors: [
-                const Color(0xFFD32F2F), // Reddish for return
-                const Color(0xFFEF5350),
               ],
-              glowColor: const Color(0xFFD32F2F),
-            )
-          else
-            buildArtisticButton(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => OrderDetailsScreen(
-                      orderId: order['id'],
-                      storeId: order['store_id'] ?? _effectiveStoreId ?? '',
-                    ),
-                  ),
-                );
-              },
-              label: "Track Live Order",
-              icon: Icons.near_me_rounded,
-              baseColors: [
-                () {
-                  final isDark =
-                      Theme.of(context).brightness == Brightness.dark;
-                  final hexColor = isDark
-                      ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
-                      : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                  print(
-                    '🎨 Track Order Button - Mode: ${isDark ? "DARK" : "LIGHT"}, Hex: $hexColor',
-                  );
-                  final baseColor = _hexToColor(hexColor);
-                  return _lightenColor(baseColor, 0.2);
-                }(),
-                () {
-                  final isDark =
-                      Theme.of(context).brightness == Brightness.dark;
-                  final hexColor = isDark
-                      ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
-                      : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                  final baseColor = _hexToColor(hexColor);
-                  return _lightenColor(baseColor, 0.35);
-                }(),
-              ],
-              glowColor: () {
-                final isDark = Theme.of(context).brightness == Brightness.dark;
-                final hexColor = isDark
-                    ? FirebaseRemoteConfigService.getThemeGradientDarkStart()
-                    : FirebaseRemoteConfigService.getThemeGradientLightStart();
-                return _hexToColor(hexColor);
-              }(),
             ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDashedLine(ThemeData theme) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final boxWidth = constraints.constrainWidth();
+        const dashWidth = 6.0;
+        final dashHeight = 1.0;
+        final dashCount = (boxWidth / (2 * dashWidth)).floor();
+        return Flex(
+          children: List.generate(dashCount, (_) {
+            return SizedBox(
+              width: dashWidth,
+              height: dashHeight,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withOpacity(0.1), // Dimmer
+                ),
+              ),
+            );
+          }),
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          direction: Axis.horizontal,
+        );
+      },
     );
   }
 
@@ -948,20 +897,242 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     final headerContentHeight = 130.0;
     final totalHeaderHeight = topPadding + headerContentHeight;
 
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
     return ListView.separated(
       padding: EdgeInsets.only(top: totalHeaderHeight + 10, bottom: 30),
       itemCount: 5,
       separatorBuilder: (_, index) => const SizedBox(height: 20),
       itemBuilder: (_, index) {
-        return Shimmer.fromColors(
-          baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
-          highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            height: 140,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              // Matching the premium card shadows
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+                spreadRadius: 0,
+              ),
+            ],
+            // Removed border for consistency
+          ),
+          child: Shimmer.fromColors(
+            baseColor: baseColor,
+            highlightColor: highlightColor,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Header: Store Image + Name + Status
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Store Image
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Store Details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Container(
+                              width: 140,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              width: 90,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Status Badge
+                      Container(
+                        width: 70,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Divider(
+                    color: theme.dividerColor.withOpacity(0.2),
+                    height: 1,
+                  ),
+                ),
+
+                // 2. Items List Shimmer
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Container(
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Container(
+                                height: 10,
+                                margin: const EdgeInsets.only(right: 60),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Divider(
+                    color: theme.dividerColor.withOpacity(0.2),
+                    height: 1,
+                  ),
+                ),
+
+                // 3. Footer
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Info Column
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 70,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            width: 50,
+                            height: 14,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Buttons - Dynamic based on tab
+                      if (_selectedTabIndex == 1) // Completed -> 2 Buttons
+                        Row(
+                          children: [
+                            Container(
+                              width: 70,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 70,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ],
+                        )
+                      else // Processing/Cancelled -> 1 Button
+                        Container(
+                          width: 110,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -982,31 +1153,44 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         // Gradient is always visible (0.95) and becomes slightly more opaque when scrolled (1.0)
         final double opacity = 0.95 + (value * 0.05);
 
+        // Calculate Light Mode Colors to match HomeScreen logic (Immersive Light)
+        final lightStartBase = _hexToColor(
+          FirebaseRemoteConfigService.getThemeGradientLightStart(),
+        );
+        final lightModeStart = Color.alphaBlend(
+          lightStartBase.withOpacity(0.35),
+          Colors.white,
+        );
+        final lightModeEnd = Colors.white;
+
         final startColor = isDark
             ? _hexToColor(
                 FirebaseRemoteConfigService.getThemeGradientDarkStart(),
               )
-            : _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientLightStart(),
-              );
+            : lightModeStart;
         final endColor = isDark
             ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkEnd())
-            : Colors.white;
+            : lightModeEnd;
 
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(20),
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(20),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withOpacity(0.4)
+                    : Colors.black.withOpacity(0.1),
+                blurRadius: 25,
+                offset: const Offset(0, 12),
+                spreadRadius: -5,
+              ),
+            ],
           ),
-          child: Container(
-            decoration: BoxDecoration(
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 15,
-                  offset: const Offset(0, 5),
-                  spreadRadius: 3,
-                ),
-              ],
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(20),
             ),
             child: ClipRect(
               child: BackdropFilter(
@@ -1218,13 +1402,6 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     }
   }
 
-  /// Creates a lighter shade of the given color by blending with white
-  /// [amount] ranges from 0.0 (original color) to 1.0 (white)
-  Color _lightenColor(Color color, [double amount = 0.3]) {
-    assert(amount >= 0 && amount <= 1);
-    return Color.lerp(color, Colors.white, amount)!;
-  }
-
   Widget _buildBackButton(ThemeData theme, bool isDark) {
     return Container(
       width: 48, // Increased size
@@ -1315,6 +1492,14 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
               : Colors.white.withOpacity(0.5),
           width: 1.0,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: -4,
+          ),
+        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {

@@ -76,151 +76,257 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
-          onPressed: () => Navigator.pop(context),
+        leading: Container(
+          margin: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface.withOpacity(0.5),
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
+            onPressed: () => Navigator.pop(context),
+            padding: EdgeInsets.zero,
+          ),
         ),
       ),
-      body: UniversalTranslationWrapper(
-        excludePatterns: [
-          '+',
-          '@',
-          '.com',
-          'OTP',
-          'API',
-        ], // Don't translate phone numbers, technical terms
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              const SizedBox(height: 40),
-
-              TranslatedText(
-                'Verify your phone number',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
-                ),
-                textAlign: TextAlign.center,
+      body: Stack(
+        children: [
+          // Background Elements
+          Positioned(
+            top: -100,
+            left: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.primary.withOpacity(0.15),
               ),
+            ),
+          ),
+          Positioned(
+            bottom: 100,
+            right: -50,
+            child: Container(
+              width: 200,
+              height: 200,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.secondary.withOpacity(0.1),
+              ),
+            ),
+          ),
+          // Blur
+          Positioned.fill(
+            child: Container(color: theme.colorScheme.surface.withOpacity(0.9)),
+          ),
 
-              const SizedBox(height: 12),
-
-              RichText(
-                textAlign: TextAlign.center,
-                text: TextSpan(
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.7),
-                  ),
+          UniversalTranslationWrapper(
+            excludePatterns: ['+', '@', '.com', 'OTP', 'API'],
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const TextSpan(text: "Enter the 4-digit code sent to\n"),
-                    TextSpan(
-                      text: widget.phoneNumber,
-                      style: TextStyle(
+                    const SizedBox(height: 20),
+
+                    // Icon/Illustration
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.05),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.lock_outline_rounded,
+                        size: 48,
                         color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w600,
                       ),
                     ),
+
+                    const SizedBox(height: 32),
+
+                    TranslatedText(
+                      'Verification Code',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: TextSpan(
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                        children: [
+                          const TextSpan(
+                            text: "We have sent the verification code to\n",
+                          ),
+                          TextSpan(
+                            text: widget.phoneNumber,
+                            style: TextStyle(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 48),
+
+                    // OTP Input
+                    OTPInputSection(
+                      otpCode: _otpCode,
+                      onChanged: (code) {
+                        setState(() {
+                          _otpCode = code;
+                        });
+                      },
+                    ),
+
+                    const SizedBox(height: 48),
+
+                    // Resend Code
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 24,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainer.withOpacity(
+                          0.5,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: theme.colorScheme.outline.withOpacity(0.1),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (!_canResend)
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                value: _resendTimer / 60,
+                                strokeWidth: 2,
+                                color: theme.colorScheme.primary,
+                                backgroundColor: theme.colorScheme.outline
+                                    .withOpacity(0.2),
+                              ),
+                            ),
+                          if (!_canResend) const SizedBox(width: 12),
+                          if (_isResendLoading)
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else if (_canResend)
+                            GestureDetector(
+                              onTap: _resendCode,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.refresh_rounded,
+                                    size: 18,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  TranslatedText(
+                                    'Resend Code',
+                                    style: theme.textTheme.bodyLarge?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            TranslatedText(
+                              'Resend available in ${_resendTimer}s',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.6,
+                                ),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    // Verify Button
+                    Container(
+                      width: double.infinity,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.primary.withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ElevatedButton(
+                        onPressed: _otpCode.length == 4 ? _verifyOTP : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          disabledBackgroundColor:
+                              theme.colorScheme.surfaceContainerHigh,
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : TranslatedText(
+                                'Verify',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 40),
-
-              // OTP Input
-              OTPInputSection(
-                otpCode: _otpCode,
-                onChanged: (code) {
-                  setState(() {
-                    _otpCode = code;
-                  });
-                },
-              ),
-
-              const SizedBox(height: 24),
-
-              // Resend Code
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TranslatedText(
-                    "Didn't get the code? ",
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
-                  ),
-                  if (_isResendLoading)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else if (_canResend)
-                    GestureDetector(
-                      onTap: _resendCode,
-                      child: TranslatedText(
-                        'Resend it.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    )
-                  else
-                    TranslatedText(
-                      'Resend in ${_resendTimer}s',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 40),
-
-              // Continue Button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _otpCode.length == 4 ? _verifyOTP : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    disabledBackgroundColor: theme.colorScheme.outline
-                        .withOpacity(0.3),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : TranslatedText(
-                          'Continue',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -337,6 +443,11 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
             // Store access token
             if (responseData['access_token'] != null) {
               await _storeToken('access_token', responseData['access_token']);
+            }
+
+            // Store refresh token (CRITICAL for session persistence)
+            if (responseData['refresh_token'] != null) {
+              await _storeToken('refresh_token', responseData['refresh_token']);
             }
 
             // Store CSRF token

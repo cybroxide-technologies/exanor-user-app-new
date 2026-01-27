@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:exanor/config/theme_config.dart';
+
 import 'package:exanor/screens/HomeScreen.dart';
 import 'package:exanor/screens/onboarding_screen.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/in_app_update_service.dart';
+import 'package:exanor/services/user_service.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
@@ -176,15 +177,83 @@ class _SplashScreenState extends State<SplashScreen>
       final prefs = await SharedPreferences.getInstance();
       final accessToken = prefs.getString('access_token');
       final refreshToken = prefs.getString('refresh_token');
+      final userId = prefs.getString('user_id');
+      final firstName = prefs.getString('first_name');
+
+      // DETAILED DEBUG LOGGING
+      developer.log(
+        '🔍 SplashScreen: Token Check Debug Info:',
+        name: 'SplashScreen',
+      );
+      developer.log(
+        '   Access Token: ${accessToken != null ? "EXISTS (${accessToken.substring(0, 20)}...)" : "NULL"}',
+        name: 'SplashScreen',
+      );
+      developer.log(
+        '   Refresh Token: ${refreshToken != null ? "EXISTS (${refreshToken.substring(0, 20)}...)" : "NULL"}',
+        name: 'SplashScreen',
+      );
+      developer.log('   User ID: ${userId ?? "NULL"}', name: 'SplashScreen');
+      developer.log(
+        '   First Name: ${firstName ?? "NULL"}',
+        name: 'SplashScreen',
+      );
 
       if (mounted) {
         if (accessToken != null && refreshToken != null) {
-          // User is logged in, navigate to HomeScreen
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          // Tokens exist, but let's verify if they are valid
+          developer.log(
+            '🔐 SplashScreen: BOTH TOKENS FOUND - Verifying session with API...',
+            name: 'SplashScreen',
           );
+
+          try {
+            await UserService.viewUserData();
+            developer.log(
+              '✅ SplashScreen: Session verified successfully! Navigating to HomeScreen',
+              name: 'SplashScreen',
+            );
+          } catch (e) {
+            developer.log(
+              '⚠️ SplashScreen: Session verification threw error: $e (Type: ${e.runtimeType})',
+              name: 'SplashScreen',
+            );
+
+            if (e is ApiAuthException) {
+              developer.log(
+                '❌ SplashScreen: Auth Exception detected (${e.statusCode}), clearing session...',
+                name: 'SplashScreen',
+              );
+              _handleInvalidSession();
+              return;
+            }
+
+            developer.log(
+              '⚠️ SplashScreen: Non-auth error, but tokens exist. Proceeding to Home anyway.',
+              name: 'SplashScreen',
+            );
+            // Fallthrough to navigation
+          }
+
+          if (mounted) {
+            developer.log(
+              '🏠 SplashScreen: Navigating to HomeScreen NOW',
+              name: 'SplashScreen',
+            );
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const HomeScreen()),
+            );
+          }
         } else {
           // No tokens found, navigate to OnboardingScreen
+          developer.log(
+            '❌ SplashScreen: TOKENS MISSING - Access: ${accessToken != null}, Refresh: ${refreshToken != null}',
+            name: 'SplashScreen',
+          );
+          developer.log(
+            '🚪 SplashScreen: Navigating to OnboardingScreen',
+            name: 'SplashScreen',
+          );
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (context) => const OnboardingScreen()),
           );
@@ -193,7 +262,7 @@ class _SplashScreenState extends State<SplashScreen>
     } catch (e) {
       // If there's an error checking tokens, default to onboarding
       developer.log(
-        '❌ SplashScreen: Error checking tokens: $e',
+        '❌ SplashScreen: EXCEPTION in _checkAuthAndNavigate: $e',
         name: 'SplashScreen',
       );
       if (mounted) {
@@ -201,6 +270,24 @@ class _SplashScreenState extends State<SplashScreen>
           MaterialPageRoute(builder: (context) => const OnboardingScreen()),
         );
       }
+    }
+  }
+
+  Future<void> _handleInvalidSession() async {
+    // Clear tokens just in case
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('access_token');
+      await prefs.remove('refresh_token');
+      await prefs.remove('user_id');
+    } catch (e) {
+      // ignore
+    }
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+      );
     }
   }
 

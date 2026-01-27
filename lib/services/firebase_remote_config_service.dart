@@ -66,6 +66,16 @@ class FirebaseRemoteConfigService {
   static const String _trackOrderButtonColorKey = 'trackOrderButtonColor';
   static const String _rateExperienceButtonColorKey =
       'rateExperienceButtonColor';
+  static const String _orderProcessingStatusColorKey =
+      'orderProcessingStatusColor';
+
+  // Refer and Earn Banner Configuration
+  static const String _referAndEarnBannerVisibleKey =
+      'refer_and_earn_banner_visible';
+  static const String _referAndEarnBannerTitleKey =
+      'refer_and_earn_banner_title';
+  static const String _referAndEarnBannerSubtitleKey =
+      'refer_and_earn_banner_subtitle';
 
   // Default values
   static const Map<String, dynamic> _defaults = {
@@ -210,6 +220,12 @@ class FirebaseRemoteConfigService {
     // Button Color defaults
     _trackOrderButtonColorKey: '#0F3D3E',
     _rateExperienceButtonColorKey: '#FF8C00',
+    _orderProcessingStatusColorKey: '#2196F3',
+
+    // Refer and Earn Banner defaults
+    _referAndEarnBannerVisibleKey: true,
+    _referAndEarnBannerTitleKey: 'Refer & Earn',
+    _referAndEarnBannerSubtitleKey: 'Invite friends & get rewards',
   };
 
   /// Initialize Firebase Remote Config
@@ -898,6 +914,104 @@ class FirebaseRemoteConfigService {
     }
   }
 
+  // --- Visibility Control Methods ---
+
+  /// Check if About Us should be shown in profile
+  static bool shouldShowAboutUs() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showAboutUsKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showAboutUsKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showAboutUs: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showAboutUsKey] as bool;
+    }
+  }
+
+  /// Check if Delete Account should be shown in profile
+  static bool shouldShowDeleteAccount() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showDeleteAccountKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showDeleteAccountKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showDeleteAccount: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showDeleteAccountKey] as bool;
+    }
+  }
+
+  /// Check if Disclaimer should be shown in profile
+  static bool shouldShowDisclaimer() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showDisclaimerKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showDisclaimerKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showDisclaimer: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showDisclaimerKey] as bool;
+    }
+  }
+
+  /// Check if Privacy Policy should be shown in profile
+  static bool shouldShowPrivacyPolicy() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showPrivacyPolicyKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showPrivacyPolicyKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showPrivacyPolicy: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showPrivacyPolicyKey] as bool;
+    }
+  }
+
+  /// Check if Refund Policy should be shown in profile
+  static bool shouldShowRefundPolicy() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showRefundPolicyKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showRefundPolicyKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showRefundPolicy: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showRefundPolicyKey] as bool;
+    }
+  }
+
+  /// Check if Terms and Conditions should be shown in profile
+  static bool shouldShowTermsAndConditions() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_showTermsAndConditionsKey] as bool;
+      }
+      return _remoteConfig!.getBool(_showTermsAndConditionsKey);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting showTermsAndConditions: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_showTermsAndConditionsKey] as bool;
+    }
+  }
+
   /// Get App Download URL
   static String getAppDownloadUrl() {
     try {
@@ -1136,6 +1250,63 @@ class FirebaseRemoteConfigService {
           : _defaults[_rateExperienceButtonColorKey] as String;
     } catch (e) {
       return _defaults[_rateExperienceButtonColorKey] as String;
+    }
+  }
+
+  /// Get Order Processing Status Color
+  static String getOrderProcessingStatusColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_orderProcessingStatusColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_orderProcessingStatusColorKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_orderProcessingStatusColorKey] as String;
+    } catch (e) {
+      return _defaults[_orderProcessingStatusColorKey] as String;
+    }
+  }
+
+  /// Get Refer and Earn Banner Visibility
+  static bool getReferAndEarnBannerVisible() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_referAndEarnBannerVisibleKey] as bool;
+      }
+      return _remoteConfig!.getBool(_referAndEarnBannerVisibleKey);
+    } catch (e) {
+      return _defaults[_referAndEarnBannerVisibleKey] as bool;
+    }
+  }
+
+  /// Get Refer and Earn Banner Title
+  static String getReferAndEarnBannerTitle() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_referAndEarnBannerTitleKey] as String;
+      }
+      final value = _remoteConfig!.getString(_referAndEarnBannerTitleKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_referAndEarnBannerTitleKey] as String;
+    } catch (e) {
+      return _defaults[_referAndEarnBannerTitleKey] as String;
+    }
+  }
+
+  /// Get Refer and Earn Banner Subtitle
+  static String getReferAndEarnBannerSubtitle() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_referAndEarnBannerSubtitleKey] as String;
+      }
+      final value = _remoteConfig!.getString(_referAndEarnBannerSubtitleKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_referAndEarnBannerSubtitleKey] as String;
+    } catch (e) {
+      return _defaults[_referAndEarnBannerSubtitleKey] as String;
     }
   }
 

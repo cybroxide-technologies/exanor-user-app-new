@@ -9,6 +9,7 @@ import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:exanor/services/user_service.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:exanor/components/my_profile_skeleton.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -184,9 +185,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          _isLoadingUserData
-              ? const Center(child: CircularProgressIndicator())
-              : _buildBody(isDark),
+          _isLoadingUserData ? const MyProfileSkeleton() : _buildBody(isDark),
 
           // 1. Sliding "Curtain" Header (Background + Title)
           Positioned(
@@ -308,37 +307,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                   color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
-                  children: [
-                    _buildSettingsTile(
-                      icon: Icons.headset_mic_rounded,
-                      title: 'Help & Support',
-                      iconColor: Colors.purple,
-                      onTap: () => _launchUrl('https://chat.exanor.com'),
-                      isDark: isDark,
-                    ),
-                    _buildDivider(isDark),
-                    _buildSettingsTile(
-                      icon: Icons.privacy_tip_rounded,
-                      title: 'Privacy Policy',
-                      iconColor: Colors.grey,
-                      onTap: () => _launchUrl(
-                        FirebaseRemoteConfigService.getPrivacyPolicyUrl(),
-                      ),
-                      isDark: isDark,
-                    ),
-                    _buildDivider(isDark),
-                    _buildSettingsTile(
-                      icon: Icons.description_rounded,
-                      title: 'Terms & Conditions',
-                      iconColor: Colors.grey,
-                      onTap: () => _launchUrl(
-                        FirebaseRemoteConfigService.getTermsAndConditionsUrl(),
-                      ),
-                      isDark: isDark,
-                    ),
-                  ],
-                ),
+                child: Column(children: _buildSettingsAndSupportItems(isDark)),
               ),
             ],
           ),
@@ -367,24 +336,27 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         ),
 
         const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: _buildSettingsTile(
-              icon: Icons.delete_forever_rounded,
-              title: 'Delete Account',
-              iconColor: Colors.red,
-              isDestructive: true,
-              onTap: () =>
-                  _launchUrl(FirebaseRemoteConfigService.getDeleteAccountUrl()),
-              isDark: isDark,
+        // Delete Account - conditionally shown
+        if (FirebaseRemoteConfigService.shouldShowDeleteAccount())
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: _buildSettingsTile(
+                icon: Icons.delete_forever_rounded,
+                title: 'Delete Account',
+                iconColor: Colors.red,
+                isDestructive: true,
+                onTap: () => _launchUrl(
+                  FirebaseRemoteConfigService.getDeleteAccountUrl(),
+                ),
+                isDark: isDark,
+              ),
             ),
           ),
-        ),
 
         const SizedBox(height: 32),
         Center(
@@ -871,6 +843,99 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         ),
       ),
     );
+  }
+
+  /// Build settings and support items based on remote config visibility
+  List<Widget> _buildSettingsAndSupportItems(bool isDark) {
+    final items = <Widget>[];
+
+    // Help & Support - always shown
+    items.add(
+      _buildSettingsTile(
+        icon: Icons.headset_mic_rounded,
+        title: 'Help & Support',
+        iconColor: Colors.purple,
+        onTap: () => _launchUrl('https://chat.exanor.com'),
+        isDark: isDark,
+      ),
+    );
+
+    // About Us - conditionally shown
+    if (FirebaseRemoteConfigService.shouldShowAboutUs()) {
+      items.add(_buildDivider(isDark));
+      items.add(
+        _buildSettingsTile(
+          icon: Icons.info_outline_rounded,
+          title: 'About Us',
+          iconColor: Colors.blue,
+          onTap: () => _launchUrl(FirebaseRemoteConfigService.getAboutUsUrl()),
+          isDark: isDark,
+        ),
+      );
+    }
+
+    // Privacy Policy - conditionally shown
+    if (FirebaseRemoteConfigService.shouldShowPrivacyPolicy()) {
+      items.add(_buildDivider(isDark));
+      items.add(
+        _buildSettingsTile(
+          icon: Icons.privacy_tip_rounded,
+          title: 'Privacy Policy',
+          iconColor: Colors.grey,
+          onTap: () =>
+              _launchUrl(FirebaseRemoteConfigService.getPrivacyPolicyUrl()),
+          isDark: isDark,
+        ),
+      );
+    }
+
+    // Terms & Conditions - conditionally shown
+    if (FirebaseRemoteConfigService.shouldShowTermsAndConditions()) {
+      items.add(_buildDivider(isDark));
+      items.add(
+        _buildSettingsTile(
+          icon: Icons.description_rounded,
+          title: 'Terms & Conditions',
+          iconColor: Colors.grey,
+          onTap: () => _launchUrl(
+            FirebaseRemoteConfigService.getTermsAndConditionsUrl(),
+          ),
+          isDark: isDark,
+        ),
+      );
+    }
+
+    // Refund Policy - conditionally shown
+    if (FirebaseRemoteConfigService.shouldShowRefundPolicy()) {
+      items.add(_buildDivider(isDark));
+      items.add(
+        _buildSettingsTile(
+          icon: Icons.policy_outlined,
+          title: 'Refund Policy',
+          iconColor: Colors.orange,
+          onTap: () =>
+              _launchUrl(FirebaseRemoteConfigService.getRefundPolicyUrl()),
+          isDark: isDark,
+        ),
+      );
+    }
+
+    // Disclaimer - conditionally shown
+    if (FirebaseRemoteConfigService.shouldShowDisclaimer()) {
+      items.add(_buildDivider(isDark));
+      items.add(
+        _buildSettingsTile(
+          icon: Icons.warning_amber_rounded,
+          title: 'Disclaimer',
+          iconColor: Colors.amber,
+          onTap: () =>
+              _launchUrl(FirebaseRemoteConfigService.getDisclaimerUrl()),
+          isDark: isDark,
+        ),
+      );
+    }
+
+    return items;
   }
 
   Widget _buildFloatingBackButton(bool isDark) {

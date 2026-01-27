@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shimmer/shimmer.dart';
 
 class ReturnDetailsScreen extends StatefulWidget {
   final String orderId;
@@ -226,67 +227,49 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
             onRefresh: () async {
               await Future.wait([_fetchOrderDetails(), _fetchOrderProducts()]);
             },
-            edgeOffset: 120, // Push refresh circle down below header
+            edgeOffset: 120,
             child: CustomScrollView(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // Content or Loading/Error States
                 if (_errorMessage != null)
                   SliverFillRemaining(child: _buildErrorView(theme))
-                else if (_isLoadingOrder)
+                else if (_isLoadingOrder && _orderData == null)
                   SliverFillRemaining(child: _buildLoadingView(theme))
                 else ...[
-                  // Rest of the content
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      MediaQuery.of(context).padding.top + 100,
+                      16,
+                      40,
+                    ),
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
-                        // 1. STATUS CARD FIRST (Top priority)
-                        SizedBox(
-                          height: MediaQuery.of(context).padding.top + 90,
-                        ),
-                        // 1. STATUS CARD (Top priority)
-                        _buildStatusCard(theme),
+                        // 1. Status Banner
+                        _buildStatusBanner(theme, isDark),
+
                         const SizedBox(height: 24),
-                        const SizedBox(height: 20),
 
-                        // 2. Order Quick Info (ID, Date)
-                        _buildOrderMetadataCard(theme),
-                        const SizedBox(height: 32),
+                        // 2. Order ID & Date
+                        _buildOrderIdCard(theme, isDark),
 
-                        // Products List
-                        _buildSectionHeader(
-                          theme,
-                          "Returned Items", // Changed title
-                          Icons.shopping_bag_outlined,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildProductsList(theme),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24),
 
-                        // Bill Summary (Receipt Style)
-                        _buildSectionHeader(
-                          theme,
-                          "Refund Summary", // Changed title
-                          Icons.receipt_long_outlined,
-                        ),
-                        const SizedBox(height: 16),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: _buildBillSummary(theme),
-                        ),
-                        const SizedBox(height: 32),
+                        // 3. Items Section
+                        _buildItemsSection(theme, isDark),
 
-                        // Combined Store & Order Info
-                        _buildSectionHeader(
-                          theme,
-                          "Return Info", // Changed title
-                          Icons.info_outline_rounded,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildCombinedOrderInfo(theme),
-                        const SizedBox(height: 120), // Bottom padding
+                        const SizedBox(height: 24),
+
+                        // 4. Refund Summary
+                        _buildPaymentSlip(theme, isDark),
+
+                        const SizedBox(height: 24),
+
+                        // 5. Fulfillment/Return Details
+                        _buildFulfillmentDetails(theme, isDark),
+
+                        const SizedBox(height: 120),
                       ]),
                     ),
                   ),
@@ -295,7 +278,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
             ),
           ),
 
-          // 2. Fixed Sticky Header (Always Visible Title)
+          // 2. Fixed Sticky Header
           Positioned(
             top: 0,
             left: 0,
@@ -312,48 +295,50 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
   }
 
   Widget _buildHeader(ThemeData theme, bool isDark) {
-    // Persistent Header
+    final topPadding = MediaQuery.of(context).padding.top;
+    const double opacity = 1.0;
+
+    final lightStartBase = _hexToColor(
+      FirebaseRemoteConfigService.getThemeGradientLightStart(),
+    );
+    final lightModeStart = Color.alphaBlend(
+      lightStartBase.withOpacity(0.35),
+      Colors.white,
+    );
+    final lightModeEnd = Colors.white;
+
     final startColor = isDark
         ? _hexToColor(
             FirebaseRemoteConfigService.getThemeGradientDarkStart(),
             defaultColor: const Color(0xFF1A1A1A),
           )
-        : _hexToColor(
-            FirebaseRemoteConfigService.getThemeGradientLightStart(),
-            defaultColor: const Color(0xFFE3F2FD),
-          );
+        : lightModeStart;
     final endColor = isDark
         ? _hexToColor(
             FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
             defaultColor: Colors.black,
           )
-        : Colors.white;
+        : lightModeEnd;
 
     return Container(
       decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 18, // Softer blur
-            offset: const Offset(0, 8),
-            spreadRadius: 1,
-          ),
-        ],
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+        color: Colors.transparent,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+        // No Shadow on Header
       ),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
-            height: MediaQuery.of(context).padding.top + 80,
+            height: topPadding + 80,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  startColor.withOpacity(0.95),
-                  endColor.withOpacity(0.95),
+                  startColor.withOpacity(opacity),
+                  endColor.withOpacity(opacity),
                 ],
               ),
               border: Border(
@@ -365,21 +350,18 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
             ),
             child: Stack(
               children: [
-                // Flowing Background Image (Watermark)
                 Positioned(
                   right: -30,
                   bottom: -20,
                   child: Transform.rotate(
                     angle: -0.2,
                     child: Icon(
-                      Icons.assignment_return_rounded, // Changed icon
+                      Icons.assignment_return_rounded,
                       size: 100,
                       color: theme.colorScheme.onSurface.withOpacity(0.05),
                     ),
                   ),
                 ),
-
-                // Content
                 Padding(
                   padding: EdgeInsets.only(
                     top: MediaQuery.of(context).padding.top + 15,
@@ -389,7 +371,6 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
                   ),
                   child: Row(
                     children: [
-                      // Back Button
                       Container(
                         width: 48,
                         height: 48,
@@ -413,12 +394,10 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(width: 16),
-                      // Title (Always Visible)
                       Expanded(
                         child: TranslatedText(
-                          "Return Details", // Changed Title
+                          "Return Details",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 24,
@@ -429,9 +408,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
                         ),
                       ),
                       const SizedBox(width: 16),
-                      const SizedBox(
-                        width: 48,
-                      ), // Balance back button (48 width)
+                      const SizedBox(width: 48),
                     ],
                   ),
                 ),
@@ -443,330 +420,509 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
     );
   }
 
-  Widget _buildOrderMetadataCard(ThemeData theme) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: SelectableText(
-          "Ref: #${_orderData?['order_id'] ?? widget.orderId}",
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
-            letterSpacing: 0.5,
+  Widget _buildStatusBanner(ThemeData theme, bool isDark) {
+    String title = 'Return Requested';
+    String description = 'Your return request is currently being processed.';
+
+    // Priority Check
+    if (_orderData != null) {
+      final mainStatus = _orderData!['status']?.toString().toLowerCase() ?? '';
+      final mainTitle = _orderData!['order_status_title']?.toString() ?? '';
+
+      if (mainStatus.contains('returned') ||
+          mainStatus.contains('refunded') ||
+          mainStatus.contains('cancelled') ||
+          mainStatus.contains('failed')) {
+        title = _formatStatus(mainStatus);
+        if (mainTitle.isNotEmpty && mainTitle != 'Unknown') title = mainTitle;
+      }
+    }
+
+    if (_orderStatuses.isNotEmpty) {
+      final latest = _orderStatuses.first;
+      if (title == 'Return Requested' || title == 'Processing Returns') {
+        title = latest['order_status_title'] ?? title;
+        description = latest['order_status_description'] ?? description;
+      }
+      if (title == 'Unknown' || title.isEmpty) {
+        final raw = latest['order_status'];
+        if (raw != null) title = _formatStatus(raw.toString());
+      }
+    }
+
+    Color statusColor;
+    IconData statusIcon = Icons.hourglass_top_rounded;
+
+    if (title.toLowerCase().contains('cancelled') ||
+        title.toLowerCase().contains('failed')) {
+      statusColor = theme.colorScheme.error;
+      statusIcon = Icons.cancel_rounded;
+    } else if (title.toLowerCase().contains('refunded') ||
+        title.toLowerCase().contains('returned') ||
+        title.toLowerCase().contains('completed')) {
+      statusColor = const Color(0xFF00C853);
+      statusIcon = Icons.check_circle_rounded;
+    } else {
+      statusColor = Colors.orange;
+      statusIcon = Icons.assignment_return_rounded;
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
           ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(statusIcon, color: statusColor, size: 24),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.0,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            if (description.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  description,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.6),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Return Timeline
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      _buildTimelineStep(theme, true, statusColor),
+                      _buildTimelineLine(theme, true, statusColor),
+                      _buildTimelineStep(
+                        theme,
+                        !title.toLowerCase().contains('requested'),
+                        statusColor,
+                      ),
+                      _buildTimelineLine(
+                        theme,
+                        title.toLowerCase().contains('refunded') ||
+                            title.toLowerCase().contains('returned') ||
+                            title.toLowerCase().contains('completed'),
+                        statusColor,
+                      ),
+                      _buildTimelineStep(
+                        theme,
+                        title.toLowerCase().contains('refunded') ||
+                            title.toLowerCase().contains('returned') ||
+                            title.toLowerCase().contains('completed'),
+                        statusColor,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Requested", style: _timelineTextStyle(theme)),
+                      Text("Processing", style: _timelineTextStyle(theme)),
+                      Text("Refunded", style: _timelineTextStyle(theme)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusCard(ThemeData theme) {
-    String title = 'Processing Return'; // Default title changed
-    String description =
-        'Your return request is being processed'; // Default description
-
-    if (_orderStatuses.isNotEmpty) {
-      final latest = _orderStatuses.first;
-      title = latest['order_status_title'] ?? title;
-      description = latest['order_status_description'] ?? description;
-
-      if (title == 'Unknown' || title.isEmpty) {
-        final raw = latest['order_status'];
-        if (raw != null) title = _formatStatus(raw.toString());
-      }
-    } else if (_orderData != null) {
-      final mainStatus = _orderData!['status'];
-      if (mainStatus != null) title = _formatStatus(mainStatus.toString());
-    }
-
-    Color statusColor = theme.colorScheme.primary;
-    if (title.toLowerCase().contains('cancelled') ||
-        title.toLowerCase().contains('failed')) {
-      statusColor = theme.colorScheme.error;
-    } else if (title.toLowerCase().contains('delivered') ||
-        title.toLowerCase().contains('completed') ||
-        title.toLowerCase().contains('returned')) {
-      // Added returned
-      statusColor = const Color(0xFF00C853); // Vibrant Green
-    } else if (title.toLowerCase().contains('ready') ||
-        title.toLowerCase().contains('prepared')) {
-      statusColor = Colors.orange.shade700;
-    }
-
+  Widget _buildTimelineStep(ThemeData theme, bool isActive, Color color) {
     return Container(
-      width: double.infinity,
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        color: isActive ? color : theme.dividerColor.withOpacity(0.2),
+        shape: BoxShape.circle,
+        border: isActive ? Border.all(color: Colors.white, width: 2) : null,
+        // No shadow to match user request
+      ),
+    );
+  }
+
+  Widget _buildTimelineLine(ThemeData theme, bool isActive, Color color) {
+    return Expanded(
+      child: Container(
+        height: 3,
+        decoration: BoxDecoration(
+          color: isActive ? color : theme.dividerColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(1.5),
+        ),
+      ),
+    );
+  }
+
+  TextStyle _timelineTextStyle(ThemeData theme) {
+    return TextStyle(
+      fontSize: 10,
+      fontWeight: FontWeight.w700,
+      color: theme.colorScheme.onSurface.withOpacity(0.4),
+      letterSpacing: 0.5,
+    );
+  }
+
+  Widget _buildOrderIdCard(ThemeData theme, bool isDark) {
+    return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: statusColor.withOpacity(0.1),
-            blurRadius: 20,
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 24,
             offset: const Offset(0, 8),
-            spreadRadius: -2,
+            spreadRadius: 0,
           ),
-        ],
-        border: Border.all(color: statusColor.withOpacity(0.2), width: 1),
-      ),
-      child: Column(
-        children: [
-          TranslatedText(
-            title,
-            style: TextStyle(
-              color: statusColor,
-              fontWeight: FontWeight.w900,
-              fontSize: 24,
-              letterSpacing: -0.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-          TranslatedText(
-            description,
-            style: TextStyle(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: LinearProgressIndicator(
-              value: 0.5,
-              minHeight: 4,
-              backgroundColor: statusColor.withOpacity(0.1),
-              valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-            ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSectionHeader(ThemeData theme, String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: theme.colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 16, color: theme.colorScheme.primary),
-          ),
-          const SizedBox(width: 12),
-          TranslatedText(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-              letterSpacing: 0.2,
+            child: Icon(
+              Icons.receipt_rounded,
+              color: theme.colorScheme.primary,
+              size: 24,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductsList(ThemeData theme) {
-    if (_isLoadingProducts) {
-      return Center(
-        child: CircularProgressIndicator(color: theme.colorScheme.primary),
-      );
-    }
-    if (_products.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: theme.cardColor.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-        ),
-        child: Column(
-          children: [
-            Icon(
-              Icons.remove_shopping_cart_outlined,
-              size: 40,
-              color: theme.disabledColor,
-            ),
-            const SizedBox(height: 12),
-            TranslatedText(
-              "No items found",
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: theme.shadowColor.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 5),
-          ),
-        ],
-        border: Border.all(
-          color: theme.dividerColor.withOpacity(0.5),
-          width: 0.5,
-        ),
-      ),
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _products.length,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        separatorBuilder: (_, __) => Divider(
-          height: 1,
-          thickness: 0.5,
-          color: theme.dividerColor.withOpacity(0.3),
-          indent: 16,
-          endIndent: 16,
-        ),
-        itemBuilder: (context, index) {
-          final product = _products[index];
-          final quantity = product['quantity'] ?? 0;
-          final price =
-              double.tryParse(
-                product['amount_including_tax']?.toString() ?? '0',
-              ) ??
-              0.0;
-          final total = price * quantity;
-          final variant = product['variant_name'];
-          final imageUrl = product['image_url'];
-
-          return Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Image (Small & Rounded)
-                Container(
-                  height: 50,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: theme.dividerColor.withOpacity(0.6),
-                      width: 0.5,
-                    ),
-                    color: isDark ? Colors.grey[800] : Colors.white,
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: imageUrl != null
-                        ? Image.network(imageUrl, fit: BoxFit.cover)
-                        : Icon(
-                            Icons.image_outlined,
-                            size: 20,
-                            color: theme.disabledColor,
-                          ),
+                Text(
+                  "Return Ref #${_orderData?['order_id'] ?? widget.orderId}",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                    letterSpacing: -0.3,
                   ),
                 ),
-
-                const SizedBox(width: 16),
-
-                // 2. Name & Variant (Left Aligned)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TranslatedText(
-                        product['product_name'] ?? 'Item',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
-                          height: 1.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (variant != null && variant.toString().isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            variant.toString(),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.5,
-                              ),
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
+                const SizedBox(height: 4),
+                Text(
+                  _orderData?['created_at'] ?? "Date not available",
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    fontWeight: FontWeight.w500,
                   ),
-                ),
-
-                const SizedBox(width: 16),
-
-                // 3. Price & Qty (Right Aligned - Symmetrical)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      "₹${total.toStringAsFixed(0)}",
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.onSurface.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        "x$quantity",
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onSurface.withOpacity(0.8),
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildBillSummary(ThemeData theme) {
-    // Data Loading
+  // 3. Items Section (Systematic Layout with Images)
+  Widget _buildItemsSection(ThemeData theme, bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: Text(
+              "ITEMS RETURNED",
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: theme.colorScheme.onSurface.withOpacity(0.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_isLoadingProducts)
+            Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: theme.colorScheme.primary,
+                  strokeWidth: 2,
+                ),
+              ),
+            )
+          else if (_products.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Center(
+                child: Text(
+                  "No items found",
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ),
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              itemCount: _products.length,
+              separatorBuilder: (_, __) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Divider(color: theme.dividerColor.withOpacity(0.15)),
+              ),
+              itemBuilder: (context, index) {
+                final product = _products[index];
+                final quantity = product['quantity'] ?? 0;
+                final price =
+                    double.tryParse(
+                      product['amount_including_tax']?.toString() ?? '0',
+                    ) ??
+                    0.0;
+                final total = price * quantity;
+                final variant = product['variant_name'];
+                final imageUrl =
+                    product['image'] ??
+                    product['product_image'] ??
+                    product['image_url'];
+
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Premium Image with Quantity Badge
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest
+                                .withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(16),
+                            image:
+                                imageUrl != null &&
+                                    imageUrl.toString().isNotEmpty
+                                ? DecorationImage(
+                                    image: NetworkImage(imageUrl),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                            border: Border.all(
+                              color: theme.dividerColor.withOpacity(0.1),
+                            ),
+                          ),
+                          child:
+                              (imageUrl == null || imageUrl.toString().isEmpty)
+                              ? Icon(
+                                  Icons.assignment_return_outlined,
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.2),
+                                  size: 24,
+                                )
+                              : null,
+                        ),
+                        if (quantity > 1)
+                          Positioned(
+                            bottom: -6,
+                            right: -6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.onSurface,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                "${quantity}x",
+                                style: TextStyle(
+                                  color: theme.colorScheme.surface,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 2),
+                          Text(
+                            product['product_name'] ?? 'Item Name',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: theme.colorScheme.onSurface,
+                              height: 1.2,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              if (variant != null &&
+                                  variant.toString().isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary
+                                        .withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    variant.toString().toUpperCase(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.primary,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              Text(
+                                "₹${price.toStringAsFixed(0)} / unit",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.5),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          "₹${total.toStringAsFixed(0)}",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: theme.colorScheme.onSurface,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  // 4. Payment Slip (Clean Professional Layout)
+  Widget _buildPaymentSlip(ThemeData theme, bool isDark) {
     final cartTotal = _orderData != null && _orderData!['cart_total'] is List
         ? _orderData!['cart_total'] as List
         : [];
@@ -774,152 +930,182 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
         _orderData != null && _orderData!['platform_fees'] is List
         ? _orderData!['platform_fees'] as List
         : [];
-    final grandTotal = _orderData?['grand_total'] != null
-        ? double.tryParse(_orderData!['grand_total'].toString()) ?? 0.0
-        : 0.0;
 
-    Widget buildRow(
-      String label,
-      dynamic value, {
-      bool isBold = false,
-      Color? color,
-      double? fontSize,
-    }) {
-      String displayValue = "₹0.00";
-      if (value is num) {
-        displayValue = "₹${value.toStringAsFixed(2)}";
-      } else if (value is String) {
-        if (double.tryParse(value) != null) {
-          displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
-        } else {
-          displayValue = value;
-        }
-      }
+    // Build all line items
+    List<Map<String, dynamic>> lineItems = [];
+    if (cartTotal.isNotEmpty) {
+      lineItems.addAll(
+        cartTotal.map(
+          (item) => {'title': item['title'] ?? '', 'value': item['value'] ?? 0},
+        ),
+      );
+    }
+    if (cartTotal.isEmpty && _orderData != null) {
+      lineItems.add({
+        'title': 'Subtotal',
+        'value': _orderData!['sub_total'] ?? 0,
+      });
+      lineItems.add({
+        'title': 'Tax',
+        'value': _orderData!['total_tax_amount'] ?? 0,
+      });
+    }
 
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            TranslatedText(
-              label,
-              style: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(
-                  isBold ? 1.0 : 0.6,
-                ),
-                fontSize: fontSize ?? (isBold ? 16 : 14),
-                fontWeight: isBold ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-            Text(
-              displayValue,
-              style: TextStyle(
-                color:
-                    color ??
-                    theme.colorScheme.onSurface.withOpacity(isBold ? 1.0 : 0.8),
-                fontSize: fontSize ?? (isBold ? 16 : 14),
-                fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-                fontFamily: isBold ? null : 'RobotoMono',
-              ),
-            ),
-          ],
+    // Add Platform Fees
+    if (platformFees.isNotEmpty) {
+      lineItems.addAll(
+        platformFees.map(
+          (item) => {'title': item['title'] ?? '', 'value': item['value'] ?? 0},
         ),
       );
     }
 
-    // Simplified Modern Bill Card
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: theme.shadowColor.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TranslatedText(
-            "Refund Summary",
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Items
-          if (cartTotal.isNotEmpty)
-            ...cartTotal.map(
-              (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
-            ),
-
-          if (cartTotal.isEmpty && _orderData != null) ...[
-            buildRow("Item Total", _orderData!['sub_total'] ?? 0),
-            buildRow("Tax", _orderData!['total_tax_amount'] ?? 0),
-            buildRow("Delivery", _orderData!['delivery_charges'] ?? 0),
-          ],
-
-          if (platformFees.isNotEmpty)
-            ...platformFees.map(
-              (item) => buildRow(item['title'] ?? '', item['value'] ?? 0),
-            ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(height: 1),
-          ),
-
-          // Total
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TranslatedText(
-                "Total Refund",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface,
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.receipt_long_rounded,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
-              ),
-              Text(
-                "₹${grandTotal.toStringAsFixed(2)}",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: theme.colorScheme.primary,
+                const SizedBox(width: 12),
+                Text(
+                  "REFUND BREAKDOWN",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: theme.dividerColor.withOpacity(0.08),
+          ),
+          ...lineItems.asMap().entries.map((entry) {
+            final item = entry.value;
+            String displayValue = "₹0.00";
+            final value = item['value'];
+            if (value is num) {
+              displayValue = "₹${value.toStringAsFixed(2)}";
+            } else if (value is String && double.tryParse(value) != null) {
+              displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
+            }
 
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item['title'] ?? '',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurface.withOpacity(0.7),
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    displayValue,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
           const SizedBox(height: 12),
-
+          Container(height: 2, color: theme.dividerColor.withOpacity(0.1)),
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(8),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  theme.colorScheme.primary.withOpacity(0.12),
+                  theme.colorScheme.primary.withOpacity(0.04),
+                ],
+              ),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.payment, size: 14, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "TOTAL REFUND",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: theme.colorScheme.primary,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
                 Text(
-                  "${_orderData?['payment_method'] ?? 'Card'}".toUpperCase(),
+                  "₹${double.tryParse(_orderData?['grand_total']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'}",
                   style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 22,
                     color: theme.colorScheme.primary,
-                    letterSpacing: 0.5,
+                    letterSpacing: -0.5,
                   ),
                 ),
               ],
@@ -930,168 +1116,207 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
     );
   }
 
-  Widget _buildCombinedOrderInfo(ThemeData theme) {
+  // 5. Fulfillment & Store Details
+  Widget _buildFulfillmentDetails(ThemeData theme, bool isDark) {
     if (_orderData == null) return const SizedBox.shrink();
 
     final storeName = _orderData!['store_name'] ?? 'Store';
     final storeAddress = _orderData!['store_address'] ?? 'No Address';
-    final paymentData = _orderData?['payment_details'];
-    String paymentMethod = 'Unknown';
-    if (paymentData is Map) {
-      paymentMethod = paymentData['payment_method_name'] ?? 'Unknown';
-    } else {
-      paymentMethod = _orderData?['payment_method'] ?? 'Unknown';
-    }
+    final storeImage = _orderData!['store_image_url'];
 
-    final orderType =
-        _orderData?['order_method_name'] ??
-        _orderData?['order_type'] ??
-        'Delivery';
+    // Determine Refund Status
+    String status =
+        _orderData!['order_status_title'] ?? _orderData!['status'] ?? '';
+    bool isRefunded =
+        status.toLowerCase().contains('refunded') ||
+        status.toLowerCase().contains('completed') ||
+        status.toLowerCase().contains('returned');
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.05)),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
           ),
         ],
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.storefront_rounded,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
-                child: Icon(
-                  Icons.storefront_outlined,
-                  color: theme.colorScheme.onSecondaryContainer,
+                const SizedBox(width: 12),
+                Text(
+                  "RETURN FULFILLMENT",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: theme.colorScheme.onSurface.withOpacity(0.5),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Return to",
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    Text(
-                      storeName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      storeAddress,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.colorScheme.onSurface.withOpacity(0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
+          Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
                   decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor,
                     borderRadius: BorderRadius.circular(16),
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    image: storeImage != null
+                        ? DecorationImage(
+                            image: NetworkImage(storeImage),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
                   ),
+                  child: storeImage == null
+                      ? Icon(
+                          Icons.store_mall_directory_rounded,
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.payment_outlined,
-                        size: 20,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Refund Type",
+                      Text(
+                        storeName,
                         style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          color: theme.colorScheme.onSurface,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _formatStatus(paymentMethod),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
+                        storeAddress,
+                        style: TextStyle(
                           fontSize: 13,
+                          color: theme.colorScheme.onSurface.withOpacity(0.5),
+                          height: 1.3,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.directions_bike_outlined,
-                        size: 20,
-                        color: theme.colorScheme.secondary,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        "Return via",
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatStatus(orderType),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                _buildDetailBox(
+                  theme,
+                  "ACTION",
+                  "RETURN",
+                  Icons.assignment_return_rounded,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                _buildDetailBox(
+                  theme,
+                  "STATUS",
+                  isRefunded ? "REFUNDED" : "PENDING",
+                  isRefunded
+                      ? Icons.check_circle_rounded
+                      : Icons.pending_rounded,
+                  valueColor: isRefunded ? Colors.green : Colors.orange,
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Helper for symetrical Detail Boxes
+  Widget _buildDetailBox(
+    ThemeData theme,
+    String label,
+    String value,
+    IconData icon, {
+    Color? valueColor,
+  }) {
+    return Expanded(
+      child: Container(
+        height: 100,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: theme.colorScheme.onSurface.withOpacity(0.4),
+            ),
+            const Spacer(),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+                color: theme.colorScheme.onSurface.withOpacity(0.4),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: valueColor ?? theme.colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1170,11 +1395,227 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
   }
 
   Widget _buildLoadingView(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: CircularProgressIndicator(color: theme.colorScheme.primary),
+    final isDark = theme.brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
+    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        MediaQuery.of(context).padding.top + 100,
+        16,
+        40,
       ),
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        // 1. Status Banner Skeleton
+        Container(
+          height: 140,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Shimmer.fromColors(
+            baseColor: baseColor,
+            highlightColor: highlightColor,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: 180,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Container(
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // 2. Order ID Skeleton
+        Container(
+          height: 88,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Shimmer.fromColors(
+            baseColor: baseColor,
+            highlightColor: highlightColor,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 100,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 80,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // 3. Items Skeleton
+        Container(
+          height: 200,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Shimmer.fromColors(
+            baseColor: baseColor,
+            highlightColor: highlightColor,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 140,
+                              height: 14,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              width: 80,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

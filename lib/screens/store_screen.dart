@@ -14,6 +14,7 @@ import 'package:exanor/screens/cart_screen.dart';
 import 'package:exanor/components/product_variant_sheet.dart';
 import 'package:exanor/components/voice_search_sheet.dart';
 import 'package:exanor/components/peel_button.dart';
+import 'package:exanor/components/product_details_sheet.dart';
 
 class StoreScreen extends StatefulWidget {
   final String storeId;
@@ -345,9 +346,12 @@ class _StoreScreenState extends State<StoreScreen> {
     }
   }
 
-  Future<void> _fetchProducts({bool loadMore = false}) async {
+  Future<void> _fetchProducts({
+    bool loadMore = false,
+    bool force = false,
+  }) async {
     if (loadMore && _isLoadingMoreProducts) return;
-    if (!loadMore && _isLoadingProducts) return;
+    if (!force && !loadMore && _isLoadingProducts) return;
 
     if (!mounted) return;
 
@@ -426,9 +430,20 @@ class _StoreScreenState extends State<StoreScreen> {
   }
 
   Future<void> _refreshAll() async {
-    await _fetchStoreDetails();
-    await _fetchProducts();
-    await _fetchCartDetails();
+    setState(() {
+      _products.clear();
+      _searchResults.clear();
+      _isLoadingProducts = true;
+      _isLoadingStore = true;
+      _isLoadingCategories = true;
+    });
+
+    await Future.wait([
+      _fetchStoreDetails(),
+      _fetchProducts(force: true),
+      _fetchCategories(),
+      _fetchCartDetails(),
+    ]);
   }
 
   Future<void> _fetchCartDetails() async {
@@ -577,15 +592,16 @@ class _StoreScreenState extends State<StoreScreen> {
 
     // Dynamic position: Button is at bottom 24 (normally) or 100 (if cart visible)
     // Align bottom edge of menu with bottom edge of button for "morph" effect
-    final double buttonBottom = _isCartVisible ? 100 : 24;
+    // Increased to 120 to ensure it clears the "Add to Cart" peel visually
+    final double buttonBottom = _isCartVisible ? 120 : 24;
 
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
         barrierDismissible: true,
         barrierColor: Colors.transparent,
-        transitionDuration: const Duration(milliseconds: 400),
-        reverseTransitionDuration: const Duration(milliseconds: 350),
+        transitionDuration: const Duration(milliseconds: 300),
+        reverseTransitionDuration: const Duration(milliseconds: 250),
         pageBuilder: (ctx, anim1, anim2) {
           return Stack(
             children: [
@@ -606,7 +622,7 @@ class _StoreScreenState extends State<StoreScreen> {
                   child: Hero(
                     tag: 'menu_fab',
                     createRectTween: (begin, end) {
-                      return MaterialRectCenterArcTween(begin: begin, end: end);
+                      return RectTween(begin: begin, end: end);
                     },
                     child: ValueListenableBuilder<int>(
                       valueListenable: _menuUpdateNotifier,
@@ -661,145 +677,158 @@ class _StoreScreenState extends State<StoreScreen> {
           ),
           child: Material(
             color: Colors.transparent,
-            child: SizedBox(
-              width: 260,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header for the "Table"
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.restaurant_menu_rounded,
-                          size: 18,
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          "CATEGORIES",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Divider(height: 1, color: Colors.black.withOpacity(0.05)),
-
-                  if (!_isLoadingCategories && _categories.isNotEmpty)
-                    InkWell(
-                      onTap: () {
-                        Navigator.pop(context);
-                        setState(() {
-                          _selectedCategoryId = null; // Clear selection = All
-                          _products.clear();
-                          _currentPage = 1;
-                          _isSearching = false;
-                          _searchController.clear();
-                        });
-                        _fetchProducts();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _selectedCategoryId == null
-                              ? theme.colorScheme.primary.withOpacity(0.08)
-                              : Colors.transparent,
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.black.withOpacity(0.03),
-                            ),
-                            left: _selectedCategoryId == null
-                                ? BorderSide(
-                                    color: theme.colorScheme.primary,
-                                    width: 3,
-                                  )
-                                : BorderSide.none,
-                          ),
-                        ),
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                child: SizedBox(
+                  width: 260,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header for the "Table"
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                         child: Row(
                           children: [
-                            Text(
-                              "All Products",
-                              style: TextStyle(
-                                color: _selectedCategoryId == null
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurface.withOpacity(
-                                        0.8,
-                                      ),
-                                fontSize: 14,
-                                fontWeight: _selectedCategoryId == null
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
+                            Icon(
+                              Icons.restaurant_menu_rounded,
+                              size: 18,
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.6,
                               ),
                             ),
-                            const Spacer(),
-                            if (_selectedCategoryId == null)
-                              Icon(
-                                Icons.check_circle,
-                                size: 16,
-                                color: theme.colorScheme.primary,
+                            const SizedBox(width: 8),
+                            Text(
+                              "CATEGORIES",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.6,
+                                ),
                               ),
+                            ),
                           ],
                         ),
                       ),
-                    ),
+                      Divider(height: 1, color: Colors.black.withOpacity(0.05)),
 
-                  if (_isLoadingCategories && _categories.isEmpty)
-                    Container(
-                      height: 100,
-                      alignment: Alignment.center,
-                      child: CircularProgressIndicator(
-                        color: theme.colorScheme.primary,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  else if (_categories.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            "No categories",
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.5,
-                              ),
-                              fontSize: 13,
+                      if (!_isLoadingCategories && _categories.isNotEmpty)
+                        InkWell(
+                          onTap: () {
+                            Navigator.pop(context);
+                            setState(() {
+                              _selectedCategoryId =
+                                  null; // Clear selection = All
+                              _products.clear();
+                              _currentPage = 1;
+                              _isSearching = false;
+                              _searchController.clear();
+                            });
+                            _fetchProducts();
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                  spreadRadius: 0,
+                                ),
+                              ],
+                              border: _selectedCategoryId == null
+                                  ? Border.all(
+                                      color: theme.colorScheme.primary
+                                          .withOpacity(0.5),
+                                      width: 1.5,
+                                    )
+                                  : Border.all(
+                                      color: Colors.black.withOpacity(0.03),
+                                    ),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  "All Products",
+                                  style: TextStyle(
+                                    color: _selectedCategoryId == null
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurface
+                                              .withOpacity(0.8),
+                                    fontSize: 14,
+                                    fontWeight: _selectedCategoryId == null
+                                        ? FontWeight.bold
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (_selectedCategoryId == null)
+                                  Icon(
+                                    Icons.check_circle,
+                                    size: 16,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                              ],
                             ),
                           ),
-                          TextButton(
-                            onPressed: () {
-                              setState(() => _isLoadingCategories = true);
-                              _fetchCategories();
-                            },
-                            child: Text("Retry"),
+                        ),
+
+                      if (_isLoadingCategories && _categories.isEmpty)
+                        Container(
+                          height: 100,
+                          alignment: Alignment.center,
+                          child: CircularProgressIndicator(
+                            color: theme.colorScheme.primary,
+                            strokeWidth: 2,
                           ),
-                        ],
-                      ),
-                    )
-                  else
-                    Flexible(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.zero,
-                        child: Column(
+                        )
+                      else if (_categories.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "No categories",
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.5),
+                                  fontSize: 13,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  setState(() => _isLoadingCategories = true);
+                                  _fetchCategories();
+                                },
+                                child: Text("Retry"),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           mainAxisSize: MainAxisSize.min,
                           children: List.generate(_categories.length, (index) {
                             final category = _categories[index];
                             final isSelected =
                                 _selectedCategoryId == category.id;
-                            final isLast = index == _categories.length - 1;
 
                             return InkWell(
                               onTap: () {
@@ -814,31 +843,34 @@ class _StoreScreenState extends State<StoreScreen> {
                                 _fetchProducts();
                               },
                               child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 4,
+                                ),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 14,
+                                  horizontal: 16,
+                                  vertical: 12,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: isSelected
-                                      ? theme.colorScheme.primary.withOpacity(
-                                          0.08,
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.06),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                      spreadRadius: 0,
+                                    ),
+                                  ],
+                                  border: isSelected
+                                      ? Border.all(
+                                          color: theme.colorScheme.primary
+                                              .withOpacity(0.5),
+                                          width: 1.5,
                                         )
-                                      : Colors.transparent,
-                                  border: Border(
-                                    bottom: isLast
-                                        ? BorderSide.none
-                                        : BorderSide(
-                                            color: Colors.black.withOpacity(
-                                              0.03,
-                                            ),
-                                          ),
-                                    left: isSelected
-                                        ? BorderSide(
-                                            color: theme.colorScheme.primary,
-                                            width: 3,
-                                          )
-                                        : BorderSide.none,
-                                  ),
+                                      : Border.all(
+                                          color: Colors.black.withOpacity(0.03),
+                                        ),
                                 ),
                                 child: Row(
                                   children: [
@@ -869,9 +901,9 @@ class _StoreScreenState extends State<StoreScreen> {
                             );
                           }),
                         ),
-                      ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -1032,6 +1064,62 @@ class _StoreScreenState extends State<StoreScreen> {
     }
   }
 
+  void _showProductDetailsPopup(Product product, int index) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Product Details",
+      barrierColor: Colors.black.withOpacity(0.5),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setSheetState) {
+            // Get latest product data
+            Product currentProduct;
+            if (_isSearching && index < _searchResults.length) {
+              currentProduct = _searchResults[index];
+            } else if (index < _products.length) {
+              currentProduct = _products[index];
+            } else {
+              currentProduct = product;
+            }
+
+            return Center(
+              child: Material(
+                color: Colors.transparent,
+                child: ProductDetailsSheet(
+                  product: currentProduct,
+                  currentQuantity: currentProduct.quantity,
+                  onAdd: () {
+                    _handleAddToCart(index);
+                    setSheetState(() {});
+                  },
+                  onRemove: () {
+                    _decrementCartItem(index);
+                    setSheetState(() {});
+                  },
+                ),
+              ),
+            );
+          },
+        );
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        return SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+              .animate(
+                CurvedAnimation(
+                  parent: anim1,
+                  curve: Curves.easeOutCubic,
+                  reverseCurve: Curves.easeInCubic,
+                ),
+              ),
+          child: child,
+        );
+      },
+    );
+  }
+
   void _updateProductQuantity(int index, int delta) {
     setState(() {
       if (_isSearching) {
@@ -1067,6 +1155,16 @@ class _StoreScreenState extends State<StoreScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     // Remote settings for gradient
+    // Calculate Light Mode Colors to match HomeScreen logic (Immersive Light)
+    final lightStartBase = _hexToColor(
+      FirebaseRemoteConfigService.getThemeGradientLightStart(),
+    );
+    final lightModeStart = Color.alphaBlend(
+      lightStartBase.withOpacity(0.35),
+      Colors.white,
+    );
+    final lightModeEnd = Colors.white;
+
     final bgGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -1079,12 +1177,7 @@ class _StoreScreenState extends State<StoreScreen> {
                 FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
               ),
             ]
-          : [
-              _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientLightStart(),
-              ),
-              Colors.white,
-            ],
+          : [lightModeStart, lightModeEnd],
       stops: const [0.0, 1.0],
     );
 
@@ -1262,39 +1355,46 @@ class _StoreScreenState extends State<StoreScreen> {
                       ],
                     ),
                   ),
-                  shape: RoundedRectangleBorder(
+                  shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(12),
+                      bottom: Radius.circular(20),
                     ),
                   ),
-                  shadowColor: Colors.black.withOpacity(0.5),
-                  forceElevated: true,
-                  flexibleSpace: ClipRRect(
-                    borderRadius: BorderRadius.vertical(
-                      bottom: Radius.circular(12),
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: bgGradient,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 12,
-                            offset: Offset(0, 4),
-                            spreadRadius: 2,
-                          ),
-                        ],
+                  shadowColor: Colors.transparent,
+                  forceElevated: false,
+                  flexibleSpace: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(20),
                       ),
-                      child: FlexibleSpaceBar(
-                        background: _isLoadingStore
-                            ? _buildSkeletalStoreLoader(theme)
-                            : _errorMessage != null
-                            ? _buildErrorView(theme)
-                            : _buildImmersiveStoreHeader(theme),
-                        stretchModes: const [
-                          StretchMode.zoomBackground,
-                          StretchMode.blurBackground,
-                        ],
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark
+                              ? Colors.black.withOpacity(0.6)
+                              : Colors.black.withOpacity(0.2),
+                          blurRadius: 25,
+                          offset: const Offset(0, 12),
+                          spreadRadius: -5,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(20),
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(gradient: bgGradient),
+                        child: FlexibleSpaceBar(
+                          background: _isLoadingStore
+                              ? _buildSkeletalStoreLoader(theme)
+                              : _errorMessage != null
+                              ? _buildErrorView(theme)
+                              : _buildImmersiveStoreHeader(theme),
+                          stretchModes: const [
+                            StretchMode.zoomBackground,
+                            StretchMode.blurBackground,
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1351,8 +1451,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       sliver: SliverGrid(
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
-                          childAspectRatio:
-                              0.63, // Optimized aspect ratio (0.7 -> 0.63) for better fit
+                          childAspectRatio: 0.66, // Wider/Less Rectangular
                           crossAxisSpacing: 16,
                           mainAxisSpacing: 16,
                         ),
@@ -1378,8 +1477,7 @@ class _StoreScreenState extends State<StoreScreen> {
                     sliver: SliverGrid(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
-                        childAspectRatio:
-                            0.63, // Optimized aspect ratio (0.7 -> 0.63) for better fit
+                        childAspectRatio: 0.66, // Wider/Less Rectangular
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
                       ),
@@ -1723,76 +1821,148 @@ class _StoreScreenState extends State<StoreScreen> {
         ? const Color(0xFF3D3D3D)
         : const Color(0xFFF5F5F5);
 
-    return Shimmer.fromColors(
-      baseColor: baseColor,
-      highlightColor: highlightColor,
-      period: const Duration(milliseconds: 1500),
-      child: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.68,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-        ),
-        itemCount: 6,
-        itemBuilder: (context, index) {
-          return Container(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: theme.colorScheme.outline.withOpacity(0.05),
+    return GridView.builder(
+      padding: const EdgeInsets.all(
+        16,
+      ).copyWith(bottom: _isCartVisible ? 100 : 16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.66,
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+      ),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
               ),
-            ),
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: Shimmer.fromColors(
+            baseColor: baseColor,
+            highlightColor: highlightColor,
+            period: const Duration(milliseconds: 1500),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Image Skeleton
-                Expanded(
-                  flex: 6,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: baseColor,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(20),
+                // Image Skeleton (AspectRatio 1.35)
+                AspectRatio(
+                  aspectRatio: 1.35,
+                  child: Stack(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(20),
+                          ),
+                        ),
                       ),
+                      // Rating Badge Placeholder
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          width: 40,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: theme.colorScheme.surface,
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Dashed Line Placeholder
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  child: CustomPaint(
+                    size: const Size(double.infinity, 1),
+                    painter: _DashedLinePainter(
+                      color: Colors.white.withOpacity(0.5),
                     ),
                   ),
                 ),
-                // Text Skeleton
+
+                // Content Skeleton
                 Expanded(
-                  flex: 4,
                   child: Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Container(
-                          height: 14,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: baseColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title Line 1
+                            Container(
+                              height: 12,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            // Title Line 2 (Part/Variant)
+                            Container(
+                              height: 10,
+                              width: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 6),
-                        Container(
-                          height: 14,
-                          width: 80,
-                          decoration: BoxDecoration(
-                            color: baseColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          height: 16,
-                          width: 60,
-                          decoration: BoxDecoration(
-                            color: baseColor,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Price
+                            Container(
+                              height: 14,
+                              width: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            // Button (Standard 76x28)
+                            Container(
+                              width: 76,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1800,9 +1970,9 @@ class _StoreScreenState extends State<StoreScreen> {
                 ),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -2015,10 +2185,13 @@ class _StoreScreenState extends State<StoreScreen> {
         Stack(
           children: [
             AspectRatio(
-              aspectRatio: 1.15,
-              child: CustomCachedNetworkImage(
-                imgUrl: product.imgUrl,
-                fit: BoxFit.cover,
+              aspectRatio: 1.35,
+              child: Hero(
+                tag: 'product_img_${product.id}',
+                child: CustomCachedNetworkImage(
+                  imgUrl: product.imgUrl,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
             if (product.averageRating > 0)
@@ -2085,10 +2258,23 @@ class _StoreScreenState extends State<StoreScreen> {
           ],
         ),
 
+        // Dotted Divider
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          child: CustomPaint(
+            size: const Size(double.infinity, 1),
+            painter: _DashedLinePainter(
+              color: isDark
+                  ? Colors.white.withOpacity(0.3)
+                  : Colors.black.withOpacity(0.2),
+            ),
+          ),
+        ),
+
         // 2. Content
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2109,7 +2295,7 @@ class _StoreScreenState extends State<StoreScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       product.childCategory.isNotEmpty
                           ? product.childCategory
@@ -2183,29 +2369,38 @@ class _StoreScreenState extends State<StoreScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? theme.colorScheme.surfaceContainer : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
           ),
         ],
-        border: Border.all(
-          color: theme.colorScheme.outline.withOpacity(0.05),
-          width: 1,
-        ),
       ),
       clipBehavior: Clip.antiAlias,
-      child: isUnavailable
-          ? ColorFiltered(
-              colorFilter: const ColorFilter.mode(
-                Colors.grey,
-                BlendMode.saturation,
-              ),
-              child: Opacity(opacity: 0.7, child: cardContent),
-            )
-          : cardContent,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showProductDetailsPopup(product, index),
+          child: isUnavailable
+              ? ColorFiltered(
+                  colorFilter: const ColorFilter.mode(
+                    Colors.grey,
+                    BlendMode.saturation,
+                  ),
+                  child: Opacity(opacity: 0.7, child: cardContent),
+                )
+              : cardContent,
+        ),
+      ),
     );
   }
 
@@ -2213,7 +2408,7 @@ class _StoreScreenState extends State<StoreScreen> {
     return SizedBox(
       width: 76,
       child: PeelButton(
-        height: 32,
+        height: 28, // Compact
         borderRadius: 8,
         onTap: onTap,
         text: "ADD",
@@ -2226,15 +2421,15 @@ class _StoreScreenState extends State<StoreScreen> {
   Widget _buildZeptoQtyControl(Color color, int qty, int index) {
     return Container(
       width: 76,
-      height: 32,
+      height: 28, // Compact
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: color.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -2645,3 +2840,29 @@ class _StoreScreenState extends State<StoreScreen> {
     ); // Hero
   }
 } // End of State class
+
+class _DashedLinePainter extends CustomPainter {
+  final Color color;
+  _DashedLinePainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    double dashWidth = 4, dashSpace = 3, startX = 0;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    while (startX < size.width) {
+      canvas.drawLine(
+        Offset(startX, size.height / 2),
+        Offset(startX + dashWidth, size.height / 2),
+        paint,
+      );
+      startX += dashWidth + dashSpace;
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
+}

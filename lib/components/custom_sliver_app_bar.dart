@@ -11,6 +11,7 @@ import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/components/language_selector.dart';
 
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:exanor/screens/global_search_screen.dart';
 import 'package:exanor/components/home_screen_skeleton.dart';
 
@@ -216,25 +217,43 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
                   : [
                       _hexToColor(
                         FirebaseRemoteConfigService.getThemeGradientLightStart(),
-                      ).withOpacity(0.12),
-                      Colors.white,
+                      ).withOpacity(
+                        0.35,
+                      ), // Increased opacity for "immersive light"
+                      _hexToColor(
+                        FirebaseRemoteConfigService.getThemeGradientLightStart(),
+                      ).withOpacity(0.0), // Fades beautifully to transparent
                     ],
               stops: const [0.0, 1.0],
             ),
           ),
-          padding: EdgeInsets.only(top: topPadding),
-          child: StoreCategoriesWidget(
-            onCategorySelected: onCategorySelected,
-            selectedCategoryId: selectedCategoryId,
-            shrinkPercentage: shrinkPercentage,
-            userImgUrl: userImgUrl,
-            userImage: userImage,
-            userName: userName,
-            isLoadingUserData: isLoadingUserData,
-            onUserDataUpdated: onUserDataUpdated,
-            addressTitle: addressTitle,
-            addressSubtitle: addressSubtitle,
-            onAddressUpdated: onAddressUpdated,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(12),
+                  ),
+                  child: AnimatedSnowfall(isDark: isDarkMode),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.only(top: topPadding),
+                child: StoreCategoriesWidget(
+                  onCategorySelected: onCategorySelected,
+                  selectedCategoryId: selectedCategoryId,
+                  shrinkPercentage: shrinkPercentage,
+                  userImgUrl: userImgUrl,
+                  userImage: userImage,
+                  userName: userName,
+                  isLoadingUserData: isLoadingUserData,
+                  onUserDataUpdated: onUserDataUpdated,
+                  addressTitle: addressTitle,
+                  addressSubtitle: addressSubtitle,
+                  onAddressUpdated: onAddressUpdated,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -541,51 +560,46 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                                               ),
                                             ],
                                           ),
-                                          child: CircleAvatar(
-                                            backgroundColor:
-                                                theme.colorScheme.primary,
-                                            backgroundImage:
-                                                (widget.userImage != null &&
-                                                        widget
-                                                            .userImage!
-                                                            .isNotEmpty) ||
-                                                    (widget.userImgUrl !=
+                                          child: Builder(
+                                            builder: (context) {
+                                              final imageUrl =
+                                                  (widget.userImage != null &&
+                                                      widget
+                                                          .userImage!
+                                                          .isNotEmpty)
+                                                  ? widget.userImage
+                                                  : (widget.userImgUrl !=
                                                             null &&
                                                         widget
                                                             .userImgUrl!
                                                             .isNotEmpty)
-                                                ? NetworkImage(
-                                                    widget.userImage ??
-                                                        widget.userImgUrl!,
-                                                  )
-                                                : null,
-                                            child:
-                                                (widget.userImage == null ||
-                                                        widget
-                                                            .userImage!
-                                                            .isEmpty) &&
-                                                    (widget.userImgUrl ==
-                                                            null ||
-                                                        widget
-                                                            .userImgUrl!
-                                                            .isEmpty)
-                                                ? TranslatedText(
-                                                    widget
-                                                                .userName
-                                                                ?.isNotEmpty ==
-                                                            true
-                                                        ? widget.userName!
-                                                              .substring(0, 1)
-                                                              .toUpperCase()
-                                                        : 'U',
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 16,
-                                                    ),
-                                                  )
-                                                : null,
+                                                  ? widget.userImgUrl
+                                                  : null;
+
+                                              return CircleAvatar(
+                                                backgroundColor:
+                                                    theme.colorScheme.primary,
+                                                backgroundImage:
+                                                    imageUrl != null
+                                                    ? NetworkImage(imageUrl)
+                                                    : null,
+                                                onBackgroundImageError:
+                                                    imageUrl != null
+                                                    ? (exception, stackTrace) {
+                                                        debugPrint(
+                                                          'Profile image failed to load: $exception',
+                                                        );
+                                                      }
+                                                    : null,
+                                                child: imageUrl == null
+                                                    ? const Icon(
+                                                        Icons.person_rounded,
+                                                        color: Colors.white,
+                                                        size: 24,
+                                                      )
+                                                    : null,
+                                              );
+                                            },
                                           ),
                                         ),
                                 ),
@@ -602,110 +616,125 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                 // The gap is now enforced by the Search Bar's top padding or the layout above
                 const SizedBox(height: 10),
 
-                // 2. Search Bar (Full Width)
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const GlobalSearchScreen(),
-                      ),
-                    );
-                  },
-                  child: ClipRRect(
+                // 2. Search Bar (Full Width) - Wrapped with shadow
+                Container(
+                  decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: isDarkMode
-                              ? Colors.black.withOpacity(0.25)
-                              : Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: isDarkMode
-                                ? Colors.white.withOpacity(0.1)
-                                : Colors.white.withOpacity(0.5),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: isDarkMode
-                                  ? Colors.black.withOpacity(0.1)
-                                  : const Color(
-                                      0xFF1F4C6B,
-                                    ).withOpacity(0.08), // Subtle bluish shadow
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: isDarkMode
+                            ? Colors.black.withOpacity(0.6)
+                            : const Color(0xFF1F4C6B).withOpacity(0.12),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GlobalSearchScreen(),
                         ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 16),
-                            Icon(
-                              Icons.search,
+                      );
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          height: 54, // Increased height
+                          decoration: BoxDecoration(
+                            color: isDarkMode
+                                ? Colors.black.withOpacity(0.25)
+                                : Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
                               color: isDarkMode
-                                  ? Colors.grey[300]!.withOpacity(0.8)
-                                  : const Color(
-                                      0xFF1F4C6B,
-                                    ).withOpacity(0.6), // Use brand color
-                              size: 24,
+                                  ? Colors.white.withOpacity(0.1)
+                                  : Colors.white.withOpacity(0.5),
+                              width: 1,
                             ),
-                            const SizedBox(width: 12),
-                            TranslatedText(
-                              'Search "Exanor"',
-                              style: theme.textTheme.bodyMedium?.copyWith(
+                          ),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 16),
+                              Icon(
+                                Icons.search,
                                 color: isDarkMode
-                                    ? Colors.grey[300]!.withOpacity(0.6)
-                                    : const Color(0xFF1F4C6B).withOpacity(0.5),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
+                                    ? Colors
+                                          .white // "Darker" perception via brightness/full opacity
+                                    : const Color(
+                                        0xFF1F4C6B,
+                                      ), // Full opacity for darker, cleaner look
+                                size: 28, // Bigger icon
                               ),
-                            ),
-                            const Spacer(),
-                            GestureDetector(
-                              onTap: () async {
-                                final result =
-                                    await showModalBottomSheet<String>(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      backgroundColor: Colors.transparent,
-                                      builder: (context) =>
-                                          const VoiceSearchSheet(),
-                                    );
-                                if (result != null && result.isNotEmpty) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => GlobalSearchScreen(
-                                        initialQuery: result,
+                              const SizedBox(width: 12),
+                              TranslatedText(
+                                'Search \"Exanor\"',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: isDarkMode
+                                      ? Colors.grey[300]!.withOpacity(0.6)
+                                      : const Color(
+                                          0xFF1F4C6B,
+                                        ).withOpacity(0.5),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: () async {
+                                  final result =
+                                      await showModalBottomSheet<String>(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        builder: (context) =>
+                                            const VoiceSearchSheet(),
+                                      );
+                                  if (result != null && result.isNotEmpty) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            GlobalSearchScreen(
+                                              initialQuery: result,
+                                            ),
                                       ),
-                                    ),
-                                  );
-                                }
-                              },
-                              child: Container(
-                                height: 40,
-                                width: 40,
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isDarkMode
-                                      ? Colors.white.withOpacity(0.1)
-                                      : Colors.white.withOpacity(0.4),
-                                ),
-                                child: Icon(
-                                  Icons.mic_rounded,
-                                  color: isDarkMode
-                                      ? Colors.white.withOpacity(0.9)
-                                      : const Color(0xFF1F4C6B),
-                                  size: 22,
+                                    );
+                                  }
+                                },
+                                child: Container(
+                                  height: 40,
+                                  width: 40,
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: isDarkMode
+                                        ? Colors.white.withOpacity(0.1)
+                                        : Colors.white.withOpacity(0.4),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.15),
+                                        blurRadius: 6,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    Icons.mic_rounded,
+                                    color: isDarkMode
+                                        ? Colors.white.withOpacity(0.9)
+                                        : const Color(0xFF1F4C6B),
+                                    size: 22,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -981,4 +1010,244 @@ Color _hexToColor(String hex) {
   } catch (e) {
     return Colors.transparent;
   }
+}
+
+class Snowflake {
+  double x;
+  double y;
+  double radius;
+  double speed;
+  double rotation;
+  double rotationSpeed;
+  double opacity;
+
+  Snowflake({
+    required this.x,
+    required this.y,
+    required this.radius,
+    required this.speed,
+    required this.rotation,
+    required this.rotationSpeed,
+    required this.opacity,
+  });
+}
+
+class AnimatedSnowfall extends StatefulWidget {
+  final bool isDark;
+
+  const AnimatedSnowfall({super.key, required this.isDark});
+
+  @override
+  State<AnimatedSnowfall> createState() => _AnimatedSnowfallState();
+}
+
+class _AnimatedSnowfallState extends State<AnimatedSnowfall>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  final List<Snowflake> _snowflakes = [];
+  final math.Random _random = math.Random();
+  // removed unused _lastSize
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      // Driving the animation loop
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _initSnowflakes(Size size) {
+    _snowflakes.clear();
+    // Create ~20 flakes for good density
+    for (int i = 0; i < 20; i++) {
+      _snowflakes.add(_createSnowflake(size, initial: true));
+    }
+  }
+
+  Snowflake _createSnowflake(Size size, {bool initial = false}) {
+    // Random radius: 4 to 10
+    double radius = _random.nextDouble() * 6 + 4;
+
+    // Speed: 0.2 to 1.0
+    double speed = _random.nextDouble() * 0.8 + 0.2;
+
+    double x;
+    double y;
+    int attempts = 0;
+
+    // Attempt to find a position not too close to others
+    do {
+      x = _random.nextDouble() * size.width;
+      if (initial) {
+        y = _random.nextDouble() * size.height;
+      } else {
+        // Start above the screen
+        y = -radius * 2 - _random.nextDouble() * 50;
+      }
+
+      bool tooClose = false;
+      for (var s in _snowflakes) {
+        final dist = (Offset(s.x, s.y) - Offset(x, y)).distance;
+        if (dist < radius * 5) {
+          // Ensure decent spacing
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) break;
+      attempts++;
+    } while (attempts < 10);
+
+    return Snowflake(
+      x: x,
+      y: y,
+      radius: radius,
+      speed: speed,
+      rotation: _random.nextDouble() * 2 * math.pi,
+      rotationSpeed: (_random.nextDouble() - 0.5) * 0.05,
+      opacity: _random.nextDouble() * 0.5 + 0.2, // 0.2 to 0.7
+    );
+  }
+
+  void _updateSnowflakes(Size size) {
+    if (_snowflakes.isEmpty) {
+      _initSnowflakes(size);
+      return;
+    }
+
+    for (var s in _snowflakes) {
+      s.y += s.speed;
+      s.rotation += s.rotationSpeed;
+      s.x += math.sin(s.y * 0.02) * 0.3; // Gentle sway
+
+      // Reset if below screen
+      if (s.y > size.height + s.radius * 2) {
+        var newFlake = _createSnowflake(size, initial: false);
+        s.x = newFlake.x;
+        s.y = newFlake.y;
+        s.speed = newFlake.speed;
+        s.radius = newFlake.radius;
+        s.opacity = newFlake.opacity;
+        s.rotation = newFlake.rotation;
+        s.rotationSpeed = newFlake.rotationSpeed;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = Size(constraints.maxWidth, constraints.maxHeight);
+
+        // Fix: Only init if empty. Do NOT re-init on size change (scrolling).
+        if (_snowflakes.isEmpty && size.width > 0 && size.height > 0) {
+          _initSnowflakes(size);
+        }
+
+        return AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            _updateSnowflakes(size);
+            return CustomPaint(
+              painter: SnowflakePainter(
+                snowflakes: _snowflakes,
+                isDark: widget.isDark,
+              ),
+              size: size,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class SnowflakePainter extends CustomPainter {
+  final List<Snowflake> snowflakes;
+  final bool isDark;
+
+  SnowflakePainter({required this.snowflakes, required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+
+    for (var s in snowflakes) {
+      paint.color = (isDark ? Colors.white : Colors.white).withOpacity(
+        (isDark ? 0.3 : 0.6) *
+            s.opacity, // Adjust base opacity by flake opacity
+      );
+      // Use flake's radius
+      _drawDetailedSnowflake(
+        canvas,
+        Offset(s.x, s.y),
+        s.radius,
+        paint,
+        s.rotation,
+      );
+    }
+  }
+
+  void _drawDetailedSnowflake(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Paint paint,
+    double rotation,
+  ) {
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(rotation);
+
+    for (int i = 0; i < 6; i++) {
+      _drawBranch(canvas, radius, paint);
+      canvas.rotate(math.pi / 3);
+    }
+    canvas.restore();
+  }
+
+  void _drawBranch(Canvas canvas, double length, Paint paint) {
+    canvas.drawLine(Offset.zero, Offset(0, -length), paint);
+
+    // V-shapes
+    double v1Pos = length * 0.45;
+    double v1Len = length * 0.3;
+    _drawV(canvas, 0, -v1Pos, v1Len, paint);
+
+    double v2Pos = length * 0.75;
+    double v2Len = length * 0.25;
+    _drawV(canvas, 0, -v2Pos, v2Len, paint);
+  }
+
+  void _drawV(Canvas canvas, double x, double y, double len, Paint paint) {
+    canvas.save();
+    canvas.translate(x, y);
+
+    canvas.save();
+    canvas.rotate(-math.pi / 3.5);
+    canvas.drawLine(Offset.zero, Offset(0, -len), paint);
+    canvas.restore();
+
+    canvas.save();
+    canvas.rotate(math.pi / 3.5);
+    canvas.drawLine(Offset.zero, Offset(0, -len), paint);
+    canvas.restore();
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

@@ -18,7 +18,7 @@ class HomeScreenSkeleton extends StatelessWidget {
     final containerColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     return SliverPadding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 110),
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 24, bottom: 20),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
           return Container(
@@ -28,12 +28,16 @@ class HomeScreenSkeleton extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: isDark
-                      ? Colors.black.withOpacity(0.4)
-                      : const Color(0xFF1F4C6B).withOpacity(0.12),
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
                   blurRadius: 24,
-                  offset: const Offset(0, 12),
-                  spreadRadius: -4,
+                  offset: const Offset(0, 8),
+                  spreadRadius: 0,
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                  spreadRadius: 0,
                 ),
               ],
             ),
@@ -63,11 +67,18 @@ class HomeScreenSkeleton extends StatelessWidget {
                         top: 12,
                         left: 12,
                         child: Container(
-                          width: 60,
-                          height: 20,
+                          padding: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
-                            color: baseColor,
-                            borderRadius: BorderRadius.circular(8),
+                            color: containerColor, // Border effect
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Container(
+                            width: 60,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: baseColor,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
@@ -76,11 +87,18 @@ class HomeScreenSkeleton extends StatelessWidget {
                         top: 12,
                         right: 12,
                         child: Container(
-                          width: 32,
-                          height: 32,
+                          padding: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
-                            color: baseColor,
+                            color: containerColor, // Border effect
                             shape: BoxShape.circle,
+                          ),
+                          child: Container(
+                            width: 30,
+                            height: 30,
+                            decoration: BoxDecoration(
+                              color: baseColor,
+                              shape: BoxShape.circle,
+                            ),
                           ),
                         ),
                       ),
@@ -89,11 +107,18 @@ class HomeScreenSkeleton extends StatelessWidget {
                         bottom: 12,
                         left: 12,
                         child: Container(
-                          width: 100,
-                          height: 24,
+                          padding: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
-                            color: baseColor,
-                            borderRadius: BorderRadius.circular(12),
+                            color: containerColor, // Border effect
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Container(
+                            width: 100,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: baseColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ),
@@ -113,11 +138,20 @@ class HomeScreenSkeleton extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Title
+                        // Title - 2 lines for realism
                         Container(
                           width: double.infinity,
-                          height: 20,
-                          margin: const EdgeInsets.only(right: 60),
+                          height: 18,
+                          margin: const EdgeInsets.only(right: 40),
+                          decoration: BoxDecoration(
+                            color: baseColor,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: 180,
+                          height: 18,
                           decoration: BoxDecoration(
                             color: baseColor,
                             borderRadius: BorderRadius.circular(4),

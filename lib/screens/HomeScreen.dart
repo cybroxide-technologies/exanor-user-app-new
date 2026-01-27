@@ -60,9 +60,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadAddressData() async {
+    print(
+      '🔄 Home: _loadAddressData called - refreshing address from SharedPreferences',
+    );
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedAddressId = prefs.getString('saved_address_id');
+      final savedTitle = prefs.getString('address_title');
+      final savedSubtitle = prefs.getString('address_subtitle');
+
+      print('📍 Home: Loaded from SharedPreferences:');
+      print('   ID: $savedAddressId');
+      print('   Title: $savedTitle');
+      print('   Subtitle: $savedSubtitle');
 
       setState(() {
         if (savedAddressId != null && savedAddressId.isNotEmpty) {
@@ -75,6 +85,10 @@ class _HomeScreenState extends State<HomeScreen> {
           // Keep default title/subtitle or set to constants
         }
       });
+
+      print(
+        '✅ Home: State updated - Title: $_addressTitle, Subtitle: $_addressSubtitle',
+      );
 
       // Fetch stores after address is loaded
       // Reset pagination
@@ -280,14 +294,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                // 3. Footer Branding - Classical Minimalist Design
+                // 3. Footer Branding - Integrated Flow Design
                 SliverToBoxAdapter(
                   child: Container(
-                    height: 320,
-                    margin: const EdgeInsets.only(top: 40),
+                    height: 280,
+                    margin: const EdgeInsets.only(top: 20),
                     child: Stack(
+                      alignment: Alignment.center,
                       children: [
-                        // 1. Background "Silk" Art
+                        // 1. "EXANOR" Watermark (Integrated in background)
+                        Positioned(
+                          bottom: 40,
+                          child: Text(
+                            "EXANOR",
+                            style: TextStyle(
+                              fontFamily: 'sans-serif',
+                              fontSize: 72,
+                              fontWeight: FontWeight.w900,
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.04,
+                              ),
+                              letterSpacing: 16,
+                            ),
+                          ),
+                        ),
+
+                        // 2. Waves (Overlaying the text)
                         Positioned.fill(
                           child: ClipRect(
                             child: CustomPaint(
@@ -299,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
-                        // 2. Gradient Fade (Top) - Seamless blend
+                        // 3. Gradient Fade (Top)
                         Positioned(
                           top: 0,
                           left: 0,
@@ -319,57 +351,37 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
-                        // 3. Content
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            // "Classical" Tagline
-                            Text(
-                              "India's last minute app",
-                              style: TextStyle(
-                                fontFamily: 'serif', // Fallback to system serif
-                                fontSize: 22,
-                                height: 1.0,
-                                fontStyle: FontStyle.italic,
-                                fontWeight: FontWeight.w500,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.8,
-                                ),
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            // Minimal Separator
-                            Container(
-                              width: 2,
-                              height: 24,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.2,
-                              ),
-                            ),
-
-                            const Spacer(),
-
-                            // "EXANOR" Anchor
-                            // Using a very modern, wide stance for the brand name
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 20.0),
-                              child: Text(
-                                "EXANOR",
+                        // 4. Tagline "Go with the flow" - Repositioned to Top-Right
+                        Positioned(
+                          top: 40,
+                          right: 24,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                "Go with the flow",
                                 style: TextStyle(
-                                  fontFamily: 'sans-serif',
-                                  fontSize: 56,
-                                  fontWeight: FontWeight.w900,
+                                  fontFamily: 'serif',
+                                  fontSize: 16,
+                                  fontStyle: FontStyle.italic,
+                                  fontWeight: FontWeight.w500,
                                   color: theme.colorScheme.onSurface
-                                      .withOpacity(0.05),
-                                  letterSpacing: 14,
-                                  height: 1,
+                                      .withOpacity(0.4),
+                                  letterSpacing: 0.5,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Container(
+                                width: 20,
+                                height: 1.5,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -407,23 +419,19 @@ class _HomeScreenState extends State<HomeScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(
-          20,
-        ), // Slightly reduced from 24 for tighter feel
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.4)
-                : const Color(0xFF1F4C6B).withOpacity(0.12),
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
             blurRadius: 24,
-            offset: const Offset(0, 12),
-            spreadRadius: -4,
+            offset: const Offset(0, 8),
+            spreadRadius: 0,
           ),
           BoxShadow(
-            color: isDark ? Colors.white.withOpacity(0.02) : Colors.white,
-            blurRadius: 0,
-            offset: const Offset(0, 0),
-            spreadRadius: 0, // Inner highlight simulated
+            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+            spreadRadius: 0,
           ),
         ],
       ),
@@ -874,7 +882,7 @@ class _SilkWavePainter extends CustomPainter {
 
     final path = Path();
 
-    // Draw 3 layers of "silk"
+    // Draw 5 layers of "silk" for deeper effect
     _drawWave(
       canvas,
       size,
@@ -889,7 +897,16 @@ class _SilkWavePainter extends CustomPainter {
       size,
       paint,
       path,
-      offset: 50,
+      offset: 30, // Tighter spacing
+      amplitude: 25,
+      frequency: 0.010,
+    );
+    _drawWave(
+      canvas,
+      size,
+      paint,
+      path,
+      offset: 60,
       amplitude: 30,
       frequency: 0.008,
     );
@@ -898,9 +915,18 @@ class _SilkWavePainter extends CustomPainter {
       size,
       paint,
       path,
-      offset: 100,
+      offset: 90,
+      amplitude: 20,
+      frequency: 0.014,
+    );
+    _drawWave(
+      canvas,
+      size,
+      paint,
+      path,
+      offset: 120, // Lower wave
       amplitude: 15,
-      frequency: 0.015,
+      frequency: 0.018,
     );
   }
 

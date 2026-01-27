@@ -153,10 +153,10 @@ class _PeelButtonState extends State<PeelButton> with TickerProviderStateMixin {
               boxShadow: widget.isEnabled
                   ? [
                       BoxShadow(
-                        color: primaryColor.withOpacity(0.3),
+                        color: primaryColor.withOpacity(0.2),
                         spreadRadius: 0,
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
+                        blurRadius: 6,
+                        offset: const Offset(0, 4),
                       ),
                     ]
                   : [],
@@ -210,46 +210,49 @@ class _PeelButtonState extends State<PeelButton> with TickerProviderStateMixin {
   Widget _buildContent() {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 300),
-      child: Row(
+      child: FittedBox(
         key: ValueKey(widget.text + (widget.price ?? "")),
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.shopping_bag_outlined,
-            color: widget.isEnabled
-                ? Colors.white.withOpacity(0.9)
-                : Colors.grey[500],
-            size: widget.height > 40 ? 18 : 14,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            widget.text,
-            style: TextStyle(
-              color: widget.isEnabled ? Colors.white : Colors.grey[600],
-              fontSize: widget.height > 40 ? 15 : 12,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.shopping_bag_outlined,
+              color: widget.isEnabled
+                  ? Colors.white.withOpacity(0.9)
+                  : Colors.grey[500],
+              size: widget.height > 40 ? 18 : 14,
             ),
-          ),
-          if (widget.price != null) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Container(
-                height: 12,
-                width: 1,
-                color: Colors.white.withOpacity(0.3),
-              ),
-            ),
+            const SizedBox(width: 8),
             Text(
-              widget.price!,
+              widget.text,
               style: TextStyle(
-                color: Colors.white,
+                color: widget.isEnabled ? Colors.white : Colors.grey[600],
                 fontSize: widget.height > 40 ? 15 : 12,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
               ),
             ),
+            if (widget.price != null) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Container(
+                  height: 12,
+                  width: 1,
+                  color: Colors.white.withOpacity(0.3),
+                ),
+              ),
+              Text(
+                widget.price!,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: widget.height > 40 ? 15 : 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

@@ -488,8 +488,37 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
               border: Border(top: BorderSide(color: Colors.grey[50]!)),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Price Summary Row if needed, or integrated into button
+                // Price Display - Separate from button
+                if (_isAvailable && _currentPrice > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Total Price',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        Text(
+                          '₹${_currentPrice.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1A1A1A),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Quantity and Add to Cart Button Row
                 Row(
                   children: [
                     // Quantity Stepper - Linear Design
@@ -528,14 +557,12 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
                     ),
                     const SizedBox(width: 16),
 
-                    // Add Button using PeelButton
+                    // Add Button using PeelButton (Price removed)
                     Expanded(
                       child: PeelButton(
                         onTap: _addToCart,
                         text: !_isAvailable ? 'UNAVAILABLE' : 'ADD TO CART',
-                        price: _isAvailable
-                            ? '₹${_currentPrice.toStringAsFixed(0)}' // Removed decimals for cleaner look if .00
-                            : null,
+                        price: null, // Price is now displayed separately above
                         isLoading: _isAdding || _isValidating,
                         isEnabled: _isAvailable && !_isAdding && !_isValidating,
                         color: theme.primaryColor,
@@ -565,7 +592,7 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
         onTap: isEnabled ? onTap : null,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          width: 48,
+          width: 40,
           height: 56,
           alignment: Alignment.center,
           child: Icon(

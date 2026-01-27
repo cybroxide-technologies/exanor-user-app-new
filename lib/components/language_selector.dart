@@ -527,30 +527,17 @@ class _LanguageSelectorState extends State<LanguageSelector>
           ),
           const SizedBox(height: 24),
 
-          // Title section
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 4,
+                height: 32,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      theme.colorScheme.primary,
-                      theme.colorScheme.primary.withOpacity(0.7),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.colorScheme.primary.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                child: Icon(Icons.language, color: Colors.white, size: 28),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,52 +546,35 @@ class _LanguageSelectorState extends State<LanguageSelector>
                       widget.showOnlyIndianLanguages
                           ? 'Indian Languages'
                           : 'Choose Language',
-                      style: theme.textTheme.headlineSmall?.copyWith(
+                      style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: isDarkMode ? Colors.white : Colors.black87,
-                        letterSpacing: -0.5,
+                        height: 1.0,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       'Translate your entire app experience',
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: theme.textTheme.bodySmall?.copyWith(
                         color: isDarkMode
-                            ? Colors.white.withOpacity(0.7)
-                            : Colors.black.withOpacity(0.6),
+                            ? Colors.white.withOpacity(0.6)
+                            : Colors.black.withOpacity(0.5),
+                        fontWeight: FontWeight.w500,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildHeaderButton(
-                    icon: _showHelperTools
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    onPressed: () {
-                      setState(() {
-                        _showHelperTools = !_showHelperTools;
-                      });
-                      HapticFeedback.lightImpact();
-                    },
-                    tooltip: _showHelperTools
-                        ? 'Hide Tools'
-                        : 'Show Helper Tools',
-                    theme: theme,
-                    isDarkMode: isDarkMode,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildHeaderButton(
-                    icon: Icons.close,
-                    onPressed: () => Navigator.of(context).pop(),
-                    tooltip: 'Close',
-                    theme: theme,
-                    isDarkMode: isDarkMode,
-                  ),
-                ],
+              _buildHeaderButton(
+                icon: Icons.close_rounded,
+                onPressed: () => Navigator.of(context).pop(),
+                tooltip: 'Close',
+                theme: theme,
+                isDarkMode: isDarkMode,
               ),
             ],
           ),
@@ -654,62 +624,94 @@ class _LanguageSelectorState extends State<LanguageSelector>
   Widget _buildSearchSection(ThemeData theme, bool isDarkMode) {
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: isDarkMode
-              ? Colors.white.withOpacity(0.08)
-              : Colors.black.withOpacity(0.03),
-          border: Border.all(
-            color: isDarkMode
-                ? Colors.white.withOpacity(0.1)
-                : Colors.black.withOpacity(0.05),
-          ),
-        ),
-        child: TextField(
-          controller: _searchController,
-          onChanged: _filterLanguages,
-          style: TextStyle(
-            color: isDarkMode ? Colors.white : Colors.black87,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-          decoration: InputDecoration(
-            hintText: widget.searchHint,
-            hintStyle: TextStyle(
-              color: isDarkMode
-                  ? Colors.white.withOpacity(0.4)
-                  : Colors.black.withOpacity(0.4),
-              fontSize: 16,
-            ),
-            prefixIcon: Icon(
-              Icons.search_rounded,
-              color: theme.colorScheme.primary.withOpacity(0.7),
-              size: 24,
-            ),
-            suffixIcon: _searchController.text.isNotEmpty
-                ? GestureDetector(
-                    onTap: () {
-                      _searchController.clear();
-                      _filterLanguages('');
-                    },
-                    child: Icon(
-                      Icons.close_rounded,
+      child: Row(
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? Colors.black.withOpacity(0.3)
+                        : Colors.grey.withOpacity(
+                            0.05,
+                          ), // Very transparent background
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
                       color: isDarkMode
-                          ? Colors.white.withOpacity(0.5)
-                          : Colors.black.withOpacity(0.5),
-                      size: 20,
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.03), // Subtle border
                     ),
-                  )
-                : null,
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 16,
+                    // Removed heavy shadow
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: _filterLanguages,
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.white : Colors.black87,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: widget.searchHint,
+                      hintStyle: TextStyle(
+                        color: isDarkMode
+                            ? Colors.white.withOpacity(0.4)
+                            : const Color(0xFF1F4C6B).withOpacity(0.5),
+                        fontSize: 16,
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search_rounded,
+                        color: isDarkMode
+                            ? Colors.white.withOpacity(0.6)
+                            : const Color(0xFF1F4C6B).withOpacity(0.6),
+                        size: 24,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? GestureDetector(
+                              onTap: () {
+                                _searchController.clear();
+                                _filterLanguages('');
+                              },
+                              child: Icon(
+                                Icons.close_rounded,
+                                color: isDarkMode
+                                    ? Colors.white.withOpacity(0.5)
+                                    : Colors.black.withOpacity(0.5),
+                                size: 20,
+                              ),
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ),
             ),
-            isDense: true,
           ),
-        ),
+          const SizedBox(width: 12),
+          _buildHeaderButton(
+            icon: _showHelperTools
+                ? Icons.keyboard_arrow_up
+                : Icons.keyboard_arrow_down,
+            onPressed: () {
+              setState(() {
+                _showHelperTools = !_showHelperTools;
+              });
+              HapticFeedback.lightImpact();
+            },
+            tooltip: _showHelperTools ? 'Hide Tools' : 'Show Helper Tools',
+            theme: theme,
+            isDarkMode: isDarkMode,
+          ),
+        ],
       ),
     );
   }
@@ -988,9 +990,18 @@ class _LanguageSelectorState extends State<LanguageSelector>
                 if (downloadProgress != null)
                   _buildProgressIndicator(downloadProgress, theme)
                 else if (isCurrentLanguage)
-                  Icon(
-                    Icons.check_circle_rounded,
-                    color: theme.colorScheme.primary,
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                    ),
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      color: theme.colorScheme.primary,
+                      size: 20,
+                    ),
                   )
                 else if (isDownloaded)
                   Container(

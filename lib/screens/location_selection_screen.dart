@@ -835,140 +835,149 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                 top: MediaQuery.of(context).padding.top + 10,
                 left: 16,
                 right: 16,
-                child: Row(
+                child: Column(
                   children: [
-                    // Back Button
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.colorScheme.shadow.withOpacity(0.1),
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.arrow_back,
-                          color: theme.colorScheme.onSurface,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-
-                    SizedBox(width: 12),
-
-                    // Search Bar
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surface,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.colorScheme.shadow.withOpacity(0.1),
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: TextField(
-                                controller: _searchController,
-                                onChanged: (value) {
-                                  // Cancel previous timer
-                                  _searchTimer?.cancel();
-
-                                  // Set new timer for debounced search
-                                  _searchTimer = Timer(
-                                    Duration(milliseconds: 500),
-                                    () {
-                                      _searchPlaces(value);
-                                    },
-                                  );
-
-                                  // Update state immediately for address card visibility
-                                  setState(() {});
-                                },
-                                onSubmitted: (value) {
-                                  _searchTimer?.cancel();
-                                  if (value.isNotEmpty) {
-                                    _searchPlaces(value);
-                                  }
-                                },
-                                onTap: () {
-                                  // Show suggestions when tapping on search bar
-                                  if (_searchController.text.isNotEmpty &&
-                                      _searchSuggestions.isNotEmpty) {
-                                    setState(() {
-                                      _showSuggestions = true;
-                                    });
-                                  }
-                                },
-                                decoration: InputDecoration(
-                                  hintText: 'Search places, areas or addresses',
-                                  hintStyle: TextStyle(
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(0.6),
-                                    fontSize: 16,
-                                  ),
-                                  border: InputBorder.none,
-                                  suffixIcon: _isSearching
-                                      ? Padding(
-                                          padding: EdgeInsets.all(12),
-                                          child: SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                    theme.colorScheme.primary,
-                                                  ),
-                                            ),
-                                          ),
-                                        )
-                                      : null,
+                    Row(
+                      children: [
+                        // Back Button
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 4),
                                 ),
-                              ),
+                              ],
                             ),
-                            if (!_isSearching)
-                              Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 12),
-                                child: GestureDetector(
-                                  onTap: () {
-                                    if (_searchController.text.isNotEmpty) {
-                                      // Clear search
+                            child: Icon(
+                              Icons.arrow_back_rounded,
+                              color: theme.colorScheme.onSurface,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(width: 12),
+
+                        // Search Bar
+                        Expanded(
+                          child: Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 8,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                SizedBox(width: 16),
+                                Icon(
+                                  Icons.search_rounded,
+                                  color: theme.colorScheme.primary,
+                                  size: 22,
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    onChanged: (value) {
+                                      _searchTimer?.cancel();
+                                      _searchTimer = Timer(
+                                        Duration(milliseconds: 500),
+                                        () {
+                                          _searchPlaces(value);
+                                        },
+                                      );
+                                      setState(() {});
+                                    },
+                                    onSubmitted: (value) {
+                                      _searchTimer?.cancel();
+                                      if (value.isNotEmpty) {
+                                        _searchPlaces(value);
+                                      }
+                                    },
+                                    onTap: () {
+                                      if (_searchController.text.isNotEmpty &&
+                                          _searchSuggestions.isNotEmpty) {
+                                        setState(() {
+                                          _showSuggestions = true;
+                                        });
+                                      }
+                                    },
+                                    decoration: InputDecoration(
+                                      hintText:
+                                          'Search for area, street name...',
+                                      hintStyle: TextStyle(
+                                        color: theme.colorScheme.onSurface
+                                            .withOpacity(0.5),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                      isDense: true,
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                                if (_isSearching)
+                                  Padding(
+                                    padding: EdgeInsets.only(right: 16),
+                                    child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              theme.colorScheme.primary,
+                                            ),
+                                      ),
+                                    ),
+                                  )
+                                else if (_searchController.text.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () {
                                       _searchController.clear();
                                       setState(() {
                                         _searchSuggestions = [];
                                         _showSuggestions = false;
                                       });
-                                    }
-                                  },
-                                  child: Icon(
-                                    _searchController.text.isNotEmpty
-                                        ? Icons.clear
-                                        : Icons.search,
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(0.6),
-                                    size: 24,
+                                    },
+                                    child: Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                      ),
+                                      child: Icon(
+                                        Icons.close_rounded,
+                                        color: theme.colorScheme.onSurface
+                                            .withOpacity(0.5),
+                                        size: 20,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                          ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -977,81 +986,114 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
               // Search Suggestions Overlay
               if (_showSuggestions && _searchSuggestions.isNotEmpty)
                 Positioned(
-                  top: 120, // Below the search bar
+                  top: MediaQuery.of(context).padding.top + 70,
                   left: 16,
                   right: 16,
                   child: Container(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.4,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.colorScheme.shadow.withOpacity(0.15),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 16,
+                          offset: Offset(0, 8),
                         ),
                       ],
                     ),
-                    child: Column(
-                      children: _searchSuggestions.map((suggestion) {
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _selectPlace(suggestion),
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              padding: EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.place,
-                                    color: theme.colorScheme.primary,
-                                    size: 20,
-                                  ),
-                                  SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          suggestion['name'] ?? '',
-                                          style: TextStyle(
-                                            color: theme.colorScheme.onSurface,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        if (suggestion['formatted_address'] !=
-                                                null &&
-                                            suggestion['formatted_address']
-                                                .isNotEmpty)
-                                          Padding(
-                                            padding: EdgeInsets.only(top: 4),
-                                            child: Text(
-                                              suggestion['formatted_address'],
-                                              style: TextStyle(
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withOpacity(0.6),
-                                                fontSize: 14,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                      ],
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: _searchSuggestions.length,
+                        separatorBuilder: (context, index) => Divider(
+                          height: 1,
+                          thickness: 0.5,
+                          color: theme.colorScheme.outline.withOpacity(0.1),
+                        ),
+                        itemBuilder: (context, index) {
+                          final suggestion = _searchSuggestions[index];
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _selectPlace(suggestion),
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: 16,
+                                  horizontal: 16,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary
+                                            .withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.location_on_rounded,
+                                        color: theme.colorScheme.primary,
+                                        size: 20,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            suggestion['name'] ?? '',
+                                            style: TextStyle(
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (suggestion['formatted_address'] !=
+                                                  null &&
+                                              suggestion['formatted_address']
+                                                  .isNotEmpty)
+                                            Padding(
+                                              padding: EdgeInsets.only(top: 4),
+                                              child: Text(
+                                                suggestion['formatted_address'],
+                                                style: TextStyle(
+                                                  color: theme
+                                                      .colorScheme
+                                                      .onSurface
+                                                      .withOpacity(0.6),
+                                                  fontSize: 13,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.north_west_rounded,
+                                      color: theme.colorScheme.onSurface
+                                          .withOpacity(0.3),
+                                      size: 16,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      }).toList(),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -1121,27 +1163,26 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
               // Current Location Button
               if (_shouldShowAddressCard())
                 Positioned(
-                  bottom: 180,
+                  bottom: 250,
                   right: 16,
                   child: Container(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(30),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.colorScheme.shadow.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
                         ),
                       ],
                     ),
                     child: Material(
                       color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(30),
                       child: InkWell(
                         onTap: () {
                           if (_userPosition != null) {
-                            // Use actual user location if available
                             LatLng userLatLng = LatLng(
                               _userPosition!.latitude,
                               _userPosition!.longitude,
@@ -1163,11 +1204,10 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
 
                             _getAddressFromCoordinates(userLatLng);
                           } else {
-                            // Request location permission again
                             _requestLocationPermissionAndGetLocation();
                           }
                         },
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(30),
                         child: Padding(
                           padding: EdgeInsets.symmetric(
                             horizontal: 16,
@@ -1176,25 +1216,18 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                padding: EdgeInsets.all(4),
-                                child: Icon(
-                                  Icons.my_location,
-                                  color: theme.colorScheme.primary,
-                                  size: 18,
-                                ),
+                              Icon(
+                                Icons.my_location_rounded,
+                                color: theme.colorScheme.primary,
+                                size: 20,
                               ),
                               SizedBox(width: 8),
-                              TranslatedText(
-                                'Current Location',
+                              Text(
+                                "Use Current Location",
                                 style: TextStyle(
                                   color: theme.colorScheme.onSurface,
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
@@ -1208,7 +1241,7 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
               // Floating Action Button for cycling locations
               if (_shouldShowAddressCard())
                 Positioned(
-                  bottom: 240,
+                  bottom: 310,
                   right: 16,
                   child: FloatingActionButton(
                     mini: true,
@@ -1216,14 +1249,16 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                     foregroundColor: theme.colorScheme.primary,
                     onPressed: _changeLocation,
                     elevation: 4,
+                    shape: CircleBorder(),
                     child: Icon(
-                      Icons.refresh,
+                      Icons.refresh_rounded,
                       color: theme.colorScheme.primary,
-                      size: 20,
+                      size: 24,
                     ),
                   ),
                 ),
 
+              // Bottom Location Details Card
               // Bottom Location Details Card
               if (_shouldShowAddressCard())
                 Positioned(
@@ -1234,231 +1269,237 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
                       borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
+                        topLeft: Radius.circular(24),
+                        topRight: Radius.circular(24),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.colorScheme.shadow.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: Offset(0, -2),
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 20,
+                          offset: Offset(0, -5),
                         ),
                       ],
                     ),
-                    child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          TranslatedText(
-                            'Place the pin at exact location',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Handle bar
+                        Center(
+                          child: Container(
+                            margin: EdgeInsets.only(top: 10),
+                            width: 36,
+                            height: 4,
+                            decoration: BoxDecoration(
                               color: theme.colorScheme.onSurface.withOpacity(
-                                0.7,
+                                0.1,
                               ),
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
+                        ),
 
-                          SizedBox(height: 16),
-
-                          Row(
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(20, 16, 20, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _isLoadingAddress
-                                  ? SizedBox(
-                                      width: 24,
-                                      height: 24,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor:
-                                            AlwaysStoppedAnimation<Color>(
-                                              theme.colorScheme.primary,
-                                            ),
-                                      ),
-                                    )
-                                  : Icon(
-                                      Icons.location_on,
-                                      color: theme.colorScheme.primary,
-                                      size: 24,
-                                    ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      selectedLocation,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: theme.colorScheme.onSurface,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      selectedAddress,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: theme.colorScheme.onSurface
-                                            .withOpacity(0.6),
-                                      ),
-                                    ),
-                                    if (_plusCode.isNotEmpty) ...[
-                                      SizedBox(height: 4),
+                              Text(
+                                "Confirm Location",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              SizedBox(height: 16),
+
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  border: Border.all(
+                                    color: theme.colorScheme.outline
+                                        .withOpacity(0.1),
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
                                       Container(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
+                                        padding: EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           color: theme.colorScheme.primary
                                               .withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(
+                                          Icons.location_on_rounded,
+                                          color: theme.colorScheme.primary,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              selectedLocation,
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color:
+                                                    theme.colorScheme.onSurface,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              selectedAddress,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                height: 1.4,
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.6),
+                                              ),
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (_isLoadingAddress)
+                                        SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  theme.colorScheme.primary,
+                                                ),
                                           ),
                                         ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              if (!isCurrentLocation && distanceKm > 0) ...[
+                                SizedBox(height: 12),
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: Colors.amber.withOpacity(0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.info_outline_rounded,
+                                        color: Colors.amber[800],
+                                        size: 18,
+                                      ),
+                                      SizedBox(width: 10),
+                                      Expanded(
                                         child: Text(
-                                          'Plus Code: $_plusCode',
+                                          'Location is far from your current position',
                                           style: TextStyle(
-                                            fontSize: 12,
-                                            color: theme.colorScheme.primary,
+                                            fontSize: 13,
+                                            color: Colors.amber[900],
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
                                       ),
                                     ],
-                                  ],
+                                  ),
                                 ),
+                              ],
+
+                              SizedBox(height: 20),
+
+                              // Confirm Button
+                              SizedBox(
+                                width: double.infinity,
+                                height: 54,
+                                child: ElevatedButton(
+                                  onPressed: _hasValidLocationData
+                                      ? () => _showAddressDetailsBottomSheet(
+                                          context,
+                                        )
+                                      : null,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: theme.colorScheme.primary,
+                                    foregroundColor:
+                                        theme.colorScheme.onPrimary,
+                                    elevation: 0,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                  ),
+                                  child: _isGettingLocation || _isLoadingAddress
+                                      ? Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(
+                                                      theme
+                                                          .colorScheme
+                                                          .onPrimary,
+                                                    ),
+                                              ),
+                                            ),
+                                            SizedBox(width: 12),
+                                            Text(
+                                              'Fetching Details...',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Text(
+                                          'Confirm Location',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              SizedBox(
+                                height: MediaQuery.of(
+                                  context,
+                                ).viewInsets.bottom,
                               ),
                             ],
                           ),
-
-                          if (!isCurrentLocation && distanceKm > 0) ...[
-                            SizedBox(height: 12),
-                            Container(
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.amber[50],
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.amber[200]!),
-                              ),
-                              child: TranslatedText(
-                                'This is a different location from your current location.',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.amber[800],
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-
-                          if (isCurrentLocation) ...[
-                            SizedBox(height: 12),
-                            Container(
-                              padding: EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.red[50],
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.zoom_in,
-                                    color: Colors.red,
-                                    size: 20,
-                                  ),
-                                  SizedBox(width: 8),
-                                  Expanded(
-                                    child: TranslatedText(
-                                      'Zoom in to place the pin at exact location',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.red[700],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-
-                          SizedBox(height: 16),
-
-                          // Confirm Button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _hasValidLocationData
-                                  ? () =>
-                                        _showAddressDetailsBottomSheet(context)
-                                  : null, // Disable button when location data isn't ready
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _hasValidLocationData
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.outline.withOpacity(
-                                        0.3,
-                                      ),
-                                foregroundColor: _hasValidLocationData
-                                    ? theme.colorScheme.onPrimary
-                                    : theme.colorScheme.onSurface.withOpacity(
-                                        0.6,
-                                      ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: _isGettingLocation || _isLoadingAddress
-                                  ? Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                  theme.colorScheme.onSurface
-                                                      .withOpacity(0.6),
-                                                ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        TranslatedText(
-                                          _isGettingLocation
-                                              ? 'Getting location...'
-                                              : 'Loading address...',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    )
-                                  : TranslatedText(
-                                      _hasValidLocationData
-                                          ? 'Confirm & proceed'
-                                          : 'Please wait for location...',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                            ),
-                          ),
-
-                          SizedBox(
-                            height: MediaQuery.of(context).padding.bottom,
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

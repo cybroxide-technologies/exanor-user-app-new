@@ -9,14 +9,20 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:exanor/screens/order_rating_screen.dart';
 
+import 'package:exanor/screens/product_rating_screen.dart'; // Add import
+
 class OrderDetailsScreen extends StatefulWidget {
   final String orderId;
   final String storeId;
+  final bool autoTriggerProductRating;
+  final double? initialOverallRating;
 
   const OrderDetailsScreen({
     super.key,
     required this.orderId,
     required this.storeId,
+    this.autoTriggerProductRating = false,
+    this.initialOverallRating,
   });
 
   @override
@@ -31,6 +37,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
   bool _isLoadingProducts = true;
   bool _isLoadingStatuses = true;
   bool _isScrolled = false;
+  bool _hasTriggeredRatingFlow = false;
 
   Map<String, dynamic>? _orderData;
   List<dynamic> _products = [];
@@ -47,8 +54,67 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
     )..repeat();
     _scrollController.addListener(_onScroll);
     _fetchOrderDetails();
-    _fetchOrderProducts();
+    _fetchOrderProducts().then((_) {
+      if (widget.autoTriggerProductRating && !_hasTriggeredRatingFlow) {
+        _triggerProductRatingFlow();
+      }
+    });
     _startStatusPolling();
+  }
+
+  Future<void> _triggerProductRatingFlow() async {
+    _hasTriggeredRatingFlow = true;
+    if (!mounted) return;
+
+    // Wait a brief moment for UI to settle if valid
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    // Iterate through unrated products
+    for (int i = 0; i < _products.length; i++) {
+      final product = _products[i];
+      if (product['is_rated'] != true) {
+        // Show rating screen
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductRatingScreen(
+              orderId: widget.orderId,
+              productId:
+                  product['id']?.toString() ??
+                  product['product_combination_id']?.toString() ??
+                  '',
+              productName: product['product_name'] ?? 'Item',
+              productImage:
+                  product['image'] ??
+                  product['product_image'] ??
+                  product['image_url'],
+              initialRating: widget.initialOverallRating,
+            ),
+          ),
+        );
+
+        if (result != null && result is double) {
+          // Update local state to show rated immediately
+          setState(() {
+            _products[i]['is_rated'] = true;
+            _products[i]['rating'] = result;
+          });
+
+          // Small delay before next
+          await Future.delayed(const Duration(milliseconds: 300));
+        } else {
+          // User cancelled rating this product.
+          // Optional: Break loop? Or continue to next?
+          // Usually if user cancels one, they might want to stop.
+          // Let's ask or just break. For now, we continue to give them chance to rate others?
+          // No, usually "close" means stop flow.
+          break;
+        }
+      }
+    }
+
+    // Refresh details at the end to ensure sync with server
+    _fetchOrderDetails();
   }
 
   @override
@@ -1627,15 +1693,26 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                                 storeName: _orderData!['store_name'],
                               ),
                             ),
-                          ).then((value) {
-                            if (value != null) {
+                          ).then((result) {
+                            if (result is Map &&
+                                (result['action'] == 'auto_rate_products' ||
+                                    result['action'] == 'rate_products')) {
+                              final double rating = result['rating'] is double
+                                  ? result['rating']
+                                  : double.tryParse(
+                                          result['rating'].toString(),
+                                        ) ??
+                                        5.0;
+                              final String review = result['review'] ?? '';
+
+                              _rateAllProducts(rating, review);
+                            } else if (result != null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Thank you for rating!'),
+                                  content: Text('Order rated successfully!'),
                                   backgroundColor: Colors.green,
                                 ),
                               );
-                              // Refresh details to show updated rating
                               _fetchOrderDetails();
                             }
                           });
@@ -1688,6 +1765,40 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _rateAllProducts(double rating, String review) async {
+    if (_products.isEmpty) return;
+
+    for (var item in _products) {
+      if (item['is_rated'] == true) continue;
+
+      try {
+        await ApiService.post(
+          '/review-product/',
+          body: {
+            "order_id": widget.orderId,
+            "product_id": item['id'] ?? item['product_combination_id'],
+            "rating": rating,
+            "review": review,
+          },
+          useBearerToken: true,
+        );
+      } catch (e) {
+        debugPrint("Failed to auto-rate product ${item['id']}: $e");
+      }
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Order and products rated successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _fetchOrderDetails();
+      _fetchOrderProducts();
+    }
   }
 
   Widget _buildLoadingView(ThemeData theme) {

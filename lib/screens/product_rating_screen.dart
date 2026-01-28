@@ -2,17 +2,27 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
 
-class OrderRatingScreen extends StatefulWidget {
+class ProductRatingScreen extends StatefulWidget {
   final String orderId;
-  final String? storeName;
+  final String productId;
+  final String productName;
+  final String? productImage;
+  final double? initialRating;
 
-  const OrderRatingScreen({super.key, required this.orderId, this.storeName});
+  const ProductRatingScreen({
+    super.key,
+    required this.orderId,
+    required this.productId,
+    required this.productName,
+    this.productImage,
+    this.initialRating,
+  });
 
   @override
-  State<OrderRatingScreen> createState() => _OrderRatingScreenState();
+  State<ProductRatingScreen> createState() => _ProductRatingScreenState();
 }
 
-class _OrderRatingScreenState extends State<OrderRatingScreen>
+class _ProductRatingScreenState extends State<ProductRatingScreen>
     with SingleTickerProviderStateMixin {
   double _ratingValue = 0.5; // 0.0 to 1.0 (Mapped to 1-5)
   late AnimationController _controller;
@@ -23,6 +33,14 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
   @override
   void initState() {
     super.initState();
+
+    // Initialize with initialRating if provided
+    if (widget.initialRating != null) {
+      // Map 1.0-5.0 back to 0.0-1.0
+      // Formula: val = (rating - 1.0) / 4.0
+      _ratingValue = ((widget.initialRating! - 1.0) / 4.0).clamp(0.0, 1.0);
+    }
+
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3000),
@@ -82,35 +100,35 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
       final review = _reviewController.text.trim();
 
       await ApiService.post(
-        '/review-order/',
-        body: {"order_id": widget.orderId, "rating": rating, "review": review},
+        '/review-product/',
+        body: {
+          "order_id": widget.orderId,
+          "product_id": widget.productId,
+          "rating": rating,
+          "review": review,
+        },
         useBearerToken: true,
       );
 
       if (!mounted) return;
 
-      if (!mounted) return;
-
-      // Handle success
-      Navigator.pop(context, {
-        'action': 'auto_rate_products',
-        'rating': rating,
-        'review': review,
-      });
+      // Return success
+      Navigator.pop(context, rating);
     } catch (e) {
       if (!mounted) return;
 
       String errorMessage = "Failed to submit review";
-
       if (e is ApiException &&
           e.response != null &&
           e.response!['data'] is Map &&
           e.response!['data']['response'] != null) {
         errorMessage = e.response!['data']['response'].toString();
-      } else if (e.toString().contains("Order has already been reviewed")) {
-        errorMessage = "Order has already been reviewed";
-      } else if (e.toString().contains("No products found")) {
-        errorMessage = "No products found in order";
+      }
+
+      if (errorMessage.contains("Review already submitted")) {
+        // Treat as success if already submitted
+        Navigator.pop(context, _getApiRating(_ratingValue));
+        return;
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -132,7 +150,7 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
 
     return Scaffold(
       backgroundColor: bgColor,
-      resizeToAvoidBottomInset: true, // Allow scrolling when keyboard opens
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Stack(
           children: [
@@ -148,17 +166,24 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
                     children: [
                       const SizedBox(height: 60), // Space for close button
                       const Spacer(flex: 1),
-                      const Spacer(flex: 1),
-                      Text(
-                        "How was your\nexperience?",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          height: 1.2,
-                          color: textColor,
+
+                      // Product Name Header
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 30),
+                        child: Text(
+                          "How was\n${widget.productName}?",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 28, // Slightly smaller for product names
+                            fontWeight: FontWeight.bold,
+                            height: 1.2,
+                            color: textColor,
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+
                       const SizedBox(height: 20),
                       Text(
                         _getMoodText(_ratingValue),
@@ -280,7 +305,7 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
                                     ),
                                   )
                                 : const Text(
-                                    "Done",
+                                    "Rate Product",
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -354,51 +379,34 @@ class _FacePainter extends CustomPainter {
     // Center point
     final center = Offset(size.width / 2, size.height / 2);
 
-    // Eyes
-    // Adjust eye shape based on rating slightly for emotion
-    // 0.0 -> Sad eyes (tilted up-outwards)
-    // 1.0 -> Happy eyes (normal)
-
     final eyeOffset = size.width * 0.2;
     final eyeY = size.height * 0.35;
     final eyeRadius = 15.0;
-
-    // Pupils (move slightly based on rating to look at the "grade")
     final pupilOffset = (rating - 0.5) * 10;
     final pupilPaint = Paint()..color = Colors.black;
-
-    // Draw Eyes with Blink (Whole Eye Blinks)
 
     // Left Eye
     canvas.save();
     canvas.translate(center.dx - eyeOffset, eyeY);
     canvas.scale(1.0, eyeOpenness);
-
-    // Draw relative to local center
     canvas.drawCircle(Offset.zero, eyeRadius * 1.5, fillPaint);
     canvas.drawCircle(Offset.zero, eyeRadius * 1.5, paint);
     canvas.drawCircle(Offset(pupilOffset, 0), 4, pupilPaint);
-
     canvas.restore();
 
     // Right Eye
     canvas.save();
     canvas.translate(center.dx + eyeOffset, eyeY);
     canvas.scale(1.0, eyeOpenness);
-
-    // Draw relative to local center
     canvas.drawCircle(Offset.zero, eyeRadius * 1.5, fillPaint);
     canvas.drawCircle(Offset.zero, eyeRadius * 1.5, paint);
     canvas.drawCircle(Offset(pupilOffset, 0), 4, pupilPaint);
-
     canvas.restore();
 
     // Eyebrows
-    // 0.0 -> Angry/Sad ( \ / )
-    // 1.0 -> Happy ( / \ or raised )
     final browY = eyeY - 40;
     final browWidth = 40.0;
-    final browAngle = (0.5 - rating) * 0.8; // Tilt angle
+    final browAngle = (0.5 - rating) * 0.8;
 
     canvas.save();
     canvas.translate(center.dx - eyeOffset, browY);
@@ -413,16 +421,10 @@ class _FacePainter extends CustomPainter {
     canvas.restore();
 
     // Mouth
-    // Use a Quadratic Bezier curve
-    // Control point moves up/down
-    // 0.0 -> Frown (Control point above start/end)
-    // 0.5 -> Straight
-    // 1.0 -> Smile (Control point below start/end)
-
     final mouthY = size.height * 0.65;
     final mouthWidth = size.width * 0.4;
     final maxCurve = 60.0;
-    final curveValue = (rating - 0.5) * 2 * maxCurve; // -60 to +60
+    final curveValue = (rating - 0.5) * 2 * maxCurve;
 
     final path = Path();
     path.moveTo(center.dx - mouthWidth / 2, mouthY);

@@ -7,6 +7,9 @@ import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:exanor/models/store_model.dart';
 import 'package:exanor/models/product_model.dart';
@@ -88,6 +91,8 @@ class _CartScreenState extends State<CartScreen> {
   // Inline Payment Selector State
   bool _isPaymentSelectorOpen = false;
 
+  String? _cachedDeviceId;
+
   @override
   void initState() {
     super.initState();
@@ -108,6 +113,7 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     _initializeCartScreen();
+    _sendUserDeviceData();
   }
 
   Future<void> _checkAndNavigateToAddressSelection() async {
@@ -801,28 +807,220 @@ class _CartScreenState extends State<CartScreen> {
       );
 
       if (response['data'] != null && response['data']['status'] == 200) {
-        final responseData = response['data'];
-        final storesList = (responseData['response'] as List)
-            .map((item) => Store.fromJson(item))
-            .toList();
+        final rawResponse = response['data']['response'];
 
-        if (storesList.isNotEmpty) {
-          final store = storesList.first;
+        // If 'response' is a list, find the store
+        // If it's a map (paginated), look in 'data' or similar
+        // Typically get-stores returns list directly or pagination structure.
+        // Based on usage elsewhere, let's assume it returns a list of stores or we filter it.
+        // Actually, if we pass store_id, ideally backend filters it.
+
+        Map<String, dynamic>? targetStore;
+
+        if (rawResponse is List) {
+          targetStore = rawResponse.firstWhere(
+            (s) => s['id'] == widget.storeId,
+            orElse: () => null,
+          );
+        } else if (rawResponse is Map && rawResponse['data'] is List) {
+          // Pagination structure
+          final list = rawResponse['data'] as List;
+          targetStore = list.firstWhere(
+            (s) => s['id'] == widget.storeId,
+            orElse: () => null,
+          );
+        }
+
+        if (targetStore != null && targetStore['coupons'] != null) {
+          final couponsList = targetStore['coupons'] as List;
           if (mounted) {
             setState(() {
-              _storeCoupons = store.coupons;
-              _isLoadingCoupons = false;
+              _storeCoupons = couponsList
+                  .map((e) => Coupon.fromJson(e))
+                  .toList();
             });
           }
-        } else {
-          if (mounted) setState(() => _isLoadingCoupons = false);
         }
-      } else {
-        if (mounted) setState(() => _isLoadingCoupons = false);
       }
+
+      if (mounted) setState(() => _isLoadingCoupons = false);
     } catch (e) {
       print("Error fetching coupons: $e");
       if (mounted) setState(() => _isLoadingCoupons = false);
+    }
+  }
+
+  Future<String> _getDeviceId() async {
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
+
+    final deviceInfo = DeviceInfoPlugin();
+    String deviceId = "device_unknown";
+
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        deviceId = androidInfo.id;
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        deviceId = iosInfo.identifierForVendor ?? "device_unknown";
+      }
+    } catch (e) {
+      print("Error getting device ID: $e");
+    }
+
+    _cachedDeviceId = deviceId;
+    return deviceId;
+  }
+
+  Future<void> _sendUserDeviceData() async {
+    // Initialize all fields with fallback values from sample payload
+    String deviceId = "device_unknown";
+    String deviceBrand = "BrandName";
+    String deviceModel = "ModelName";
+    String osVersion = "1.0.0";
+    String deviceBuildId = "build123";
+    String platformName =
+        "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36";
+    String browser =
+        "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36";
+    String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
+    String language = "en-GB";
+    String appName = "AppName";
+    String appVersion = "1.0.0";
+    String screenWidth = "1087";
+    String screenHeight = "928";
+    String devicePixelRatio = "2";
+    String screenOrientation = "landscape-primary";
+    String customerUserId = "65311e29-c78c-47b7-88c5-02a950f4c8eb";
+
+    // Try to get device ID
+    try {
+      deviceId = await _getDeviceId();
+    } catch (e) {
+      print("⚠️ Failed to get device ID: $e");
+    }
+
+    // Try to get device info
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+
+      if (Platform.isAndroid) {
+        try {
+          final androidInfo = await deviceInfo.androidInfo;
+          deviceBrand = androidInfo.brand;
+          deviceModel = androidInfo.model;
+          osVersion = androidInfo.version.release;
+          deviceBuildId = androidInfo.id;
+          platformName = "Android ${androidInfo.version.release}";
+          browser = "Exanor App (Flutter) Android";
+          userAgent = "Exanor/Android (${androidInfo.model})";
+        } catch (e) {
+          print("⚠️ Failed to get Android info: $e");
+        }
+      } else if (Platform.isIOS) {
+        try {
+          final iosInfo = await deviceInfo.iosInfo;
+          deviceBrand = "Apple";
+          deviceModel = iosInfo.name;
+          osVersion = iosInfo.systemVersion;
+          deviceBuildId = iosInfo.utsname.release;
+          platformName = "${iosInfo.systemName} ${iosInfo.systemVersion}";
+          browser = "Exanor App (Flutter) iOS";
+          userAgent = "Exanor/iOS (${iosInfo.name})";
+        } catch (e) {
+          print("⚠️ Failed to get iOS info: $e");
+        }
+      }
+    } catch (e) {
+      print("⚠️ Failed to get device info plugin: $e");
+    }
+
+    // Try to get package info
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      appName = packageInfo.appName;
+      appVersion = packageInfo.version;
+      userAgent =
+          "Exanor/${packageInfo.version} (Flutter; ${Platform.operatingSystem})";
+    } catch (e) {
+      print("⚠️ Failed to get package info: $e");
+    }
+
+    // Try to get screen info
+    try {
+      final screenSize = MediaQuery.of(context).size;
+      final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+      screenWidth = screenSize.width.toInt().toString();
+      screenHeight = screenSize.height.toInt().toString();
+      devicePixelRatio = pixelRatio.toString();
+      screenOrientation = MediaQuery.of(context).orientation.name;
+    } catch (e) {
+      print("⚠️ Failed to get screen info: $e");
+    }
+
+    // Try to get language
+    try {
+      language = Localizations.localeOf(context).toString();
+    } catch (e) {
+      print("⚠️ Failed to get language: $e");
+    }
+
+    // Try to get user ID
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      customerUserId = prefs.getString('user_id') ?? customerUserId;
+    } catch (e) {
+      print("⚠️ Failed to get user ID: $e");
+    }
+
+    // Construct payload with all mandatory fields
+    final payload = {
+      "software_version": 1,
+      "device_id": deviceId,
+      "device_brand": deviceBrand,
+      "device_model": deviceModel,
+      "os_version": osVersion,
+      "last_online": DateTime.now().millisecondsSinceEpoch,
+      "browser": browser,
+      "device_build_id": deviceBuildId,
+      "mac_address": "00:00:00:00:00:00",
+      "user_agent": userAgent,
+      "platform": platformName,
+      "language": language,
+      "app_name": appName,
+      "app_version": appVersion,
+      "screen_width": screenWidth,
+      "screen_height": screenHeight,
+      "device_pixel_ratio": devicePixelRatio,
+      "screen_orientation": screenOrientation,
+      "color_depth": "30",
+      "cookies_enabled": "true",
+      "network_effective_type": "unknown",
+      "network_rtt": "unknown",
+      "network_downlink": "unknown",
+
+      // "store_id": widget.storeId,
+    };
+
+    try {
+      print("📤 Sending User Device Data: $payload");
+
+      final response = await ApiService.post(
+        '/add-user-devices/',
+        body: payload,
+        useBearerToken: true,
+      );
+
+      print("📥 Device Data Response: $response");
+
+      if (response['data'] != null && response['data']['status'] == 200) {
+        print("✅ Device data sent successfully");
+      } else {
+        print("⚠️ Device data response status: ${response['data']?['status']}");
+      }
+    } catch (e) {
+      print("❌ Error sending device data: $e");
+      // Gracefully handle - don't block cart screen from loading
     }
   }
 
@@ -867,6 +1065,7 @@ class _CartScreenState extends State<CartScreen> {
         "payment_method_id": _selectedPaymentMethod!['id'],
         "store_id": widget.storeId,
         "user_address_id": _currentAddressId,
+        "device_id": await _getDeviceId(),
       };
 
       print("📦 Placing Order with:");

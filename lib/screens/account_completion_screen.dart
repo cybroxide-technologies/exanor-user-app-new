@@ -41,6 +41,9 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
   void initState() {
     super.initState();
 
+    // Pre-populate fields with existing user data if available
+    _prefillFormFields();
+
     // Initialize animation controller
     _animationController = AnimationController(
       vsync: this,
@@ -61,6 +64,55 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
 
     // Start animation
     _animationController.forward();
+  }
+
+  /// Pre-fill form fields with existing user data
+  void _prefillFormFields() {
+    final userData = widget.userData;
+
+    // Pre-fill first name (only if not 'unnamed')
+    final firstName = userData['first_name'];
+    if (firstName != null &&
+        firstName != 'unnamed' &&
+        firstName.toString().isNotEmpty) {
+      _firstNameController.text = firstName.toString();
+    }
+
+    // Pre-fill last name (only if not 'user')
+    final lastName = userData['last_name'];
+    if (lastName != null &&
+        lastName != 'user' &&
+        lastName.toString().isNotEmpty) {
+      _lastNameController.text = lastName.toString();
+    }
+
+    // Pre-fill email if available
+    final email = userData['email'];
+    if (email != null && email.toString().isNotEmpty) {
+      _emailController.text = email.toString();
+    }
+
+    // Pre-fill gender if available and valid
+    final gender = userData['gender'];
+    if (gender != null && gender != 'undefined') {
+      final genderStr = gender.toString().toLowerCase();
+      if (genderStr == 'male' ||
+          genderStr == 'female' ||
+          genderStr == 'other') {
+        _selectedGender = genderStr;
+      }
+    }
+
+    // Pre-fill date of birth if available
+    final dob = userData['date_of_birth'];
+    if (dob != null && dob.toString().isNotEmpty) {
+      try {
+        _selectedDateOfBirth = DateTime.parse(dob.toString());
+      } catch (e) {
+        // If parsing fails, leave it null
+        print('⚠️ Failed to parse date of birth: $dob');
+      }
+    }
   }
 
   @override

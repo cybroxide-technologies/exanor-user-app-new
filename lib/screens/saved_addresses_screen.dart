@@ -7,7 +7,6 @@ import 'package:exanor/components/universal_translation_wrapper.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/screens/location_selection_screen.dart';
 import 'package:exanor/services/api_service.dart';
-import 'package:exanor/screens/refer_and_earn_screen.dart';
 
 class SavedAddressesScreen extends StatefulWidget {
   const SavedAddressesScreen({super.key});
@@ -266,62 +265,35 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         child: Stack(
           children: [
             // 1. Scrollable Content
-            CustomScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.only(
-                    top: MediaQuery.of(context).padding.top + 100,
-                    bottom: 120, // Space for bottom button
-                    left: 20,
-                    right: 20,
-                  ),
-                  sliver: _isLoading
-                      ? SliverToBoxAdapter(
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      : _savedAddresses.isEmpty
-                      ? SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: _buildEmptyState(theme),
-                        )
-                      : SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              // Check if banner is visible
-                              final bool showBanner =
-                                  FirebaseRemoteConfigService.getReferAndEarnBannerVisible() &&
-                                  !_savedAddresses.isEmpty;
-
-                              // Adjust index if banner is shown
-                              if (showBanner) {
-                                if (index == 0) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 20),
-                                    child: _buildReferAndEarnBanner(
-                                      theme,
-                                      isDark,
-                                    ),
-                                  );
-                                }
-                                // Adjust index for addresses
-                                final addressIndex = index - 1;
-                                if (addressIndex < _savedAddresses.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 20),
-                                    child: _buildAddressCard(
-                                      theme,
-                                      _savedAddresses[addressIndex],
-                                      addressIndex,
-                                      isDark,
-                                    ),
-                                  );
-                                }
-                                return const SizedBox.shrink();
-                              }
-
-                              // Normal list without banner (fallback logic though showBanner condition handles empty list separately above)
+            RefreshIndicator(
+              onRefresh: _loadAddresses,
+              color: theme.colorScheme.primary,
+              backgroundColor: theme.cardColor,
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverPadding(
+                    padding: EdgeInsets.only(
+                      top: MediaQuery.of(context).padding.top + 100,
+                      bottom: 120, // Space for bottom button
+                      left: 20,
+                      right: 20,
+                    ),
+                    sliver: _isLoading
+                        ? SliverToBoxAdapter(
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : _savedAddresses.isEmpty
+                        ? SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _buildEmptyState(theme),
+                          )
+                        : SliverList(
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 20),
                                 child: _buildAddressCard(
@@ -331,16 +303,11 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                                   isDark,
                                 ),
                               );
-                            },
-                            childCount:
-                                FirebaseRemoteConfigService.getReferAndEarnBannerVisible() &&
-                                    !_savedAddresses.isEmpty
-                                ? _savedAddresses.length + 1
-                                : _savedAddresses.length,
+                            }, childCount: _savedAddresses.length),
                           ),
-                        ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
 
             // 2. Fixed Header
@@ -709,118 +676,6 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReferAndEarnBanner(ThemeData theme, bool isDark) {
-    // Gradient Logic from OrdersListScreen
-    final startColor = isDark
-        ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkStart())
-        : _hexToColor(FirebaseRemoteConfigService.getThemeGradientLightStart());
-
-    final endColor = isDark
-        ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkEnd())
-        : Colors.white;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-            spreadRadius: 0,
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-            spreadRadius: 0,
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ReferAndEarnScreen(),
-                ),
-              );
-            },
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [startColor, endColor],
-                ),
-              ),
-              child: Row(
-                children: [
-                  // Icon
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.white.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.card_giftcard_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-
-                  // Text Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        TranslatedText(
-                          FirebaseRemoteConfigService.getReferAndEarnBannerTitle(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: theme.colorScheme.onSurface,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        TranslatedText(
-                          FirebaseRemoteConfigService.getReferAndEarnBannerSubtitle(),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: theme.colorScheme.onSurface.withOpacity(0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Arrow
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 16,
-                    color: theme.colorScheme.onSurface.withOpacity(0.3),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
       ),
     );

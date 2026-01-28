@@ -40,6 +40,7 @@ import 'package:exanor/services/crashlytics_service.dart';
 import 'package:exanor/services/performance_service.dart';
 import 'package:exanor/components/navigation_performance_tracker.dart';
 import 'package:exanor/screens/refer_and_earn_screen.dart';
+import 'package:exanor/widgets/connectivity_overlay.dart';
 
 /// Top-level function to handle background messages
 /// This must be a top-level function, not a class method
@@ -612,7 +613,8 @@ class _MyAppState extends State<MyApp> {
             title: 'exanor',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeManager().materialThemeMode,
+            themeMode: ThemeMode.light, // Templorary force light mode
+
             navigatorKey: ApiService.navigatorKey,
             navigatorObservers: [
               AnalyticsService().observer,
@@ -629,6 +631,9 @@ class _MyAppState extends State<MyApp> {
             // - Profile Screen: User data and UI text translated
             // - Home Screen: Section headers and help text translated
             // Access language selector: FAB on home screen or language tools in selector
+            builder: (context, child) {
+              return ConnectivityOverlay(child: child!);
+            },
             routes: {
               '/onboarding': (context) => const OnboardingScreen(),
               '/phone_registration': (context) =>

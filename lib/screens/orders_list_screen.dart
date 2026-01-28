@@ -261,18 +261,68 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           storeName: order['store_name'],
         ),
       ),
-    ).then((ratingValue) {
-      if (ratingValue != null && ratingValue is double) {
-        // Handle rating submission if needed here or inside the screen
-        // The screen currently just returns the value
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Thank you for rating!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+    ).then((result) {
+      if (result != null) {
+        if (result is Map) {
+          if (result['action'] == 'auto_rate_products' ||
+              result['action'] == 'rate_products') {
+            final double rating = result['rating'] is double
+                ? result['rating']
+                : double.tryParse(result['rating'].toString()) ?? 5.0;
+            final String review = result['review'] ?? '';
+
+            // Rate products automatically
+            _rateAllProducts(order, rating, review);
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Order rated successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            _fetchOrders(); // Refresh to update UI
+          } else if (result['rating'] != null) {
+            _fetchOrders();
+          }
+        } else if (result is double) {
+          _fetchOrders();
+        }
       }
     });
+  }
+
+  Future<void> _rateAllProducts(
+    dynamic order,
+    double rating,
+    String review,
+  ) async {
+    final List items = order['product_details'] as List? ?? [];
+    if (items.isEmpty) return;
+
+    for (var item in items) {
+      // Check if already rated to avoid overwrite/errors if backend enforces it
+      if (item['is_rated'] == true) continue;
+
+      try {
+        await ApiService.post(
+          '/review-product/',
+          body: {
+            "order_id": order['id'],
+            "product_id": item['id'] ?? item['product_combination_id'],
+            "rating": rating,
+            "review":
+                review, // Same review for all? Or empty? User said "just give the rating to veryt= prodt"
+          },
+          useBearerToken: true,
+        );
+      } catch (e) {
+        debugPrint(
+          "Failed to auto-rate product ${item['id']}: $e",
+        ); // Silent fail
+      }
+    }
+    // Refresh again after products are rated to show their status if needed
+    if (mounted) _fetchOrders();
   }
 
   @override
@@ -345,10 +395,14 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           SizedBox(height: totalHeaderHeight + 20),
-          if (_allOrders.isNotEmpty)
-            _buildEmptyFilterState(theme)
-          else
-            _buildEmptyState(theme),
+          SizedBox(
+            height:
+                MediaQuery.of(context).size.height -
+                (totalHeaderHeight + 20 + 50), // 50 for bottom nav/padding
+            child: _allOrders.isNotEmpty
+                ? _buildEmptyFilterState(theme)
+                : _buildEmptyState(theme),
+          ),
         ],
       );
     }

@@ -11,6 +11,8 @@ import 'package:exanor/components/custom_sliver_app_bar.dart';
 import 'package:exanor/components/professional_bottom_nav.dart';
 import 'package:exanor/screens/store_screen.dart';
 import 'package:exanor/screens/refer_and_earn_screen.dart';
+import 'package:exanor/services/firebase_messaging_service.dart';
+import 'package:flutter/foundation.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,6 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _selectedCategoryId = '';
 
   bool _isBottomNavVisible = true;
+  int _categoryRefreshTrigger = 0;
 
   @override
   void initState() {
@@ -57,12 +60,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController.addListener(_onScroll);
 
     _loadAddressData();
+    _sendNotificationData();
   }
 
   Future<void> _loadAddressData() async {
     print(
       '🔄 Home: _loadAddressData called - refreshing address from SharedPreferences',
     );
+    setState(() {
+      _categoryRefreshTrigger++;
+    });
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedAddressId = prefs.getString('saved_address_id');
@@ -220,6 +227,33 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _sendNotificationData() async {
+    try {
+      final token = await FirebaseMessagingService.getStoredToken();
+      if (token != null) {
+        final platformData = {
+          'is_android':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+          'is_ios': !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
+          'is_web': kIsWeb,
+          'is_macos': !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS,
+          'is_windows':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
+          'is_linux': !kIsWeb && defaultTargetPlatform == TargetPlatform.linux,
+        };
+
+        await ApiService.post(
+          '/create-notification-data/',
+          body: {'fcm_token': token, ...platformData},
+          useBearerToken: true,
+        );
+        print('✅ Notification data sent successfully');
+      }
+    } catch (e) {
+      print('❌ Error sending notification data: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -257,6 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       });
                       _fetchStores();
                     },
+                    categoryRefreshTrigger: _categoryRefreshTrigger,
                   ),
                 ),
 

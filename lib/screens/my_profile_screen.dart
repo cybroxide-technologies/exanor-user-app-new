@@ -210,134 +210,125 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     final topPadding = MediaQuery.of(context).padding.top;
     final headerHeight = 70.0;
 
-    return ListView(
-      controller: _scrollController,
-      padding: EdgeInsets.only(top: topPadding + headerHeight, bottom: 40),
-      children: [
-        // 1. Profile Section
-        _buildProfileSection(isDark),
+    return RefreshIndicator(
+      onRefresh: () => _loadUserData(forceRefresh: true),
+      // Apple-style rubber banding
+      notificationPredicate: (notification) {
+        // Allow refresh only when at top
+        return notification.depth == 0;
+      },
+      color: Theme.of(context).colorScheme.primary,
+      backgroundColor: Theme.of(context).cardColor,
+      child: ListView(
+        controller: _scrollController,
+        // Ensure always scrollable to allow pull to refresh even when content is short
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.only(top: topPadding + headerHeight, bottom: 40),
+        children: [
+          // 1. Profile Section
+          _buildProfileSection(isDark),
 
-        const SizedBox(height: 24),
+          const SizedBox(height: 24),
 
-        // 2. Main Actions (Orders, Address, Wallet)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionHeader('MY ACCOUNT'),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark
-                          ? Colors.black.withOpacity(0.6)
-                          : Colors.black.withOpacity(0.15),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    _buildSettingsTile(
-                      icon: Icons.receipt_long_rounded,
-                      title: 'My Orders',
-                      iconColor: Colors.blue,
-                      onTap: () => Navigator.pushNamed(context, '/orders'),
-                      isDark: isDark,
-                    ),
-                    _buildDivider(isDark),
-                    _buildSettingsTile(
-                      icon: Icons.pin_drop_rounded,
-                      title: 'Saved Addresses',
-                      iconColor: Colors.green,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SavedAddressesScreen(),
-                        ),
+          // 2. Main Actions (Orders, Address, Wallet)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionHeader('MY ACCOUNT'),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isDark
+                            ? Colors.black.withOpacity(0.6)
+                            : Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
-                      isDark: isDark,
-                    ),
-                    _buildDivider(isDark),
-                    _buildSettingsTile(
-                      icon: Icons.account_balance_wallet_rounded,
-                      title: 'Wallet',
-                      iconColor: Colors.orange,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: TranslatedText('Wallet coming soon!'),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _buildSettingsTile(
+                        icon: Icons.receipt_long_rounded,
+                        title: 'My Orders',
+                        iconColor: Colors.blue,
+                        onTap: () => Navigator.pushNamed(context, '/orders'),
+                        isDark: isDark,
+                      ),
+                      _buildDivider(isDark),
+                      _buildSettingsTile(
+                        icon: Icons.pin_drop_rounded,
+                        title: 'Saved Addresses',
+                        iconColor: Colors.green,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SavedAddressesScreen(),
                           ),
-                        );
-                      },
-                      isDark: isDark,
-                    ),
-                  ],
+                        ),
+                        isDark: isDark,
+                      ),
+                      _buildDivider(isDark),
+                      _buildSettingsTile(
+                        icon: Icons.account_balance_wallet_rounded,
+                        title: 'Wallet',
+                        iconColor: Colors.orange,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: TranslatedText('Wallet coming soon!'),
+                            ),
+                          );
+                        },
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 24),
-
-        // 3. Promo Banner - REMOVED
-        // Padding(
-        //   padding: const EdgeInsets.symmetric(horizontal: 16),
-        //   child: _buildReferBanner(isDark),
-        // ),
-        // const SizedBox(height: 12),
-        const SizedBox(height: 24),
-
-        // 4. Settings Section
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionHeader('SETTINGS & SUPPORT'),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(children: _buildSettingsAndSupportItems(isDark)),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 24),
-
-        // 5. Danger Zone / Logout
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: _buildSettingsTile(
-              icon: Icons.logout_rounded,
-              title: 'Log Out',
-              iconColor: Colors.red,
-              isDestructive: true,
-              onTap: _showLogoutConfirmationDialog,
-              isDark: isDark,
-              showChevron: false,
+              ],
             ),
           ),
-        ),
 
-        const SizedBox(height: 12),
-        // Delete Account - conditionally shown
-        if (FirebaseRemoteConfigService.shouldShowDeleteAccount())
+          const SizedBox(height: 24),
+
+          // 3. Promo Banner - REMOVED
+          // Padding(
+          //   padding: const EdgeInsets.symmetric(horizontal: 16),
+          //   child: _buildReferBanner(isDark),
+          // ),
+          // const SizedBox(height: 12),
+          const SizedBox(height: 24),
+
+          // 4. Settings Section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionHeader('SETTINGS & SUPPORT'),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: _buildSettingsAndSupportItems(isDark),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // 5. Danger Zone / Logout
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -346,30 +337,53 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: _buildSettingsTile(
-                icon: Icons.delete_forever_rounded,
-                title: 'Delete Account',
+                icon: Icons.logout_rounded,
+                title: 'Log Out',
                 iconColor: Colors.red,
                 isDestructive: true,
-                onTap: () => _launchUrl(
-                  FirebaseRemoteConfigService.getDeleteAccountUrl(),
-                ),
+                onTap: _showLogoutConfirmationDialog,
                 isDark: isDark,
+                showChevron: false,
               ),
             ),
           ),
 
-        const SizedBox(height: 32),
-        Center(
-          child: TranslatedText(
-            'Version ${FirebaseRemoteConfigService.getMinAppVersion()}',
-            style: TextStyle(
-              color: isDark ? Colors.grey[600] : Colors.grey[400],
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+          const SizedBox(height: 12),
+          // Delete Account - conditionally shown
+          if (FirebaseRemoteConfigService.shouldShowDeleteAccount())
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _buildSettingsTile(
+                  icon: Icons.delete_forever_rounded,
+                  title: 'Delete Account',
+                  iconColor: Colors.red,
+                  isDestructive: true,
+                  onTap: () => _launchUrl(
+                    FirebaseRemoteConfigService.getDeleteAccountUrl(),
+                  ),
+                  isDark: isDark,
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 32),
+          Center(
+            child: TranslatedText(
+              'Version ${FirebaseRemoteConfigService.getMinAppVersion()}',
+              style: TextStyle(
+                color: isDark ? Colors.grey[600] : Colors.grey[400],
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

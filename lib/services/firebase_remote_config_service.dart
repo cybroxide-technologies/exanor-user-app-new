@@ -1,6 +1,7 @@
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'dart:developer' as developer;
 import 'dart:convert';
+import 'package:exanor/models/refer_and_earn_data.dart';
 
 class FirebaseRemoteConfigService {
   static FirebaseRemoteConfig? _remoteConfig;
@@ -76,6 +77,13 @@ class FirebaseRemoteConfigService {
       'refer_and_earn_banner_title';
   static const String _referAndEarnBannerSubtitleKey =
       'refer_and_earn_banner_subtitle';
+
+  // Splash Screen Colors
+  static const String _splashScreenColorKey = 'splash_screen_color';
+  static const String _splashScreenLineColorKey = 'splash_screen_line_color';
+
+  // Refer and Earn Screen Data
+  static const String _referAndEarnScreenDataKey = 'refer_and_earn_screen_data';
 
   // Default values
   static const Map<String, dynamic> _defaults = {
@@ -226,6 +234,62 @@ class FirebaseRemoteConfigService {
     _referAndEarnBannerVisibleKey: true,
     _referAndEarnBannerTitleKey: 'Refer & Earn',
     _referAndEarnBannerSubtitleKey: 'Invite friends & get rewards',
+
+    // Splash Screen Color defaults
+    _splashScreenColorKey: '#2962FF', // Original Royal Blue
+    _splashScreenLineColorKey: '#2962FF', // Default Blue
+    // Refer and Earn Screen Data default
+    _referAndEarnScreenDataKey: '''{
+      "refer_and_earn": {
+        "enabled": true,
+        "title": "Refer & Earn Rewards",
+        "description": "Invite your friends to Exanor and earn exciting rewards when they sign up and place their first order.",
+        "benefits": [
+          {
+            "icon": {
+              "type": "material",
+              "name": "account_balance_wallet"
+            },
+            "title": "Earn ₹100 per referral",
+            "subtitle": "Wallet credit after your friend completes their first order."
+          },
+          {
+            "icon": {
+              "type": "material",
+              "name": "card_giftcard"
+            },
+            "title": "Friend gets ₹50",
+            "subtitle": "Welcome bonus on signup using your code."
+          },
+          {
+            "icon": {
+              "type": "material",
+              "name": "groups"
+            },
+            "title": "Unlimited referrals",
+            "subtitle": "Refer as many friends as you want."
+          },
+          {
+            "icon": {
+              "type": "material",
+              "name": "schedule"
+            },
+            "title": "Fast rewards",
+            "subtitle": "Rewards credited within 24 hours."
+          }
+        ],
+        "terms_and_conditions": {
+          "title": "Terms & Conditions",
+          "points": [
+            "Referral reward is credited only after the referred user completes their first order.",
+            "Rewards are added to the in-app wallet and cannot be withdrawn.",
+            "Self-referrals or misuse will result in disqualification.",
+            "Exanor may modify or discontinue the program at any time.",
+            "All rewards are subject to verification."
+          ]
+        }
+      }
+    }''',
   };
 
   /// Initialize Firebase Remote Config
@@ -1415,6 +1479,62 @@ class FirebaseRemoteConfigService {
         name: 'RemoteConfig',
       );
       return false;
+    }
+  }
+
+  /// Get Splash Screen Background Color
+  static String getSplashScreenColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_splashScreenColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_splashScreenColorKey);
+      return value.isEmpty ? _defaults[_splashScreenColorKey] as String : value;
+    } catch (e) {
+      return _defaults[_splashScreenColorKey] as String;
+    }
+  }
+
+  /// Get Splash Screen Line/Fill Color
+  static String getSplashScreenLineColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_splashScreenLineColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_splashScreenLineColorKey);
+      return value.isEmpty
+          ? _defaults[_splashScreenLineColorKey] as String
+          : value;
+    } catch (e) {
+      return _defaults[_splashScreenLineColorKey] as String;
+    }
+  }
+
+  /// Get Refer and Earn Screen Data
+  static ReferAndEarnData getReferAndEarnData() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        developer.log(
+          '⚠️ FirebaseRemoteConfig: Not initialized, returning default refer & earn data',
+          name: 'RemoteConfig',
+        );
+        return ReferAndEarnData.defaults();
+      }
+
+      final jsonString = _remoteConfig!.getString(_referAndEarnScreenDataKey);
+
+      if (jsonString.isEmpty) {
+        return ReferAndEarnData.defaults();
+      }
+
+      final Map<String, dynamic> jsonMap = json.decode(jsonString);
+      return ReferAndEarnData.fromJson(jsonMap);
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting refer & earn data: $e, returning default',
+        name: 'RemoteConfig',
+      );
+      return ReferAndEarnData.defaults();
     }
   }
 }

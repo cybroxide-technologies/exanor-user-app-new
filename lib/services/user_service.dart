@@ -23,7 +23,7 @@ class UserService {
               )
               .toList();
         } else {
-          throw ApiException('Invalid response format');
+          throw const ApiException('Invalid response format');
         }
       }
 
@@ -46,7 +46,7 @@ class UserService {
       if (response['data'] != null) {
         return User.fromJson(response['data'] as Map<String, dynamic>);
       } else {
-        throw ApiException('User not found');
+        throw const ApiException('User not found');
       }
     } catch (e) {
       if (e is ApiException) {
@@ -88,7 +88,7 @@ class UserService {
           website: website,
         );
       } else {
-        throw ApiException('Failed to create user');
+        throw const ApiException('Failed to create user');
       }
     } catch (e) {
       if (e is ApiException) {
@@ -130,7 +130,7 @@ class UserService {
           website: website,
         );
       } else {
-        throw ApiException('Failed to update user');
+        throw const ApiException('Failed to update user');
       }
     } catch (e) {
       if (e is ApiException) {
@@ -352,7 +352,7 @@ class UserService {
           );
         }
       } else {
-        throw ApiException('Invalid response format or empty user data');
+        throw const ApiException('Invalid response format or empty user data');
       }
     } catch (e) {
       if (e is ApiException) {

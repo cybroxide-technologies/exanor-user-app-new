@@ -145,7 +145,7 @@ AppBar(
                     'This text will be translated to Hindi when you change the language!',
                   ),
                   const SizedBox(height: 8),
-                  Text('User Name: ${'John Doe'}'), // API data - not translated
+                  const Text('User Name: ${'John Doe'}'), // API data - not translated
                   const SizedBox(height: 8),
                   ElevatedButton(
                     onPressed: () {},

@@ -38,11 +38,11 @@ class _CrashlyticsDebugHelperState extends State<CrashlyticsDebugHelper> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               Icon(Icons.bug_report, color: Colors.red, size: 20),
-              const SizedBox(width: 8),
-              const TranslatedText(
+              SizedBox(width: 8),
+              TranslatedText(
                 'Crashlytics Debug Helper',
                 style: TextStyle(
                   fontSize: 16,

@@ -237,12 +237,12 @@ class _ProductVariantSheetState extends State<ProductVariantSheet> {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
             Colors.white,
-            const Color(0xFFF5F5F7), // Very subtle grey-white
+            Color(0xFFF5F5F7), // Very subtle grey-white
           ],
           // If user wants "Linear Grafing" maybe they mean a literal graph paper? Unlikely.
           // Maybe "Linear Gradient" with strong direction.

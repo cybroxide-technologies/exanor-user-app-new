@@ -305,7 +305,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
       lightStartBase.withOpacity(0.35),
       Colors.white,
     );
-    final lightModeEnd = Colors.white;
+    const lightModeEnd = Colors.white;
 
     final startColor = isDark
         ? _hexToColor(
@@ -321,9 +321,9 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
         : lightModeEnd;
 
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.transparent,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
         // No Shadow on Header
       ),
       child: ClipRRect(
@@ -757,12 +757,20 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
               itemBuilder: (context, index) {
                 final product = _products[index];
                 final quantity = product['quantity'] ?? 0;
-                final price =
+                double total =
                     double.tryParse(
                       product['amount_including_tax']?.toString() ?? '0',
                     ) ??
                     0.0;
-                final total = price * quantity;
+
+                if (total == 0) {
+                  final p =
+                      double.tryParse(product['price']?.toString() ?? '0') ??
+                      0.0;
+                  if (p != 0) total = p * quantity;
+                }
+
+                final unitPrice = quantity > 0 ? total / quantity : 0.0;
                 final variant = product['variant_name'];
                 final imageUrl =
                     product['image'] ??
@@ -883,7 +891,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
                                   ),
                                 ),
                               Text(
-                                "₹${price.toStringAsFixed(0)} / unit",
+                                "₹${unitPrice.toStringAsFixed(0)} / unit",
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: theme.colorScheme.onSurface
@@ -1020,11 +1028,19 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
             final item = entry.value;
             String displayValue = "₹0.00";
             final value = item['value'];
+            double parsedValue = 0.0;
+
             if (value is num) {
-              displayValue = "₹${value.toStringAsFixed(2)}";
-            } else if (value is String && double.tryParse(value) != null) {
-              displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
+              parsedValue = value.toDouble();
+            } else if (value != null) {
+              final cleaned = value.toString().replaceAll(
+                RegExp(r'[^0-9.-]'),
+                '',
+              );
+              parsedValue = double.tryParse(cleaned) ?? 0.0;
             }
+
+            displayValue = "₹${parsedValue.abs().toStringAsFixed(2)}";
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),

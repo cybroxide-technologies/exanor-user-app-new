@@ -7,8 +7,6 @@ import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/components/universal_translation_wrapper.dart';
 import 'package:exanor/services/enhanced_translation_service.dart';
 import 'package:exanor/components/language_selector.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class PhoneRegistrationScreen extends StatefulWidget {
   const PhoneRegistrationScreen({super.key});
@@ -42,7 +40,7 @@ class _PhoneRegistrationScreenState extends State<PhoneRegistrationScreen> {
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: UniversalTranslationWrapper(
-        excludePatterns: ['+', '@', '.com', 'API'],
+        excludePatterns: const ['+', '@', '.com', 'API'],
         child: SafeArea(
           child: Column(
             children: [

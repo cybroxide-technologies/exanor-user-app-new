@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:ui';
 
 import 'package:exanor/components/translation_widget.dart';
@@ -145,7 +144,7 @@ class _SwipeToPayButtonState extends State<SwipeToPayButton>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primaryColor = widget.color ?? theme.colorScheme.primary;
-    final buttonHeight = 60.0;
+    const buttonHeight = 60.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {

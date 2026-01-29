@@ -138,305 +138,354 @@ class _SimplePhoneRegistrationScreenState
             left: 0,
             right: 0,
             bottom: bottomInset,
-            child: Column(
-              children: [
-                const Spacer(),
-
-                // The "Sheet" Container
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(32),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                        blurRadius: 10, // Matte/Sharper
-                        offset: const Offset(0, -2), // Closer
-                        spreadRadius: 0,
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min, // Wrap content tightly
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Logo and Title Row
-                      Column(
+                    child: IntrinsicHeight(
+                      child: Column(
                         children: [
+                          const Spacer(),
+
+                          // The "Sheet" Container
                           Container(
-                            width: 64,
-                            height: 64,
+                            width: double.infinity,
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              color: isDark ? Colors.black : Colors.white,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(32),
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
+                                  color: Colors.black.withOpacity(
+                                    isDark ? 0.3 : 0.05,
+                                  ),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, -2),
+                                  spreadRadius: 0,
                                 ),
                               ],
                             ),
-                            child: Image.asset(
-                              'assets/icon/exanor_blue.png',
-                              // Removed color tint to show original logo
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                "YOUR NEEDS",
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.playfairDisplay(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
-                                  height: 1.0,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  mainAxisSize: MainAxisSize.min,
+                            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Logo and Title Row - CLEAN LUXURY REDESIGN
+                                Column(
                                   children: [
-                                    Container(
-                                      width: 3,
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.primary
-                                            .withOpacity(0.3),
-                                        shape: BoxShape.circle,
+                                    // Logo - Larger & Premium
+                                    // Logo - Big & Clean
+                                    SizedBox(
+                                      width: 88,
+                                      height: 88,
+                                      child: Image.asset(
+                                        'assets/icon/exanor_blue.png',
+                                        fit: BoxFit.contain,
                                       ),
                                     ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      width: 5,
-                                      height: 5,
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.primary,
-                                        shape: BoxShape.circle,
-                                      ),
+                                    const SizedBox(height: 32),
+
+                                    // "Cool" Editorial Typographic Lockup
+                                    Column(
+                                      children: [
+                                        // Top Line: "YOUR NEEDS" - The "Label" style
+                                        Text(
+                                          "YOUR NEEDS",
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: theme.colorScheme.primary,
+                                            letterSpacing: 4.0,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        // Bottom Line: "Under One Umbrella"
+                                        Text(
+                                          "Under One Umbrella",
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.playfairDisplay(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w500,
+                                            fontStyle: FontStyle.italic,
+                                            color: theme.colorScheme.onSurface,
+                                            height: 1.2,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 6),
-                                    Container(
-                                      width: 3,
-                                      height: 3,
-                                      decoration: BoxDecoration(
-                                        color: theme.colorScheme.primary
-                                            .withOpacity(0.3),
-                                        shape: BoxShape.circle,
-                                      ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Creative Subtitle - "Unlock your experience"
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          height: 1,
+                                          width: 24,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.1),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          "Unlock your experience",
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: theme.colorScheme.onSurface
+                                                .withOpacity(0.6),
+                                            letterSpacing: 1.2,
+                                            height: 1.0,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Container(
+                                          height: 1,
+                                          width: 24,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.1),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
-                              ),
-                              Text(
-                                "Under One Umbrella",
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.9),
-                                  height: 1.0,
-                                  letterSpacing: 0.5,
+
+                                const SizedBox(height: 24),
+
+                                // Phone Input Field
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.transparent,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: theme.colorScheme.onSurface
+                                          .withOpacity(0.2),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      // Country Code Section with Classy Flag
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Classy Flag Image (Network)
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.1),
+                                                  blurRadius: 2,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ],
+                                            ),
+                                            child: ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
+                                              child: Image.network(
+                                                'https://flagcdn.com/w40/in.png',
+                                                width: 28,
+                                                height: 20,
+                                                fit: BoxFit.cover,
+                                                errorBuilder:
+                                                    (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) => const Text(
+                                                      "🇮🇳",
+                                                      style: TextStyle(
+                                                        fontSize: 24,
+                                                      ),
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 2,
+                                            ),
+                                            child: Text(
+                                              "+$_countryCode",
+                                              style: GoogleFonts.inter(
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 18,
+                                                color:
+                                                    theme.colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+
+                                      // Vertical Line Separator
+                                      Container(
+                                        height: 24,
+                                        width: 1,
+                                        margin: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                        ),
+                                        color: theme.colorScheme.onSurface
+                                            .withOpacity(0.15),
+                                      ),
+
+                                      // Phone Number Input
+                                      Expanded(
+                                        child: TextFormField(
+                                          controller: _phoneController,
+                                          keyboardType: TextInputType.phone,
+                                          textAlignVertical:
+                                              TextAlignVertical.center,
+                                          onChanged: (_) => setState(() {}),
+                                          style: GoogleFonts.inter(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: theme.colorScheme.onSurface,
+                                            letterSpacing: 0.5,
+                                          ),
+                                          inputFormatters: [
+                                            FilteringTextInputFormatter
+                                                .digitsOnly,
+                                            LengthLimitingTextInputFormatter(
+                                              10,
+                                            ),
+                                          ],
+                                          decoration: InputDecoration(
+                                            isDense: true,
+                                            filled: false,
+                                            fillColor: Colors.transparent,
+                                            contentPadding: EdgeInsets.zero,
+                                            border: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            errorBorder: InputBorder.none,
+                                            disabledBorder: InputBorder.none,
+                                            hintText: "0000000000",
+                                            hintStyle: GoogleFonts.inter(
+                                              color: theme.colorScheme.onSurface
+                                                  .withOpacity(0.2),
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            suffixIconConstraints:
+                                                const BoxConstraints(
+                                                  maxHeight: 24,
+                                                  maxWidth: 32,
+                                                ),
+                                            suffixIcon:
+                                                _phoneController.text.isNotEmpty
+                                                ? GestureDetector(
+                                                    onTap: () => setState(
+                                                      () => _phoneController
+                                                          .clear(),
+                                                    ),
+                                                    child: Container(
+                                                      margin:
+                                                          const EdgeInsets.only(
+                                                            left: 8,
+                                                          ),
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            4,
+                                                          ),
+                                                      child: Icon(
+                                                        Icons.close_rounded,
+                                                        size: 18,
+                                                        color: theme
+                                                            .colorScheme
+                                                            .onSurface
+                                                            .withOpacity(0.6),
+                                                      ),
+                                                    ),
+                                                  )
+                                                : null,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Log in or Sign up",
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.6,
-                              ),
+                                const SizedBox(height: 20),
+
+                                // Verify Button - Full width, prominent
+                                SizedBox(
+                                  height: 54,
+                                  child: ElevatedButton(
+                                    onPressed: _isLoading
+                                        ? null
+                                        : _submitPhoneNumber,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          theme.colorScheme.primary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      disabledBackgroundColor: theme
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.1),
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          )
+                                        : Text(
+                                            "Continue",
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                Text(
+                                  "By continuing, you agree to our Terms of Service & Privacy Policy",
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.4),
+                                    height: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                              ],
                             ),
                           ),
                         ],
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // Phone Input Field
-                      Container(
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF0F172A)
-                              : const Color(
-                                  0xFFF1F5F9,
-                                ), // Slight grey fill instead of white to define area without border
-                          borderRadius: BorderRadius.circular(16),
-                          // Border removed as requested
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              "+$_countryCode",
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 18,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                            Container(
-                              height: 24,
-                              width: 1.5,
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              color: theme.colorScheme.outline.withOpacity(0.3),
-                            ),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _phoneController,
-                                keyboardType: TextInputType.phone,
-                                textAlignVertical: TextAlignVertical.center,
-                                // Trigger rebuild to show/hide suffix icon
-                                onChanged: (_) => setState(() {}),
-                                style: GoogleFonts.inter(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurface,
-                                  letterSpacing: 0.5,
-                                ),
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(10),
-                                ],
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  contentPadding: EdgeInsets.zero,
-                                  filled: false,
-                                  fillColor: Colors.transparent,
-                                  hintText: "0000000000",
-                                  hintStyle: GoogleFonts.inter(
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(
-                                          0.2,
-                                        ), // More subtle placeholder
-                                    fontSize: 18, // Match input size
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  border: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  errorBorder: InputBorder.none,
-                                  disabledBorder: InputBorder.none,
-                                  suffixIconConstraints: const BoxConstraints(
-                                    maxHeight: 24,
-                                    maxWidth: 40,
-                                  ),
-                                  suffixIcon: _phoneController.text.isNotEmpty
-                                      ? Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 8,
-                                          ),
-                                          child: GestureDetector(
-                                            onTap: () => setState(
-                                              () => _phoneController.clear(),
-                                            ),
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withOpacity(0.1),
-                                                shape: BoxShape.circle,
-                                              ),
-                                              padding: const EdgeInsets.all(4),
-                                              child: Icon(
-                                                Icons.close_rounded,
-                                                size: 14,
-                                                color: theme
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withOpacity(0.6),
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : null,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Verify Button - Full width, prominent
-                      SizedBox(
-                        height: 54,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _submitPhoneNumber,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: theme
-                                .colorScheme
-                                .primary, // Typically Green/Brand color
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            disabledBackgroundColor: theme.colorScheme.onSurface
-                                .withOpacity(0.1),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : Text(
-                                  "Continue",
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Text(
-                        "By continuing, you agree to our Terms of Service & Privacy Policy",
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: theme.colorScheme.onSurface.withOpacity(0.4),
-                          height: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -445,6 +494,9 @@ class _SimplePhoneRegistrationScreenState
   }
 
   void _submitPhoneNumber() async {
+    // Minimize keyboard immediately
+    FocusScope.of(context).unfocus();
+
     final phone = _phoneController.text.trim();
     if (phone.isEmpty || phone.length != 10) {
       ScaffoldMessenger.of(context).showSnackBar(

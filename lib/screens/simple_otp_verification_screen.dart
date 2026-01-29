@@ -171,290 +171,383 @@ class _SimpleOTPVerificationScreenState
             left: 0,
             right: 0,
             bottom: bottomInset,
-            child: Column(
-              children: [
-                const Spacer(), // Pushes content to bottom
-
-                Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(32),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -2),
-                        spreadRadius: 0,
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Logo and Title
-                      Column(
+                    child: IntrinsicHeight(
+                      child: Column(
                         children: [
+                          const Spacer(), // Pushes content to bottom
+
                           Container(
-                            width: 64,
-                            height: 64,
+                            width: double.infinity,
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(16),
+                              color: isDark ? Colors.black : Colors.white,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(32),
+                              ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                            ),
-                            child: Image.asset(
-                              'assets/icon/exanor_blue.png',
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          Text(
-                            'OTP Verification',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.outfit(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          RichText(
-                            textAlign: TextAlign.center,
-                            text: TextSpan(
-                              style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.6,
-                                ),
-                                height: 1.4,
-                              ),
-                              children: [
-                                const TextSpan(text: 'We\'ve sent a code to '),
-                                TextSpan(
-                                  text: widget.phoneNumber,
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onSurface,
-                                    fontWeight: FontWeight.w700,
+                                  color: Colors.black.withOpacity(
+                                    isDark ? 0.3 : 0.05,
                                   ),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, -2),
+                                  spreadRadius: 0,
                                 ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.center,
-                        children: [
-                          // OTP Boxes
-                          GestureDetector(
-                            onTap: () {
-                              FocusScope.of(context).requestFocus(_focusNode);
-                              SystemChannels.textInput.invokeMethod(
-                                'TextInput.show',
-                              );
-                            },
-                            child: Container(
-                              color: Colors.transparent,
-                              width: double.infinity,
-                              alignment: Alignment.center,
-                              child: Wrap(
-                                spacing: 12,
-                                alignment: WrapAlignment.center,
-                                children: List.generate(4, (index) {
-                                  final isFilled = index < _otpCode.length;
-                                  final isFocused =
-                                      index == _otpCode.length &&
-                                      _focusNode.hasFocus;
-                                  final char = isFilled ? _otpCode[index] : '';
-
-                                  return AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    width: 60,
-                                    height: 60,
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? const Color(0xFF0F172A)
-                                          : Colors.white,
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: isFocused
-                                            ? theme.colorScheme.primary
-                                            : isDark
-                                            ? Colors.white24
-                                            : theme.colorScheme.outline
-                                                  .withOpacity(0.2),
-                                        width: isFocused ? 2 : 1.5,
+                            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Logo and Title - Brand Lockup
+                                Column(
+                                  children: [
+                                    // Logo - Big & Clean
+                                    SizedBox(
+                                      width: 88,
+                                      height: 88,
+                                      child: Image.asset(
+                                        'assets/icon/exanor_blue.png',
+                                        fit: BoxFit.contain,
                                       ),
-                                      boxShadow: isFocused
-                                          ? [
-                                              BoxShadow(
-                                                color: theme.colorScheme.primary
-                                                    .withOpacity(0.25),
-                                                blurRadius: 12,
-                                                offset: const Offset(0, 4),
-                                              ),
-                                            ]
-                                          : [],
                                     ),
-                                    child: Center(
-                                      child: Text(
-                                        char,
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.w700,
-                                          color: theme.colorScheme.onSurface,
+                                    const SizedBox(height: 32),
+
+                                    // "Cool" Editorial Typographic Lockup
+                                    Column(
+                                      children: [
+                                        Text(
+                                          "YOUR NEEDS",
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: theme.colorScheme.primary,
+                                            letterSpacing: 4.0,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "Under One Umbrella",
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.playfairDisplay(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w500,
+                                            fontStyle: FontStyle.italic,
+                                            color: theme.colorScheme.onSurface,
+                                            height: 1.2,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Divider / Subtitle
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          height: 1,
+                                          width: 24,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.1),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          "Verification Code",
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: theme.colorScheme.onSurface
+                                                .withOpacity(0.6),
+                                            letterSpacing: 1.2,
+                                            height: 1.0,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Container(
+                                          height: 1,
+                                          width: 24,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.1),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    RichText(
+                                      textAlign: TextAlign.center,
+                                      text: TextSpan(
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.6),
+                                          height: 1.4,
+                                        ),
+                                        children: [
+                                          const TextSpan(
+                                            text: 'We\'ve sent a code to ',
+                                          ),
+                                          TextSpan(
+                                            text: widget.phoneNumber,
+                                            style: TextStyle(
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // OTP Boxes
+                                    GestureDetector(
+                                      onTap: () {
+                                        FocusScope.of(
+                                          context,
+                                        ).requestFocus(_focusNode);
+                                        SystemChannels.textInput.invokeMethod(
+                                          'TextInput.show',
+                                        );
+                                      },
+                                      child: Container(
+                                        color: Colors.transparent,
+                                        width: double.infinity,
+                                        alignment: Alignment.center,
+                                        child: Wrap(
+                                          spacing: 12,
+                                          alignment: WrapAlignment.center,
+                                          children: List.generate(4, (index) {
+                                            final isFilled =
+                                                index < _otpCode.length;
+                                            final isFocused =
+                                                index == _otpCode.length &&
+                                                _focusNode.hasFocus;
+                                            final char = isFilled
+                                                ? _otpCode[index]
+                                                : '';
+
+                                            return AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 200,
+                                              ),
+                                              width: 60,
+                                              height: 60,
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? const Color(0xFF0F172A)
+                                                    : Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: isFocused
+                                                      ? theme
+                                                            .colorScheme
+                                                            .primary
+                                                      : isDark
+                                                      ? Colors.white24
+                                                      : theme
+                                                            .colorScheme
+                                                            .outline
+                                                            .withOpacity(0.2),
+                                                  width: isFocused ? 2 : 1.5,
+                                                ),
+                                                boxShadow: isFocused
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: theme
+                                                              .colorScheme
+                                                              .primary
+                                                              .withOpacity(
+                                                                0.25,
+                                                              ),
+                                                          blurRadius: 12,
+                                                          offset: const Offset(
+                                                            0,
+                                                            4,
+                                                          ),
+                                                        ),
+                                                      ]
+                                                    : [],
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  char,
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 24,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onSurface,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }),
                                         ),
                                       ),
                                     ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          ),
 
-                          // Hidden text field - positioned but invisible
-                          // We give it 1x1 size so the system treats it as "visible" for focus purposes
-                          Positioned(
-                            bottom: 0,
-                            left: 0,
-                            child: Opacity(
-                              opacity: 0,
-                              child: SizedBox(
-                                width: 1,
-                                height: 1,
-                                child: TextField(
-                                  controller: _otpController,
-                                  focusNode: _focusNode,
-                                  keyboardType: TextInputType.number,
-                                  // Remove all borders to prevent the "blue line"
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    errorBorder: InputBorder.none,
-                                    disabledBorder: InputBorder.none,
-                                    counterText: '',
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                  style: const TextStyle(
-                                    color: Colors.transparent,
-                                  ),
-                                  showCursor: false,
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(4),
+                                    // Hidden text field - positioned but invisible
+                                    // We give it 1x1 size so the system treats it as "visible" for focus purposes
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      child: Opacity(
+                                        opacity: 0,
+                                        child: SizedBox(
+                                          width: 1,
+                                          height: 1,
+                                          child: TextField(
+                                            controller: _otpController,
+                                            focusNode: _focusNode,
+                                            keyboardType: TextInputType.number,
+                                            // Remove all borders to prevent the "blue line"
+                                            decoration: const InputDecoration(
+                                              border: InputBorder.none,
+                                              enabledBorder: InputBorder.none,
+                                              focusedBorder: InputBorder.none,
+                                              errorBorder: InputBorder.none,
+                                              disabledBorder: InputBorder.none,
+                                              counterText: '',
+                                              contentPadding: EdgeInsets.zero,
+                                            ),
+                                            style: const TextStyle(
+                                              color: Colors.transparent,
+                                            ),
+                                            showCursor: false,
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter
+                                                  .digitsOnly,
+                                              LengthLimitingTextInputFormatter(
+                                                4,
+                                              ),
+                                            ],
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _otpCode = value;
+                                              });
+                                              if (value.length == 4) {
+                                                _verifyOTP();
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ],
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _otpCode = value;
-                                    });
-                                    if (value.length == 4) {
-                                      _verifyOTP();
-                                    }
-                                  },
                                 ),
-                              ),
+
+                                const SizedBox(height: 20),
+
+                                // Action Button
+                                SizedBox(
+                                  height: 54,
+                                  child: ElevatedButton(
+                                    onPressed:
+                                        (_otpCode.length == 4 && !_isLoading)
+                                        ? _verifyOTP
+                                        : null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          theme.colorScheme.primary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      disabledBackgroundColor: theme
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.12),
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          )
+                                        : Text(
+                                            'Verify & Proceed',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                // Resend Link
+                                Center(
+                                  child: _isResendLoading
+                                      ? SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        )
+                                      : GestureDetector(
+                                          onTap: _canResend
+                                              ? _resendCode
+                                              : null,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
+                                            child: Text(
+                                              _canResend
+                                                  ? 'Resend code'
+                                                  : 'Resend code in ${_resendTimer}s',
+                                              style: GoogleFonts.inter(
+                                                color: _canResend
+                                                    ? theme.colorScheme.primary
+                                                    : theme
+                                                          .colorScheme
+                                                          .onSurface
+                                                          .withOpacity(0.4),
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
                             ),
                           ),
                         ],
                       ),
-
-                      const SizedBox(height: 20),
-
-                      // Action Button
-                      SizedBox(
-                        height: 54,
-                        child: ElevatedButton(
-                          onPressed: (_otpCode.length == 4 && !_isLoading)
-                              ? _verifyOTP
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            disabledBackgroundColor: theme.colorScheme.onSurface
-                                .withOpacity(0.12),
-                          ),
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 24,
-                                  height: 24,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : Text(
-                                  'Verify & Proceed',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Resend Link
-                      Center(
-                        child: _isResendLoading
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              )
-                            : GestureDetector(
-                                onTap: _canResend ? _resendCode : null,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  child: Text(
-                                    _canResend
-                                        ? 'Resend code'
-                                        : 'Resend code in ${_resendTimer}s',
-                                    style: GoogleFonts.inter(
-                                      color: _canResend
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.onSurface
-                                                .withOpacity(0.4),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -503,6 +596,9 @@ class _SimpleOTPVerificationScreenState
   }
 
   void _verifyOTP() async {
+    // Minimize keyboard immediately
+    FocusScope.of(context).unfocus();
+
     if (_isLoading) return;
     setState(() => _isLoading = true);
 

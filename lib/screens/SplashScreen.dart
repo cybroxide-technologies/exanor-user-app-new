@@ -9,9 +9,8 @@ import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
-// Unused import
-// import 'package:google_fonts/google_fonts.dart';
 import 'dart:math';
+import 'package:exanor/main.dart' show backgroundInitComplete;
 
 // ------------------------------------------------
 //  OPTIMIZED STAR MODEL
@@ -172,10 +171,17 @@ class _SplashScreenState extends State<SplashScreen>
     final configFuture = _initRemoteConfig();
     final userCheckFuture = _checkUserSession();
 
+    // Wait for background initialization from main.dart to complete
+    // This ensures all services are fully ready before we navigate
+    final backgroundInitFuture = backgroundInitComplete.future;
+
     await minSplashDuration;
 
     await configFuture;
     _isLoggedIn = await userCheckFuture;
+
+    // Also wait for background services to be ready
+    await backgroundInitFuture;
 
     if (mounted) {
       try {

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:exanor/components/liquid_glass_bottom_nav.dart'; // For RegistrationBottomSheet
@@ -508,7 +507,7 @@ class _PeelPainter extends CustomPainter {
 
     final center = size.width / 2;
     // Tweak curve geometry for 64px button overlap
-    final curveWidth = 70.0;
+    const curveWidth = 70.0;
 
     path.moveTo(0, 0); // Top Left
 

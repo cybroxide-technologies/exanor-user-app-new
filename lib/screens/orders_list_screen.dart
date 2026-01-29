@@ -31,6 +31,8 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   List<dynamic> _filteredOrders = []; // Store filtered orders
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _isSilentFetching =
+      false; // For background auto-fetch without UI indicator
   bool _hasNextPage = false;
   int _currentPage = 1;
   String? _effectiveStoreId;
@@ -42,6 +44,9 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
   // Header State
   bool _isScrolled = false;
+
+  // Minimum number of visible items before auto-fetching more
+  static const int _minVisibleItems = 6;
 
   @override
   void initState() {
@@ -85,11 +90,19 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     }
   }
 
-  Future<void> _fetchOrders({bool isLoadMore = false}) async {
-    if (isLoadMore) {
+  Future<void> _fetchOrders({
+    bool isLoadMore = false,
+    bool silent = false,
+  }) async {
+    // Prevent concurrent fetches
+    if (silent && _isSilentFetching) return;
+
+    if (isLoadMore && !silent) {
       setState(() => _isLoadingMore = true);
-    } else {
+    } else if (!isLoadMore) {
       setState(() => _isLoading = true);
+    } else if (silent) {
+      _isSilentFetching = true;
     }
 
     try {
@@ -129,8 +142,13 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
             _isLoading = false;
             _isLoadingMore = false;
+            _isSilentFetching = false;
             _errorMessage = null;
           });
+
+          // Auto-fetch more if filtered list is too small and more pages exist
+          // This ensures users can always scroll to trigger more loads
+          _checkAndFetchMoreIfNeeded();
         }
       } else {
         throw Exception(result['message'] ?? 'Failed to load orders');
@@ -144,8 +162,35 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
             _isLoading = false;
           }
           _isLoadingMore = false;
+          _isSilentFetching = false;
         });
       }
+    }
+  }
+
+  /// Checks if the current filtered list has too few items and fetches more if possible.
+  /// This solves the issue where the server sends a page of orders but only a few
+  /// match the current filter (e.g., "Completed" tab), leaving the user unable to scroll.
+  void _checkAndFetchMoreIfNeeded() {
+    // Only auto-fetch if:
+    // 1. We have more pages available
+    // 2. Current filtered list is smaller than threshold
+    // 3. We're not already loading (including silent fetches)
+    if (_hasNextPage &&
+        _filteredOrders.length < _minVisibleItems &&
+        !_isLoadingMore &&
+        !_isLoading &&
+        !_isSilentFetching) {
+      // Small delay to prevent rapid-fire requests
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted &&
+            _hasNextPage &&
+            _filteredOrders.length < _minVisibleItems &&
+            !_isSilentFetching) {
+          // Use silent: true to avoid showing loading indicator
+          _fetchOrders(isLoadMore: true, silent: true);
+        }
+      });
     }
   }
 
@@ -221,6 +266,8 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
       _selectedTabIndex = index;
       _applyFilter();
     });
+    // After switching tabs, check if we need to fetch more for this filter
+    _checkAndFetchMoreIfNeeded();
   }
 
   Color _getStatusColor(String status) {
@@ -386,7 +433,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   Widget _buildOrderList(ThemeData theme, bool isDark, Gradient bgGradient) {
     // Header = StatusBar + TopBar(60) + Tabs(60) + Padding
     final topPadding = MediaQuery.of(context).padding.top;
-    final headerContentHeight = 130.0;
+    const headerContentHeight = 130.0;
     final totalHeaderHeight = topPadding + headerContentHeight;
 
     if (_filteredOrders.isEmpty) {
@@ -884,7 +931,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final boxWidth = constraints.constrainWidth();
         const dashWidth = 6.0;
-        final dashHeight = 1.0;
+        const dashHeight = 1.0;
         final dashCount = (boxWidth / (2 * dashWidth)).floor();
         return Flex(
           children: List.generate(dashCount, (_) {
@@ -948,7 +995,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   Widget _buildShimmerList(ThemeData theme, Gradient bgGradient) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final topPadding = MediaQuery.of(context).padding.top;
-    final headerContentHeight = 130.0;
+    const headerContentHeight = 130.0;
     final totalHeaderHeight = topPadding + headerContentHeight;
 
     final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
@@ -1215,7 +1262,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           lightStartBase.withOpacity(0.35),
           Colors.white,
         );
-        final lightModeEnd = Colors.white;
+        const lightModeEnd = Colors.white;
 
         final startColor = isDark
             ? _hexToColor(

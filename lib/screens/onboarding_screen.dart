@@ -194,7 +194,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     // Handle case where pages are not yet initialized
     if (_pages.isEmpty) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: Colors.white,
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF2C2C2C)),
@@ -264,14 +264,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                       width: 1,
                                     ),
                                   ),
-                                  child: Icon(
+                                  child: const Icon(
                                     Icons.arrow_back_ios_new,
                                     color: Colors.white,
                                     size: 20,
                                   ),
                                 ),
                               )
-                            : SizedBox(width: 56, height: 56),
+                            : const SizedBox(width: 56, height: 56),
                       ),
 
                       // Next/Get Started button

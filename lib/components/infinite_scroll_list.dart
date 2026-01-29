@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
-import 'package:exanor/config/theme_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Reusable infinite scroll list component that can handle different API endpoints

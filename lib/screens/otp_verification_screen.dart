@@ -88,7 +88,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         ),
       ),
       body: UniversalTranslationWrapper(
-        excludePatterns: ['+', '@', '.com', 'OTP', 'API'],
+        excludePatterns: const ['+', '@', '.com', 'OTP', 'API'],
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -284,13 +284,13 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
         if (response['data'] != null && response['data']['status'] == 200) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: TranslatedText('Verification code sent!')),
+            const SnackBar(content: TranslatedText('Verification code sent!')),
           );
           _startResendTimer();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: TranslatedText(
+              content: const TranslatedText(
                 'Failed to resend OTP. Please try again.',
               ),
               backgroundColor: Theme.of(context).colorScheme.error,
@@ -305,7 +305,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: TranslatedText('Network error. Please try again.'),
+            content: const TranslatedText('Network error. Please try again.'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

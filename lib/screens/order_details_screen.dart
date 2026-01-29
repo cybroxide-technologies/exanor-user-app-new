@@ -383,7 +383,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       lightStartBase.withOpacity(0.35),
       Colors.white,
     );
-    final lightModeEnd = Colors.white;
+    const lightModeEnd = Colors.white;
 
     final startColor = isDark
         ? _hexToColor(
@@ -399,9 +399,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         : lightModeEnd;
 
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.transparent, // Ensure container itself is transparent
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
         // No Shadow on Header
       ),
       child: ClipRRect(
@@ -879,12 +879,23 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
               itemBuilder: (context, index) {
                 final product = _products[index];
                 final quantity = product['quantity'] ?? 0;
-                final price =
+                double total =
                     double.tryParse(
                       product['amount_including_tax']?.toString() ?? '0',
                     ) ??
                     0.0;
-                final total = price * quantity;
+
+                // Fallback: If amount_including_tax is 0, check for other keys or assume it was unit price if needed?
+                // But usually 'amount' implies total.
+                // Let's also check if 'total' is available directly.
+                if (total == 0) {
+                  final p =
+                      double.tryParse(product['price']?.toString() ?? '0') ??
+                      0.0;
+                  if (p != 0) total = p * quantity;
+                }
+
+                final unitPrice = quantity > 0 ? total / quantity : 0.0;
                 final variant = product['variant_name'];
                 // Check multiple keys for image, or default to null
                 final imageUrl =
@@ -1009,7 +1020,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                                   ),
                                 ),
                               Text(
-                                "₹${price.toStringAsFixed(0)} / unit",
+                                "₹${unitPrice.toStringAsFixed(0)} / unit",
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: theme.colorScheme.onSurface
@@ -1193,15 +1204,23 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
 
             String displayValue = "₹0.00";
             final value = item['value'];
+            double parsedValue = 0.0;
+
             if (value is num) {
-              displayValue = "₹${value.toStringAsFixed(2)}";
-            } else if (value is String && double.tryParse(value) != null) {
-              displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
+              parsedValue = value.toDouble();
+            } else if (value != null) {
+              // Robust parsing: remove non-numeric chars except dot and minus
+              final cleaned = value.toString().replaceAll(
+                RegExp(r'[^0-9.-]'),
+                '',
+              );
+              parsedValue = double.tryParse(cleaned) ?? 0.0;
             }
 
+            displayValue = "₹${parsedValue.abs().toStringAsFixed(2)}";
+
             final isDiscount =
-                (value is num && value < 0) ||
-                (value is String && value.startsWith('-'));
+                parsedValue < 0 || (value.toString().contains('-'));
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -1391,7 +1410,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             ),
           ),
 
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+          Divider(height: 1, color: theme.dividerColor.withOpacity(0.4)),
 
           // Store Header
           Padding(
@@ -1451,7 +1470,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             ),
           ),
 
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+          Divider(height: 1, color: theme.dividerColor.withOpacity(0.4)),
 
           // Info Grid - Symmetrical Boxes
           Padding(
@@ -1534,7 +1553,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

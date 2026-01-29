@@ -102,9 +102,9 @@ class CustomSliverAppBar extends StatelessWidget {
                       stops: isDarkMode ? null : const [0.0, 1.0],
                     ),
                   ),
-                  child: SafeArea(
+                  child: const SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.only(
+                      padding: EdgeInsets.only(
                         left: 16.0,
                         right: 16.0,
                         top: 12.0,
@@ -795,7 +795,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                               scrollDirection: Axis.horizontal,
                               itemCount: _categories.length,
                               separatorBuilder: (context, index) =>
-                                  SizedBox(width: 16.0),
+                                  const SizedBox(width: 16.0),
                               itemBuilder: (context, index) {
                                 final category = _categories[index];
                                 final categoryId = category['id'];
@@ -923,7 +923,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                       alignment: Alignment.bottomCenter,
                       child: Container(
                         height: 50, // Fixed height for chips container
-                        padding: EdgeInsets.only(
+                        padding: const EdgeInsets.only(
                           bottom: 10,
                         ), // Added bottom padding
                         child: MediaQuery.removePadding(

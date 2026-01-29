@@ -4,15 +4,22 @@ import 'package:flutter/foundation.dart';
 class AnalyticsService {
   static final AnalyticsService _instance = AnalyticsService._internal();
   factory AnalyticsService() => _instance;
-  AnalyticsService._internal();
 
-  late final FirebaseAnalytics _analytics;
+  // Initialize immediately so observer is always available
+  final FirebaseAnalytics _analytics = FirebaseAnalytics.instance;
   late final FirebaseAnalyticsObserver _observer;
 
-  // Initialize the analytics service
-  void initialize() {
-    _analytics = FirebaseAnalytics.instance;
+  bool _isInitialized = false;
+
+  AnalyticsService._internal() {
+    // Create observer immediately so it's available for MaterialApp
     _observer = FirebaseAnalyticsObserver(analytics: _analytics);
+  }
+
+  // Initialize the analytics service (for additional setup)
+  void initialize() {
+    if (_isInitialized) return;
+    _isInitialized = true;
 
     // Set default event parameters
     _setDefaultEventParameters();
@@ -33,7 +40,7 @@ class AnalyticsService {
         await _analytics.setDefaultEventParameters(<String, dynamic>{
           'app_version': '1.0.0', // Replace with actual app version
           'platform': 'flutter',
-          'debug_mode': kDebugMode,
+          'debug_mode': kDebugMode ? 'true' : 'false',
         });
       }
     } catch (e) {

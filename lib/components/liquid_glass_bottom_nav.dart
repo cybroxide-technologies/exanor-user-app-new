@@ -5,14 +5,12 @@ import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:exanor/components/translation_widget.dart';
-import 'package:exanor/services/api_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:exanor/components/dashboard_section.dart';
 import 'package:exanor/components/language_selector.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/screens/qr_scanner_screen.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:convert';
 import 'dart:async'; // Added for Timer
 
 // Badge types for navigation items
@@ -480,10 +478,10 @@ class _RegistrationBottomSheetState extends State<RegistrationBottomSheet>
                     ),
 
                     // Dashboard section
-                    Expanded(
+                    const Expanded(
                       child: SingleChildScrollView(
-                        physics: const BouncingScrollPhysics(),
-                        child: const DashboardSection(),
+                        physics: BouncingScrollPhysics(),
+                        child: DashboardSection(),
                       ),
                     ),
                   ],
@@ -1324,7 +1322,7 @@ class _LiquidGlassBottomNavState extends State<LiquidGlassBottomNav>
                   ),
                 ],
               ),
-              child: Text(
+              child: const Text(
                 'FREE',
                 style: TextStyle(
                   color: Colors.white,
@@ -1556,7 +1554,7 @@ class _LiquidGlassBottomNavState extends State<LiquidGlassBottomNav>
               ),
               child: Text(
                 badgeText,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 8,
                   fontWeight: FontWeight.bold,

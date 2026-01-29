@@ -332,7 +332,7 @@ class _RemoteConfigDebugScreenState extends State<RemoteConfigDebugScreen> {
 
               // Instructions
               Card(
-                color: theme.colorScheme.surfaceVariant,
+                color: theme.colorScheme.surfaceContainerHighest,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

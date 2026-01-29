@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:exanor/components/translation_widget.dart';
+import 'package:flutter/foundation.dart';
 import 'package:exanor/components/home_screen_skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'; // Added for ScrollDirection
@@ -10,9 +11,8 @@ import 'package:exanor/services/api_service.dart';
 import 'package:exanor/components/custom_sliver_app_bar.dart';
 import 'package:exanor/components/professional_bottom_nav.dart';
 import 'package:exanor/screens/store_screen.dart';
-import 'package:exanor/screens/refer_and_earn_screen.dart';
 import 'package:exanor/services/firebase_messaging_service.dart';
-import 'package:flutter/foundation.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? userName;
   String? userImage;
   bool _isLoadingUserData = true;
+  bool _showTokenSuccess = false;
 
   // Navigation
   int _bottomNavIndex = 0;
@@ -51,6 +52,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isBottomNavVisible = true;
   int _categoryRefreshTrigger = 0;
 
+  // Scroll throttle for performance - limits setState calls during rapid scrolling
+  DateTime? _lastScrollTime;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _loadAddressData();
     _sendNotificationData();
+    _createNotificationToken();
   }
 
   Future<void> _loadAddressData() async {
@@ -117,6 +122,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onScroll() {
+    // Throttle scroll events to reduce setState calls (max 60fps = 16ms)
+    final now = DateTime.now();
+    if (_lastScrollTime != null &&
+        now.difference(_lastScrollTime!) < const Duration(milliseconds: 16)) {
+      // Still check for pagination even if throttled
+      _checkPagination();
+      return;
+    }
+    _lastScrollTime = now;
+
     // Handle Bottom Nav Visibility
     if (_scrollController.position.userScrollDirection ==
         ScrollDirection.reverse) {
@@ -126,6 +141,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!_isBottomNavVisible) setState(() => _isBottomNavVisible = true);
     }
 
+    _checkPagination();
+  }
+
+  void _checkPagination() {
     if (_scrollController.hasClients &&
         _scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 200) {
@@ -254,6 +273,76 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _createNotificationToken() async {
+    try {
+      String? token = await FirebaseMessagingService.getStoredToken();
+
+      // Fallback: Try to get token directly from Firebase Messaging instance
+      if (token == null) {
+        print(
+          '⚠️ Home: Stored token is null, fetching directly from instance...',
+        );
+        try {
+          token = await FirebaseMessaging.instance.getToken();
+          if (token != null) {
+            print('✅ Home: Fetched token from instance');
+          }
+        } catch (e) {
+          print('❌ Home: Failed to get token from instance: $e');
+        }
+      }
+
+      if (token != null) {
+        final platformData = {
+          'is_android':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+          'is_ios': !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
+          'is_web': kIsWeb,
+          'is_macos': !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS,
+          'is_windows':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
+          'is_linux': !kIsWeb && defaultTargetPlatform == TargetPlatform.linux,
+        };
+
+        print('🚀 Home: Calling /create-notification-token/ with token');
+
+        final response = await ApiService.post(
+          '/create-notification-token/',
+          body: {'fcm_token': token, ...platformData},
+          useBearerToken: true,
+        );
+
+        if (response['statusCode'] == 200 &&
+            response['data'] != null &&
+            response['data']['status'] == 200) {
+          if (mounted) {
+            setState(() {
+              _showTokenSuccess = true;
+            });
+            print('✅ Home: Token creation successful - Showing checkmark');
+
+            // Hide after 2 seconds
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) {
+                setState(() {
+                  _showTokenSuccess = false;
+                });
+              }
+            });
+          }
+        } else {
+          print(
+            '❌ Home: Token creation failed or invalid status: ${response['statusCode']}',
+          );
+        }
+      } else {
+        print('❌ Home: No token available to create notification token');
+      }
+    } catch (e) {
+      print('❌ Error creating notification token: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -354,13 +443,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
-                        // 2. Waves (Overlaying the text)
+                        // 2. Waves (Overlaying the text) - Wrapped in RepaintBoundary for performance
                         Positioned.fill(
-                          child: ClipRect(
-                            child: CustomPaint(
-                              painter: _SilkWavePainter(
-                                color: theme.colorScheme.onSurface,
-                                isDark: theme.brightness == Brightness.dark,
+                          child: RepaintBoundary(
+                            child: ClipRect(
+                              child: CustomPaint(
+                                painter: _SilkWavePainter(
+                                  color: theme.colorScheme.onSurface,
+                                  isDark: theme.brightness == Brightness.dark,
+                                ),
                               ),
                             ),
                           ),
@@ -442,6 +533,32 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          if (_showTokenSuccess)
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -628,63 +745,66 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                  // Bottom Glass Info Bar (Time & Rating) - Tighter & Cleaner
+                  // Bottom Glass Info Bar (Time & Rating) - Optimized for performance
+                  // Note: Replaced BackdropFilter with static semi-transparent container
+                  // for better scroll performance (BackdropFilter is expensive during scrolling)
                   Positioned(
                     bottom: 12,
                     left: 12,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        // Using a darker semi-transparent background instead of live blur
+                        color: Colors.black.withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.15),
+                          width: 0.5,
+                        ),
+                        // Subtle shadow for depth
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.1),
-                              width: 0.5,
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 14,
+                            color: Color(0xFFFFB800),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            store.averageRating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.star_rounded,
-                                size: 14,
-                                color: Color(0xFFFFB800),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                store.averageRating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                width: 1,
-                                height: 10,
-                                color: Colors.white.withOpacity(0.4),
-                              ),
-                              Text(
-                                store.fulfillmentSpeed, // e.g. "30-40 min"
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 8),
+                            width: 1,
+                            height: 10,
+                            color: Colors.white.withOpacity(0.4),
                           ),
-                        ),
+                          Text(
+                            store.fulfillmentSpeed, // e.g. "30-40 min"
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

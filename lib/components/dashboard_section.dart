@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:exanor/components/translation_widget.dart';
-import 'package:exanor/services/enhanced_translation_service.dart';
 import 'dart:ui';
 import 'dart:math' as math;
-import 'dart:convert';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/components/language_selector.dart';
 
@@ -654,14 +651,14 @@ class _DashboardSectionState extends State<DashboardSection>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: TranslatedText('Subscription Required'),
-        content: TranslatedText(
+        title: const TranslatedText('Subscription Required'),
+        content: const TranslatedText(
           'You need an active subscription to access your employee profile.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: TranslatedText('Cancel'),
+            child: const TranslatedText('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -669,7 +666,7 @@ class _DashboardSectionState extends State<DashboardSection>
               // Navigate to subscription screen (fallback without specific data)
               Navigator.pushNamed(context, '/subscription');
             },
-            child: TranslatedText('View Subscriptions'),
+            child: const TranslatedText('View Subscriptions'),
           ),
         ],
       ),
@@ -680,12 +677,12 @@ class _DashboardSectionState extends State<DashboardSection>
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: TranslatedText('Error'),
+        title: const TranslatedText('Error'),
         content: TranslatedText(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: TranslatedText('OK'),
+            child: const TranslatedText('OK'),
           ),
         ],
       ),
@@ -699,7 +696,7 @@ class _DashboardSectionState extends State<DashboardSection>
       // If route doesn't exist, show a message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: TranslatedText('Registration feature coming soon!'),
+          content: const TranslatedText('Registration feature coming soon!'),
           backgroundColor: Theme.of(context).colorScheme.primary,
         ),
       );

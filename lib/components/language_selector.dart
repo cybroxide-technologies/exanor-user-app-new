@@ -215,7 +215,7 @@ class _LanguageSelectorState extends State<LanguageSelector>
             SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -440,8 +440,8 @@ class _LanguageSelectorState extends State<LanguageSelector>
               scale: _scaleAnimation,
               child: Container(
                 height: screenSize.height * 0.75, // Reduced height
-                decoration: BoxDecoration(
-                  borderRadius: const BorderRadius.only(
+                decoration: const BoxDecoration(
+                  borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(28),
                     topRight: Radius.circular(28),
                   ),
@@ -1315,10 +1315,10 @@ class _EnhancedLanguageButtonState extends State<EnhancedLanguageButton>
                                   height: 8,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    gradient: LinearGradient(
+                                    gradient: const LinearGradient(
                                       colors: [
-                                        const Color(0xFF3B82F6),
-                                        const Color(0xFF8B5CF6),
+                                        Color(0xFF3B82F6),
+                                        Color(0xFF8B5CF6),
                                       ],
                                     ),
                                     boxShadow: [

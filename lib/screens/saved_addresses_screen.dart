@@ -7,6 +7,7 @@ import 'package:exanor/components/universal_translation_wrapper.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/screens/location_selection_screen.dart';
 import 'package:exanor/services/api_service.dart';
+import 'package:exanor/components/saved_addresses_skeleton.dart';
 
 class SavedAddressesScreen extends StatefulWidget {
   const SavedAddressesScreen({super.key});
@@ -144,65 +145,6 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
     }
   }
 
-  Future<void> _deleteAddress(int index) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const TranslatedText('Delete Address'),
-        content: const TranslatedText(
-          'Are you sure you want to delete this address?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const TranslatedText('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const TranslatedText('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final addressToDelete = _savedAddresses[index];
-      final addressId = addressToDelete['id'];
-
-      // Optimistically remove from UI
-      setState(() {
-        _savedAddresses.removeAt(index);
-      });
-
-      // Update local storage
-      final prefs = await SharedPreferences.getInstance();
-      final List<String> listToSave = _savedAddresses
-          .map((e) => json.encode(e))
-          .toList();
-      await prefs.setStringList('saved_addresses_list', listToSave);
-
-      // Delete from server if address has an ID
-      if (addressId != null) {
-        try {
-          print('🗑️ SavedAddresses: Deleting address from server: $addressId');
-
-          await ApiService.post(
-            '/delete-user-address/',
-            body: {'user_address_id': addressId},
-            useBearerToken: true,
-          );
-
-          print('✅ SavedAddresses: Address deleted from server');
-        } catch (e) {
-          print('❌ SavedAddresses: Error deleting from server: $e');
-          // Address already removed from UI and local storage
-          // Could show a snackbar here if needed
-        }
-      }
-    }
-  }
-
   Color _hexToColor(String? hex, {Color defaultColor = Colors.transparent}) {
     if (hex == null || hex.isEmpty) {
       return defaultColor;
@@ -281,8 +223,11 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                       right: 20,
                     ),
                     sliver: _isLoading
-                        ? SliverToBoxAdapter(
-                            child: Center(child: CircularProgressIndicator()),
+                        ? const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: 20),
+                              child: SavedAddressesSkeleton(),
+                            ),
                           )
                         : _savedAddresses.isEmpty
                         ? SliverFillRemaining(
@@ -342,7 +287,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
       lightStartBase.withOpacity(0.35),
       Colors.white,
     );
-    final lightModeEnd = Colors.white;
+    const lightModeEnd = Colors.white;
 
     final startColor = isDark
         ? _hexToColor(
@@ -499,183 +444,147 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
       displayAddress = parts.join(', ');
     }
 
-    return InkWell(
-      onTap: () async {
-        // Save the selected address to SharedPreferences
-        try {
-          final prefs = await SharedPreferences.getInstance();
-
-          // Save address ID and coordinates (handle both string and numeric types)
-          await prefs.setString('saved_address_id', address['id'] ?? '');
-
-          // Parse lat/lng properly - they come as strings from the API
-          double lat = 0.0;
-          double lng = 0.0;
-
-          if (address['lat'] != null) {
-            lat = address['lat'] is String
-                ? double.parse(address['lat'])
-                : (address['lat'] as num).toDouble();
-          }
-
-          if (address['lng'] != null) {
-            lng = address['lng'] is String
-                ? double.parse(address['lng'])
-                : (address['lng'] as num).toDouble();
-          }
-
-          await prefs.setDouble('latitude', lat);
-          await prefs.setDouble('longitude', lng);
-
-          // Save address display strings
-          final label =
-              address['address_name'] ?? address['label'] ?? 'Unknown';
-          String displayAddress = address['address'] ?? '';
-          if (displayAddress.isEmpty) {
-            List<String> parts = [];
-            if (address['address_line_1'] != null)
-              parts.add(address['address_line_1']);
-            if (address['address_line_2'] != null)
-              parts.add(address['address_line_2']);
-            if (address['city'] != null) parts.add(address['city']);
-            if (address['state'] != null) parts.add(address['state']);
-            if (address['pincode'] != null)
-              parts.add(address['pincode'].toString());
-            displayAddress = parts.join(', ');
-          }
-
-          await prefs.setString('address_title', label);
-          await prefs.setString('address_subtitle', displayAddress);
-
-          print(
-            '✅ SavedAddresses: Selected address saved to SharedPreferences',
-          );
-          print('   ID: ${address['id']}');
-          print('   Lat/Lng: ${address['lat']}, ${address['lng']}');
-          print('   Title: $label');
-          print('   Subtitle: $displayAddress');
-        } catch (e) {
-          print('❌ Error saving address to SharedPreferences: $e');
-        }
-
-        // Return the selected address with proper format
-        if (mounted) {
-          Navigator.pop(context, {'addressSelected': true, ...address});
-        }
-      },
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-              spreadRadius: 0,
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-              spreadRadius: 0,
-            ),
-          ],
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: theme.dividerColor.withOpacity(0.05),
+          width: 1,
         ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Icon Container
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    _getIconForLabel(label),
-                    color: theme.colorScheme.primary,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+            spreadRadius: -4,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () async {
+              // Save the selected address to SharedPreferences
+              try {
+                final prefs = await SharedPreferences.getInstance();
 
-                // Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TranslatedText(
-                        label.toString().toUpperCase(),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TranslatedText(
-                        displayAddress,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withOpacity(0.6),
-                          height: 1.4,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                // Save address ID and coordinates (handle both string and numeric types)
+                await prefs.setString('saved_address_id', address['id'] ?? '');
+
+                // Parse lat/lng properly - they come as strings from the API
+                double lat = 0.0;
+                double lng = 0.0;
+
+                if (address['lat'] != null) {
+                  lat = address['lat'] is String
+                      ? double.parse(address['lat'])
+                      : (address['lat'] as num).toDouble();
+                }
+
+                if (address['lng'] != null) {
+                  lng = address['lng'] is String
+                      ? double.parse(address['lng'])
+                      : (address['lng'] as num).toDouble();
+                }
+
+                await prefs.setDouble('latitude', lat);
+                await prefs.setDouble('longitude', lng);
+
+                // Save address display strings
+                final label =
+                    address['address_name'] ?? address['label'] ?? 'Unknown';
+                String displayAddress = address['address'] ?? '';
+                if (displayAddress.isEmpty) {
+                  List<String> parts = [];
+                  if (address['address_line_1'] != null)
+                    parts.add(address['address_line_1']);
+                  if (address['address_line_2'] != null)
+                    parts.add(address['address_line_2']);
+                  if (address['city'] != null) parts.add(address['city']);
+                  if (address['state'] != null) parts.add(address['state']);
+                  if (address['pincode'] != null)
+                    parts.add(address['pincode'].toString());
+                  displayAddress = parts.join(', ');
+                }
+
+                await prefs.setString(
+                  'address_title',
+                  label.toString().toUpperCase(),
+                );
+                await prefs.setString('address_subtitle', displayAddress);
+
+                print(
+                  '✅ SavedAddresses: Selected address saved to SharedPreferences',
+                );
+                print('   ID: ${address['id']}');
+                print('   Lat/Lng: ${address['lat']}, ${address['lng']}');
+                print('   Title: $label');
+                print('   Subtitle: $displayAddress');
+              } catch (e) {
+                print('❌ Error saving address to SharedPreferences: $e');
+              }
+
+              // Return the selected address with proper format
+              if (mounted) {
+                Navigator.pop(context, {'addressSelected': true, ...address});
+              }
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  // Icon Container
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(
+                      _getIconForLabel(label),
+                      color: theme.colorScheme.primary,
+                      size: 26,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 16),
+
+                  // Content
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TranslatedText(
+                          label.toString().toUpperCase(),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            letterSpacing: 1.0,
+                            color: theme.colorScheme.onSurface.withOpacity(0.9),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        TranslatedText(
+                          displayAddress,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            height: 1.5,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
-            // Buttons
-            Row(
-              children: [
-                // Expanded(
-                //   child: OutlinedButton.icon(
-                //     onPressed: () => _editAddress(index),
-                //     icon: Icon(Icons.edit_rounded, size: 16),
-                //     label: TranslatedText("EDIT"),
-                //     style: OutlinedButton.styleFrom(
-                //       padding: EdgeInsets.symmetric(vertical: 12),
-                //       side: BorderSide(color: theme.dividerColor),
-                //       shape: RoundedRectangleBorder(
-                //         borderRadius: BorderRadius.circular(12),
-                //       ),
-                //       foregroundColor: theme.colorScheme.onSurface,
-                //     ),
-                //   ),
-                // ),
-                // const SizedBox(width: 12),
-                // Expanded(
-                //   child: OutlinedButton.icon(
-                //     onPressed: () => _deleteAddress(index),
-                //     icon: Icon(Icons.delete_rounded, size: 16),
-                //     label: TranslatedText("DELETE"),
-                //     style: OutlinedButton.styleFrom(
-                //       padding: EdgeInsets.symmetric(vertical: 12),
-                //       side: BorderSide(color: Colors.transparent),
-                //       backgroundColor: theme.colorScheme.error.withOpacity(0.1),
-                //       shape: RoundedRectangleBorder(
-                //         borderRadius: BorderRadius.circular(12),
-                //       ),
-                //       foregroundColor: theme.colorScheme.error,
-                //       elevation: 0,
-                //     ),
-                //   ),
-                // ),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -784,10 +693,10 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                 child: InkWell(
                   onTap: _addNewAddress,
                   splashColor: Colors.white.withOpacity(0.2),
-                  child: Center(
+                  child: const Center(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+                      children: [
                         Icon(
                           Icons.add_location_alt_rounded,
                           color: Colors.white,

@@ -146,7 +146,7 @@ class _ProductRatingScreenState extends State<ProductRatingScreen>
   @override
   Widget build(BuildContext context) {
     final bgColor = _getBackgroundColor(_ratingValue);
-    final textColor = Colors.black87;
+    const textColor = Colors.black87;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -173,7 +173,7 @@ class _ProductRatingScreenState extends State<ProductRatingScreen>
                         child: Text(
                           "How was\n${widget.productName}?",
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 28, // Slightly smaller for product names
                             fontWeight: FontWeight.bold,
                             height: 1.2,
@@ -381,7 +381,7 @@ class _FacePainter extends CustomPainter {
 
     final eyeOffset = size.width * 0.2;
     final eyeY = size.height * 0.35;
-    final eyeRadius = 15.0;
+    const eyeRadius = 15.0;
     final pupilOffset = (rating - 0.5) * 10;
     final pupilPaint = Paint()..color = Colors.black;
 
@@ -405,25 +405,25 @@ class _FacePainter extends CustomPainter {
 
     // Eyebrows
     final browY = eyeY - 40;
-    final browWidth = 40.0;
+    const browWidth = 40.0;
     final browAngle = (0.5 - rating) * 0.8;
 
     canvas.save();
     canvas.translate(center.dx - eyeOffset, browY);
     canvas.rotate(-browAngle);
-    canvas.drawLine(Offset(-browWidth / 2, 0), Offset(browWidth / 2, 0), paint);
+    canvas.drawLine(const Offset(-browWidth / 2, 0), const Offset(browWidth / 2, 0), paint);
     canvas.restore();
 
     canvas.save();
     canvas.translate(center.dx + eyeOffset, browY);
     canvas.rotate(browAngle);
-    canvas.drawLine(Offset(-browWidth / 2, 0), Offset(browWidth / 2, 0), paint);
+    canvas.drawLine(const Offset(-browWidth / 2, 0), const Offset(browWidth / 2, 0), paint);
     canvas.restore();
 
     // Mouth
     final mouthY = size.height * 0.65;
     final mouthWidth = size.width * 0.4;
-    final maxCurve = 60.0;
+    const maxCurve = 60.0;
     final curveValue = (rating - 0.5) * 2 * maxCurve;
 
     final path = Path();

@@ -17,7 +17,7 @@ class MyProfileSkeleton extends StatelessWidget {
     final containerColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     final topPadding = MediaQuery.of(context).padding.top;
-    final headerHeight = 70.0;
+    const headerHeight = 70.0;
 
     return ListView(
       padding: EdgeInsets.only(top: topPadding + headerHeight, bottom: 40),

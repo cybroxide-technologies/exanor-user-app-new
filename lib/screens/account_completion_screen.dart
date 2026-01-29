@@ -1,7 +1,6 @@
 import 'package:exanor/screens/location_selection_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
-import 'package:exanor/screens/HomeScreen.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -321,7 +320,7 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
                 size: 22,
               ),
               filled: true,
-              fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide.none,
@@ -428,7 +427,7 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
         decoration: BoxDecoration(
           color: isSelected
               ? theme.colorScheme.primary.withOpacity(0.1)
-              : theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isSelected
@@ -504,7 +503,7 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: theme.colorScheme.outline.withOpacity(0.1),

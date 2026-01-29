@@ -1,6 +1,5 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
@@ -208,7 +207,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
   Widget _buildBody(bool isDark) {
     final topPadding = MediaQuery.of(context).padding.top;
-    final headerHeight = 70.0;
+    const headerHeight = 70.0;
 
     return RefreshIndicator(
       onRefresh: () => _loadUserData(forceRefresh: true),
@@ -644,10 +643,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
-            const Color(0xFF6366F1), // Indigo
-            const Color(0xFF8B5CF6), // Violet
+            Color(0xFF6366F1), // Indigo
+            Color(0xFF8B5CF6), // Violet
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,

@@ -100,7 +100,7 @@ class _PremiumContentPreviewState extends State<PremiumContentPreview> {
             'Watch Premium Content',
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onBackground,
+              color: theme.colorScheme.onSurface,
             ),
           ),
 

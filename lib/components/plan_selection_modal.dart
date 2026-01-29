@@ -84,7 +84,7 @@ class _PlanSelectionModalState extends State<PlanSelectionModal>
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.surfaceVariant,
+                                    color: theme.colorScheme.surfaceContainerHighest,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(

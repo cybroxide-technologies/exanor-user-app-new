@@ -345,7 +345,7 @@ class _ReferAndEarnScreenState extends State<ReferAndEarnScreen>
                             // Center Title
                             Center(
                               child: Text(
-                                "Refer & Earn",
+                                _data.title,
                                 style: TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w900,

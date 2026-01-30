@@ -71,6 +71,15 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
             '✅ SavedAddresses: Loaded ${addressesList.length} addresses from server',
           );
 
+          // If no addresses from API, navigate to location selection screen
+          if (addressesList.isEmpty) {
+            print(
+              '📍 SavedAddresses: No addresses found, opening location selection...',
+            );
+            _openLocationSelectionScreen();
+            return;
+          }
+
           final List<Map<String, dynamic>> loaded = addressesList
               .map((item) => item as Map<String, dynamic>)
               .toList();
@@ -137,12 +146,52 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         _savedAddresses = loaded;
         _isLoading = false;
       });
+
+      // If no addresses found in local storage, navigate to location selection
+      if (loaded.isEmpty) {
+        print(
+          '📍 SavedAddresses: No local addresses found, opening location selection...',
+        );
+        _openLocationSelectionScreen();
+      }
     } catch (e) {
       print('Error loading addresses from local storage: $e');
       setState(() {
         _isLoading = false;
       });
+      // Also navigate to location selection on error with no addresses
+      _openLocationSelectionScreen();
     }
+  }
+
+  /// Navigate to location selection screen automatically (no addresses found)
+  void _openLocationSelectionScreen() {
+    if (!mounted) return;
+
+    // Use a small delay to ensure the widget is fully built
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              const LocationSelectionScreen(returnAddressOnly: true),
+        ),
+      );
+
+      // If an address was added, pop back to previous screen (cart) with the address data
+      if (mounted) {
+        if (result != null && result is Map<String, dynamic>) {
+          // Address was added successfully, return it to the calling screen (cart)
+          // Add the addressSelected flag that cart screen expects
+          Navigator.pop(context, {'addressSelected': true, ...result});
+        } else {
+          // Reload addresses when returning without a result
+          _loadAddresses();
+        }
+      }
+    });
   }
 
   Color _hexToColor(String? hex, {Color defaultColor = Colors.transparent}) {

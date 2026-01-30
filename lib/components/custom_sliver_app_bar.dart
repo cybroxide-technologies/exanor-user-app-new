@@ -21,7 +21,7 @@ class CustomSliverAppBar extends StatelessWidget {
   final String? addressSubtitle;
   final String? addressArea;
   final String? addressCity;
-  final VoidCallback? onAddressUpdated;
+  final Function(Map<String, dynamic>?)? onAddressUpdated;
   final VoidCallback? onUserDataUpdated;
   final VoidCallback? onTabsRefresh;
   final VoidCallback? onRefreshNeeded;
@@ -141,7 +141,7 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
 
   final String? addressTitle;
   final String? addressSubtitle;
-  final VoidCallback? onAddressUpdated;
+  final Function(Map<String, dynamic>?)? onAddressUpdated;
   final int categoryRefreshTrigger;
 
   const StoreCategoriesDelegate({
@@ -296,7 +296,7 @@ class StoreCategoriesWidget extends StatefulWidget {
 
   final String? addressTitle;
   final String? addressSubtitle;
-  final VoidCallback? onAddressUpdated;
+  final Function(Map<String, dynamic>?)? onAddressUpdated;
   final int categoryRefreshTrigger;
 
   const StoreCategoriesWidget({
@@ -440,7 +440,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                                   if (result != null &&
                                       result['addressSelected'] == true &&
                                       widget.onAddressUpdated != null) {
-                                    widget.onAddressUpdated!();
+                                    widget.onAddressUpdated!(result);
                                   }
                                 },
                                 child: Container(
@@ -671,13 +671,13 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                           height: 46, // Reduced height
                           decoration: BoxDecoration(
                             color: isDarkMode
-                                ? Colors.black.withOpacity(0.25)
-                                : Colors.white.withOpacity(0.2),
+                                ? Colors.black.withOpacity(0.6)
+                                : Colors.white.withOpacity(0.9),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: isDarkMode
                                   ? Colors.white.withOpacity(0.1)
-                                  : Colors.white.withOpacity(0.5),
+                                  : Colors.transparent,
                               width: 1,
                             ),
                           ),

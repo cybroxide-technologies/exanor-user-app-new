@@ -70,20 +70,12 @@ class FirebaseRemoteConfigService {
   static const String _orderProcessingStatusColorKey =
       'orderProcessingStatusColor';
 
-  // Refer and Earn Banner Configuration
-  static const String _referAndEarnBannerVisibleKey =
-      'refer_and_earn_banner_visible';
-  static const String _referAndEarnBannerTitleKey =
-      'refer_and_earn_banner_title';
-  static const String _referAndEarnBannerSubtitleKey =
-      'refer_and_earn_banner_subtitle';
-
   // Splash Screen Colors
-  static const String _splashScreenColorKey = 'splash_screen_color';
-  static const String _splashScreenLineColorKey = 'splash_screen_line_color';
+  static const String _splashScreenLineColorKey = 'splashScreenLineColor';
+  static const String _splashScreenColorKey = 'splashScreenColor';
 
-  // Refer and Earn Screen Data
-  static const String _referAndEarnScreenDataKey = 'refer_and_earn_screen_data';
+  // Refer & Earn Data
+  static const String _referAndEarnDataKey = 'refer_and_earn_data';
 
   // Default values
   static const Map<String, dynamic> _defaults = {
@@ -230,66 +222,12 @@ class FirebaseRemoteConfigService {
     _rateExperienceButtonColorKey: '#FF8C00',
     _orderProcessingStatusColorKey: '#2196F3',
 
-    // Refer and Earn Banner defaults
-    _referAndEarnBannerVisibleKey: true,
-    _referAndEarnBannerTitleKey: 'Refer & Earn',
-    _referAndEarnBannerSubtitleKey: 'Invite friends & get rewards',
+    // Splash Screen Defaults
+    _splashScreenLineColorKey: '#2962FF',
+    _splashScreenColorKey: '#2962FF',
 
-    // Splash Screen Color defaults
-    _splashScreenColorKey: '#2962FF', // Original Royal Blue
-    _splashScreenLineColorKey: '#2962FF', // Default Blue
-    // Refer and Earn Screen Data default
-    _referAndEarnScreenDataKey: '''{
-      "refer_and_earn": {
-        "enabled": true,
-        "title": "Refer & Earn Rewards",
-        "description": "Invite your friends to Exanor and earn exciting rewards when they sign up and place their first order.",
-        "benefits": [
-          {
-            "icon": {
-              "type": "material",
-              "name": "account_balance_wallet"
-            },
-            "title": "Earn ₹100 per referral",
-            "subtitle": "Wallet credit after your friend completes their first order."
-          },
-          {
-            "icon": {
-              "type": "material",
-              "name": "card_giftcard"
-            },
-            "title": "Friend gets ₹50",
-            "subtitle": "Welcome bonus on signup using your code."
-          },
-          {
-            "icon": {
-              "type": "material",
-              "name": "groups"
-            },
-            "title": "Unlimited referrals",
-            "subtitle": "Refer as many friends as you want."
-          },
-          {
-            "icon": {
-              "type": "material",
-              "name": "schedule"
-            },
-            "title": "Fast rewards",
-            "subtitle": "Rewards credited within 24 hours."
-          }
-        ],
-        "terms_and_conditions": {
-          "title": "Terms & Conditions",
-          "points": [
-            "Referral reward is credited only after the referred user completes their first order.",
-            "Rewards are added to the in-app wallet and cannot be withdrawn.",
-            "Self-referrals or misuse will result in disqualification.",
-            "Exanor may modify or discontinue the program at any time.",
-            "All rewards are subject to verification."
-          ]
-        }
-      }
-    }''',
+    // Refer & Earn Data Default (Empty JSON, parser handles defaults)
+    _referAndEarnDataKey: '{}',
   };
 
   /// Initialize Firebase Remote Config
@@ -1332,48 +1270,6 @@ class FirebaseRemoteConfigService {
     }
   }
 
-  /// Get Refer and Earn Banner Visibility
-  static bool getReferAndEarnBannerVisible() {
-    try {
-      if (!_isInitialized || _remoteConfig == null) {
-        return _defaults[_referAndEarnBannerVisibleKey] as bool;
-      }
-      return _remoteConfig!.getBool(_referAndEarnBannerVisibleKey);
-    } catch (e) {
-      return _defaults[_referAndEarnBannerVisibleKey] as bool;
-    }
-  }
-
-  /// Get Refer and Earn Banner Title
-  static String getReferAndEarnBannerTitle() {
-    try {
-      if (!_isInitialized || _remoteConfig == null) {
-        return _defaults[_referAndEarnBannerTitleKey] as String;
-      }
-      final value = _remoteConfig!.getString(_referAndEarnBannerTitleKey);
-      return value.isNotEmpty
-          ? value
-          : _defaults[_referAndEarnBannerTitleKey] as String;
-    } catch (e) {
-      return _defaults[_referAndEarnBannerTitleKey] as String;
-    }
-  }
-
-  /// Get Refer and Earn Banner Subtitle
-  static String getReferAndEarnBannerSubtitle() {
-    try {
-      if (!_isInitialized || _remoteConfig == null) {
-        return _defaults[_referAndEarnBannerSubtitleKey] as String;
-      }
-      final value = _remoteConfig!.getString(_referAndEarnBannerSubtitleKey);
-      return value.isNotEmpty
-          ? value
-          : _defaults[_referAndEarnBannerSubtitleKey] as String;
-    } catch (e) {
-      return _defaults[_referAndEarnBannerSubtitleKey] as String;
-    }
-  }
-
   /// Get all configuration as a map for debugging
   static Map<String, dynamic> getAllConfig() {
     try {
@@ -1481,36 +1377,49 @@ class FirebaseRemoteConfigService {
       return false;
     }
   }
+  // --- Splash Screen Methods ---
 
-  /// Get Splash Screen Background Color
-  static String getSplashScreenColor() {
-    try {
-      if (!_isInitialized || _remoteConfig == null) {
-        return _defaults[_splashScreenColorKey] as String;
-      }
-      final value = _remoteConfig!.getString(_splashScreenColorKey);
-      return value.isEmpty ? _defaults[_splashScreenColorKey] as String : value;
-    } catch (e) {
-      return _defaults[_splashScreenColorKey] as String;
-    }
-  }
-
-  /// Get Splash Screen Line/Fill Color
+  /// Get Splash Screen Line Color
   static String getSplashScreenLineColor() {
     try {
       if (!_isInitialized || _remoteConfig == null) {
         return _defaults[_splashScreenLineColorKey] as String;
       }
       final value = _remoteConfig!.getString(_splashScreenLineColorKey);
-      return value.isEmpty
-          ? _defaults[_splashScreenLineColorKey] as String
-          : value;
+      return value.isNotEmpty
+          ? value
+          : _defaults[_splashScreenLineColorKey] as String;
     } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting splash screen line color: $e',
+        name: 'RemoteConfig',
+      );
       return _defaults[_splashScreenLineColorKey] as String;
     }
   }
 
-  /// Get Refer and Earn Screen Data
+  /// Get Splash Screen Color
+  static String getSplashScreenColor() {
+    try {
+      if (!_isInitialized || _remoteConfig == null) {
+        return _defaults[_splashScreenColorKey] as String;
+      }
+      final value = _remoteConfig!.getString(_splashScreenColorKey);
+      return value.isNotEmpty
+          ? value
+          : _defaults[_splashScreenColorKey] as String;
+    } catch (e) {
+      developer.log(
+        '❌ FirebaseRemoteConfig: Error getting splash screen color: $e',
+        name: 'RemoteConfig',
+      );
+      return _defaults[_splashScreenColorKey] as String;
+    }
+  }
+
+  // --- Refer & Earn Methods ---
+
+  /// Get Refer & Earn Data
   static ReferAndEarnData getReferAndEarnData() {
     try {
       if (!_isInitialized || _remoteConfig == null) {
@@ -1521,17 +1430,14 @@ class FirebaseRemoteConfigService {
         return ReferAndEarnData.defaults();
       }
 
-      final jsonString = _remoteConfig!.getString(_referAndEarnScreenDataKey);
+      final jsonString = _remoteConfig!.getString(_referAndEarnDataKey);
+      if (jsonString.isEmpty) return ReferAndEarnData.defaults();
 
-      if (jsonString.isEmpty) {
-        return ReferAndEarnData.defaults();
-      }
-
-      final Map<String, dynamic> jsonMap = json.decode(jsonString);
+      final jsonMap = jsonDecode(jsonString);
       return ReferAndEarnData.fromJson(jsonMap);
     } catch (e) {
       developer.log(
-        '❌ FirebaseRemoteConfig: Error getting refer & earn data: $e, returning default',
+        '❌ FirebaseRemoteConfig: Error getting refer & earn data: $e',
         name: 'RemoteConfig',
       );
       return ReferAndEarnData.defaults();

@@ -11,7 +11,6 @@ import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:exanor/components/custom_cached_network_image.dart';
 import 'package:exanor/screens/cart_screen.dart';
-import 'package:exanor/screens/location_selection_screen.dart';
 import 'package:exanor/components/product_variant_sheet.dart';
 import 'package:exanor/components/voice_search_sheet.dart';
 import 'package:exanor/components/peel_button.dart';
@@ -298,21 +297,6 @@ class _StoreScreenState extends State<StoreScreen> {
       await _fetchProducts();
       await _fetchCartDetails();
     }
-  }
-
-  /// Opens the LocationSelectionScreen with StoreScreen as the referrer.
-  /// On successful address selection, navigates to CartScreen.
-  /// On back press, returns to this StoreScreen.
-  void _openLocationSelectionScreen() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LocationSelectionScreen(
-          referrer: 'storeScreen',
-          storeId: widget.storeId,
-        ),
-      ),
-    );
   }
 
   Future<void> _fetchStoreDetails() async {

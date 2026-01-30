@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+
 import 'dart:ui' as ui;
+import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/models/campaign_models.dart';
 import 'package:exanor/components/external_coupon_carousel.dart';
-import 'package:shimmer/shimmer.dart';
+import 'package:exanor/components/leaderboard_skeleton.dart';
+
 import 'dart:async';
 
 class CampaignsScreen extends StatefulWidget {
@@ -14,7 +16,8 @@ class CampaignsScreen extends StatefulWidget {
   State<CampaignsScreen> createState() => _CampaignsScreenState();
 }
 
-class _CampaignsScreenState extends State<CampaignsScreen> {
+class _CampaignsScreenState extends State<CampaignsScreen>
+    with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _isLeaderboardLoading = false;
   List<TopUser> _topUsers = [];
@@ -23,11 +26,10 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
   int? _myRank;
   late PageController _premiumCarouselController;
   Timer? _carouselTimer;
+  late AnimationController _entranceController;
 
   // Premium "Matte" Palette
   final Color _bgPurple = const Color(0xFF6B5AE0);
-  final Color _matteDark = const Color(0xFF1A1A2E); // Deep Matte Blue/Black
-  final Color _matteCard = const Color(0xFF16213E); // Slightly lighter matte
 
   final Color _cardPeach = const Color(0xFFFF9F76);
   final Color _cardPeachDark = const Color(0xFFFF8F60);
@@ -47,10 +49,14 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
   @override
   void initState() {
     super.initState();
-    // Increased viewport fraction to prevent overlap
     _premiumCarouselController = PageController(
       viewportFraction: 0.75,
       initialPage: 1000,
+    );
+    // Single Use Controller for "Entrance"
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
     );
     _fetchData();
   }
@@ -59,6 +65,7 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
   void dispose() {
     _carouselTimer?.cancel();
     _premiumCarouselController.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -75,14 +82,8 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
   }
 
   void _onTabTapped(int index) {
-    if (index == 0) {
-      // Trend/Leaderboard Tab
-      setState(() {
-        _isLeaderboardLoading = true;
-      });
-      // Simulate loading delay for better UX or fetch fresh data
-      _fetchData(isRefresh: true);
-    }
+    // Disabled reloading on tab tap as per user request to prevent "issue with reloading".
+    // Data is already fetched in initState.
   }
 
   Future<void> _fetchData({bool isRefresh = false}) async {
@@ -156,6 +157,7 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
         _myRank = myRank;
         _errorMessage = null;
       });
+      _entranceController.forward(from: 0.0); // Trigger Entrance
       if (_newUsers.isNotEmpty) {
         _startAutoScroll();
       }
@@ -176,10 +178,50 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
     }
   }
 
+  Color _hexToColor(String hex, {Color defaultColor = Colors.transparent}) {
+    try {
+      String cleanHex = hex
+          .trim()
+          .toUpperCase()
+          .replaceAll('#', '')
+          .replaceAll('0X', '');
+      if (cleanHex.length == 6) {
+        cleanHex = 'FF$cleanHex';
+      }
+      return Color(int.parse('0x$cleanHex'));
+    } catch (e) {
+      return defaultColor;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final bgGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: isDark
+          ? [
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
+              ),
+              _hexToColor(
+                FirebaseRemoteConfigService.getThemeGradientDarkEnd(),
+              ),
+            ]
+          : [
+              const Color(0xFFF5F5F7), // Subtle grey for contrast in Light Mode
+              const Color(0xFFF5F5F7),
+            ],
+      stops: const [0.0, 1.0],
+    );
+
     return Scaffold(
-      backgroundColor: _bgPurple,
+      backgroundColor: theme
+          .scaffoldBackgroundColor, // Use theme background, gradient overlaid below
+      extendBodyBehindAppBar: true, // Allow content behind header
       body: DefaultTabController(
         length: 3,
         child: AnimatedSwitcher(
@@ -195,13 +237,7 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
                   children: [
                     Positioned.fill(
                       child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [_bgPurple, const Color(0xFF5648B8)],
-                          ),
-                        ),
+                        decoration: BoxDecoration(gradient: bgGradient),
                       ),
                     ),
 
@@ -221,7 +257,7 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
                       top: 0,
                       left: 0,
                       right: 0,
-                      child: _buildGlassHeader(context),
+                      child: _buildGlassHeader(context, isDark, theme),
                     ),
                   ],
                 ),
@@ -230,210 +266,162 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
     );
   }
 
-  Widget _buildGlassHeader(BuildContext context) {
+  Widget _buildGlassHeader(BuildContext context, bool isDark, ThemeData theme) {
     final topPadding = MediaQuery.of(context).padding.top;
     // Increased height to accommodate the restored tabs
     final headerHeight = topPadding + 140;
 
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          height: headerHeight,
-          decoration: BoxDecoration(
-            color: _bgPurple.withOpacity(0.95),
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.white.withOpacity(0.1),
-                width: 0.5,
+    // Use header gradient logic from Orders screen
+    final blurSigma = 10.0;
+    final opacity = 0.95;
+
+    final lightStartBase = _hexToColor(
+      FirebaseRemoteConfigService.getThemeGradientLightStart(),
+    );
+    final lightModeStart = Color.alphaBlend(
+      lightStartBase.withOpacity(0.35),
+      Colors.white,
+    );
+    const lightModeEnd = Colors.white;
+
+    final startColor = isDark
+        ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkStart())
+        : lightModeStart;
+    final endColor = isDark
+        ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkEnd())
+        : lightModeEnd;
+
+    return Container(
+      height: headerHeight,
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.4)
+                : Colors.black.withOpacity(0.1),
+            blurRadius: 25,
+            offset: const Offset(0, 12),
+            spreadRadius: -5,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  startColor.withOpacity(opacity),
+                  endColor.withOpacity(opacity),
+                ],
+              ),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(20),
               ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 20,
-                spreadRadius: 0,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // Title Row
-              Padding(
-                padding: EdgeInsets.only(
-                  top: topPadding + 5,
-                  left: 16,
-                  right: 16,
-                  bottom: 12,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 45,
-                      height: 45,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.1),
-                          width: 1,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // Title Row
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: topPadding + 5,
+                    left: 16,
+                    right: 16,
+                    bottom: 12,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 45,
+                        height: 45,
+                        decoration: BoxDecoration(
+                          color: theme.cardColor.withOpacity(
+                            0.5,
+                          ), // Adaptive button bg
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: theme.dividerColor.withOpacity(0.1),
+                            width: 1,
+                          ),
+                        ),
+                        child: InkWell(
+                          onTap: () => Navigator.of(context).pop(),
+                          borderRadius: BorderRadius.circular(14),
+                          child: Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            size: 22,
+                            color: theme
+                                .colorScheme
+                                .onSurface, // Adaptive icon color
+                          ),
                         ),
                       ),
-                      child: InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        borderRadius: BorderRadius.circular(14),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          size: 22,
-                          color: Colors.white,
+                      Text(
+                        "Trends",
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: theme
+                              .colorScheme
+                              .onSurface, // Adaptive text color
+                          letterSpacing: -0.5,
                         ),
                       ),
-                    ),
-                    const Text(
-                      "Trends",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(width: 40),
-                  ],
+                      const SizedBox(width: 45), // Balance layout
+                    ],
+                  ),
                 ),
-              ),
 
-              // Tabs
-              Container(
-                height: 44,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TabBar(
-                  onTap: _onTabTapped, // Ensures data refresh logic triggers
-                  indicator: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                // Tabs
+                Container(
+                  height: 44,
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.05), // Subtle tab bg
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white.withOpacity(0.6),
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
+                  child: TabBar(
+                    onTap: _onTabTapped, // Ensures data refresh logic triggers
+                    indicator: BoxDecoration(
+                      color: theme.cardColor, // Adaptive indicator
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    labelColor: theme.colorScheme.onSurface,
+                    unselectedLabelColor: theme.colorScheme.onSurface
+                        .withOpacity(0.6),
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    overlayColor: WidgetStateProperty.all(Colors.transparent),
+                    padding: const EdgeInsets.all(4),
+                    tabs: const [
+                      Tab(text: "Trends"),
+                      Tab(text: "New Users"),
+                      Tab(text: "Offers"),
+                    ],
                   ),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
-                  padding: const EdgeInsets.all(4),
-                  tabs: const [
-                    Tab(text: "Trends"),
-                    Tab(text: "New Users"),
-                    Tab(text: "Offers"),
-                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildLeaderboardShimmer() {
-    final topPadding = MediaQuery.of(context).padding.top + 180;
-    return CustomScrollView(
-      physics: const NeverScrollableScrollPhysics(),
-      slivers: [
-        SliverPadding(
-          padding: EdgeInsets.only(top: topPadding + 10),
-          sliver: SliverToBoxAdapter(
-            child: Shimmer.fromColors(
-              baseColor: Colors.white.withOpacity(0.4),
-              highlightColor: Colors.white.withOpacity(0.8),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  // Podium Placeholder
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        width: 80,
-                        height: 150,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 90,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 80,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  // List connector mask placeholder
-                  Container(
-                    height: 30,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(30),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-            child: Shimmer.fromColors(
-              baseColor: Colors.grey[300]!,
-              highlightColor: Colors.grey[100]!,
-              child: Column(
-                children: List.generate(
-                  5,
-                  (index) => Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -452,7 +440,59 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
       physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.only(top: topPadding),
       children: [
-        // A. Podium Section
+        // A. My Rank (If applicable)
+        if (_myRank != null && _myRank! > 3)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 24),
+                      const SizedBox(width: 12),
+                      const Text(
+                        "Your Rank",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white, // Visible on dark gradient
+                          fontSize: 16,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        "#$_myRank",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                          fontSize: 22,
+                          shadows: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // B. Podium Section
         Padding(
           padding: const EdgeInsets.only(bottom: 20),
           child: _buildPodiumRow(displayUsers.take(3).toList()),
@@ -463,9 +503,18 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
           offset: Offset(0, -bannerOverlap),
           child: Container(
             height: bannerOverlap,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 15,
+                  offset: const Offset(0, -5), // Upward shadow
+                ),
+              ],
             ),
             child: Center(
               child: Container(
@@ -485,6 +534,9 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
         Transform.translate(
           offset: Offset(0, -bannerOverlap),
           child: Container(
+            constraints: BoxConstraints(
+              minHeight: screenHeight,
+            ), // Ensure it fills screen
             color: Colors.white,
             child: Column(
               children: [
@@ -495,8 +547,8 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
                     padding: EdgeInsets.all(40),
                     child: Text("Start ordering to join the trends!"),
                   ),
-                // Add bottom spacing here so it is white and scrollable
-                const SizedBox(height: 100),
+                // Add bottom spacing: 100 for safe area + bannerOverlap to compensate for Transform
+                SizedBox(height: 100 + bannerOverlap),
               ],
             ),
           ),
@@ -507,6 +559,7 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
 
   Widget _buildNewUsersCreativeTab(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top + 160;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
@@ -519,60 +572,81 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
               children: [
                 const SizedBox(height: 10),
 
-                // Unified "Billboard" Section
+                // RESTORED CONTAINER ("The Div")
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16),
-                  clipBehavior:
-                      Clip.antiAlias, // KEY FIX: Clips the overflowing content
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                     borderRadius: BorderRadius.circular(32),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.1),
-                      width: 1,
+                      color: isDark
+                          ? Colors.white.withOpacity(0.08)
+                          : Colors.black.withOpacity(0.04),
+                      width: 1.5,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
-                      // Header inside the container
+                      // Header Inside Container (Scaled Down slightly)
                       Padding(
-                        padding: const EdgeInsets.all(24.0),
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 10),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "FRESH FACES",
+                                  "FRESH",
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 48, // Reduced from 64
                                     fontWeight: FontWeight.w900,
-                                    color: Colors.white.withOpacity(0.6),
-                                    letterSpacing: 2,
+                                    height: 0.9,
+                                    letterSpacing: -1.5,
+                                    foreground: Paint()
+                                      ..style = PaintingStyle.stroke
+                                      ..strokeWidth = 1.0
+                                      ..color = isDark
+                                          ? Colors.white.withOpacity(0.5)
+                                          : Colors.black.withOpacity(0.3),
                                   ),
                                 ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  "New Arrivals",
-                                  style: TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    height: 1.0,
+                                Transform.translate(
+                                  offset: const Offset(3, -6),
+                                  child: Text(
+                                    "DROPS",
+                                    style: TextStyle(
+                                      fontSize: 48, // Reduced from 64
+                                      fontWeight: FontWeight.w900,
+                                      height: 0.9,
+                                      letterSpacing: -1.5,
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF2D3142),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
+                            // Small decorative icon
                             Container(
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
+                                color: _bgPurple.withOpacity(0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.auto_awesome,
-                                color: Colors.white,
+                                color: _bgPurple,
                                 size: 20,
                               ),
                             ),
@@ -580,18 +654,13 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
                         ),
                       ),
 
-                      // Carousel nicely contained inside
+                      // Carousel (Smaller fixed height)
                       SizedBox(
-                        height: 380, // Height for the carousel to live in
+                        height: 360, // Reduced from 480 to 360
                         child: _newUsers.isEmpty
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                ),
-                              )
+                            ? const Center(child: CircularProgressIndicator())
                             : PageView.builder(
                                 controller: _premiumCarouselController,
-                                // Removed Clip.none, relying on container clipping
                                 itemBuilder: (context, index) {
                                   final userIndex = index % _newUsers.length;
                                   final user = _newUsers[userIndex];
@@ -606,26 +675,24 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
                                         value =
                                             _premiumCarouselController.page! -
                                             index;
-                                        value = (1 - (value.abs() * 0.25))
-                                            .clamp(0.0, 1.0);
+                                        value = (1 - (value.abs() * 0.2)).clamp(
+                                          0.0,
+                                          1.0,
+                                        );
                                       }
                                       final scale = Curves.easeOut.transform(
                                         value,
                                       );
-                                      // Less aggressive opacity fading
                                       final opacity = value < 0.8 ? 0.6 : 1.0;
 
                                       return Center(
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                          ),
-                                          child: SizedBox(
-                                            height: scale * 340,
-                                            child: Opacity(
-                                              opacity: opacity,
-                                              child: child,
-                                            ),
+                                        child: SizedBox(
+                                          // Smaller card size
+                                          height: scale * 320,
+                                          width: scale * 240,
+                                          child: Opacity(
+                                            opacity: opacity,
+                                            child: child,
                                           ),
                                         ),
                                       );
@@ -653,9 +720,16 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
     final topPadding = MediaQuery.of(context).padding.top + 180;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
       ),
       margin: EdgeInsets.only(top: topPadding + 20),
       child: const ClipRRect(
@@ -676,108 +750,125 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
 
   Widget _buildBigNewUserCard(NewUser user) {
     return Container(
-      width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
-        // Shadow removed as requested
+        borderRadius: BorderRadius.circular(40),
+        boxShadow: [
+          // Matte Shadow: Visible all around, soft but defined
+          BoxShadow(
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 15,
+            spreadRadius: 2,
+            offset: const Offset(0, 0), // Centered to show all around
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 30,
+            spreadRadius: 6,
+            offset: const Offset(0, 10), // Slight depth
+          ),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Image
+          // 1. Full Bleed Image
           if (user.imgUrl.isNotEmpty)
-            Image.network(user.imgUrl, fit: BoxFit.cover)
+            Image.network(
+              user.imgUrl,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+            )
           else
             Container(
-              color: Colors.grey.shade200,
+              color: const Color(0xFFF0F0F0),
               child: Icon(Icons.person, size: 80, color: Colors.grey.shade400),
             ),
 
-          // Subtle Gradient Overlay
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withOpacity(0.0),
-                  Colors.black.withOpacity(0.7),
-                ],
-                stops: const [0.0, 0.6, 1.0],
+          // 2. Light Gradient Overlay for Black Text
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.white.withOpacity(0.0),
+                    Colors.white.withOpacity(0.9), // White fade for black text
+                  ],
+                  stops: const [0.5, 0.7, 1.0],
+                ),
               ),
             ),
           ),
 
-          // Glass Info Box
+          // 3. "Sticker" Graphic on Top Right
           Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.2),
-                      width: 1,
+            top: 20,
+            right: 20,
+            child: Transform.rotate(
+              angle: 0.2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD700),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          "NEW",
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: _bgPurple,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        user.firstName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          height: 1.0,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "Joined Recently",
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white.withOpacity(0.8),
-                        ),
-                      ),
-                    ],
+                  ],
+                ),
+                child: const Text(
+                  "NEW",
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
                   ),
                 ),
               ),
+            ),
+          ),
+
+          // 4. Modern Typography Overlay (Black Text)
+          Positioned(
+            bottom: 24,
+            left: 20,
+            right: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "INTRODUCING",
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black.withOpacity(0.6), // Dark label
+                    letterSpacing: 2.0,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  user.firstName.toUpperCase(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 28, // Reduced from 42
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black, // BLACK COLOR
+                    height: 1.0,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -827,37 +918,193 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
 
     final width = MediaQuery.of(context).size.width;
     final availableWidth = width - 40;
-
-    // Widths - Equal for all ranks
     final podiumWidth = availableWidth * 0.35;
-
-    // Gap calculation:
-    // podiumWidth - 25 provides good overlap for Rank 2.
-    // We will manually slide Rank 3 to adjust its position independently.
     final double gapWidth = podiumWidth - 25;
 
-    // We prepare the items
+    // Entrance Animation Values
+    // 1. Podiums Rise (0.0 -> 0.6)
+    final podiumRise = CurvedAnimation(
+      parent: _entranceController,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
+    );
+
+    // Helper to build animated item
+    Widget buildAnimatedItem({
+      required TopUser user,
+      required int rank,
+      required double height,
+      required double pWidth,
+      required Color front,
+      required Color side,
+      required Color top,
+      bool isFirst = false,
+      bool showSide = true,
+    }) {
+      return AnimatedBuilder(
+        animation: _entranceController,
+        builder: (context, child) {
+          // Animate Height of the Block
+          final currentBlockHeight = height * podiumRise.value;
+
+          return GestureDetector(
+            onTap: () => _showUserDialog(user, rank),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Avatar Section (Animated Drop)
+                // Avatar Section (Simple Rise with Podium)
+                Opacity(
+                  opacity: podiumRise.value.clamp(0.0, 1.0),
+                  child: Column(
+                    children: [
+                      if (isFirst)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 6),
+                          child: Icon(
+                            Icons.emoji_events,
+                            color: Color(0xFFFFCC00),
+                            size: 36,
+                          ),
+                        ),
+                      if (!isFirst) SizedBox(height: isFirst ? 0 : 36),
+                      Container(
+                        width: isFirst ? 72 : 60,
+                        height: isFirst ? 72 : 60,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: CircleAvatar(
+                          backgroundImage: user.imgUrl.isNotEmpty
+                              ? NetworkImage(user.imgUrl)
+                              : null,
+                          backgroundColor: Colors.grey.shade300,
+                          child: user.imgUrl.isEmpty
+                              ? const Icon(Icons.person, color: Colors.grey)
+                              : null,
+                        ),
+                      ),
+                      SizedBox(
+                        width: pWidth + 20,
+                        child: Text(
+                          user.firstName,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.only(top: 4, bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          "${user.orderCount} Orders",
+                          style: const TextStyle(
+                            color: Colors.black, // Changed to black
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Block (Animated Growth)
+                SizedBox(
+                  width: pWidth,
+                  height: currentBlockHeight, // Animated Height
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: BlockPainter(
+                            front: front,
+                            top: top,
+                            side: side,
+                            showSide: showSide,
+                          ),
+                        ),
+                      ),
+                      // Rank Number fade in with block
+                      if (podiumRise.value > 0.5)
+                        Positioned(
+                          bottom:
+                              50 *
+                              (currentBlockHeight / height), // Scale position
+                          left: 0,
+                          width: showSide ? pWidth - 16.0 : pWidth,
+                          child: Center(
+                            child: Transform.translate(
+                              offset: const Offset(-4, 0),
+                              child: Opacity(
+                                opacity: (podiumRise.value - 0.5) * 2,
+                                child: Text(
+                                  "$rank",
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                    fontSize: 56,
+                                    fontWeight: FontWeight.w900,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // Prepare Items
     Widget? rank2Item;
     if (second != null) {
-      rank2Item = _buildPodiumItem(
+      rank2Item = buildAnimatedItem(
         user: second,
         rank: 2,
         height: 180,
-        width: podiumWidth,
+        pWidth: podiumWidth,
         front: _p2Front,
         side: _p2Side,
         top: _p2Top,
-        showSide: false, // Merges right
+        showSide: false,
       );
     }
 
     Widget? rank3Item;
     if (third != null) {
-      rank3Item = _buildPodiumItem(
+      rank3Item = buildAnimatedItem(
         user: third,
         rank: 3,
         height: 150,
-        width: podiumWidth,
+        pWidth: podiumWidth,
         front: _p3Front,
         side: _p3Side,
         top: _p3Top,
@@ -865,15 +1112,8 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
       );
     }
 
-    // Placeholders for alignment
-    final rank2Placeholder = Opacity(
-      opacity: 0,
-      child: SizedBox(width: podiumWidth),
-    );
-    final rank3Placeholder = Opacity(
-      opacity: 0,
-      child: SizedBox(width: podiumWidth),
-    );
+    final rank2Placeholder = SizedBox(width: podiumWidth);
+    final rank3Placeholder = SizedBox(width: podiumWidth);
 
     return Container(
       padding: EdgeInsets.zero,
@@ -882,32 +1122,27 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
         alignment: Alignment.bottomCenter,
         clipBehavior: Clip.none,
         children: [
-          // Layer 1: Rank 2 (Back)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              rank2Item ?? SizedBox(width: podiumWidth),
+              rank2Item ?? rank2Placeholder,
               SizedBox(width: gapWidth),
               rank3Placeholder,
             ],
           ),
-
-          // Layer 2: Rank 1 (Middle)
           if (first != null)
-            _buildPodiumItem(
+            buildAnimatedItem(
               user: first,
               rank: 1,
               height: 230,
-              width: podiumWidth,
+              pWidth: podiumWidth,
               front: _p1Front,
               side: _p1Side,
               top: _p1Top,
               isFirst: true,
               showSide: true,
             ),
-
-          // Layer 3: Rank 3 (Front)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -915,151 +1150,10 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
               rank2Placeholder,
               SizedBox(width: gapWidth),
               Transform.translate(
-                offset: const Offset(
-                  -2,
-                  0,
-                ), // Slide Rank 3 independently to the right
-                child: rank3Item ?? SizedBox(width: podiumWidth),
+                offset: const Offset(-2, 0),
+                child: rank3Item ?? rank3Placeholder,
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPodiumItem({
-    required TopUser user,
-    required int rank,
-    required double height,
-    required double width,
-    required Color front,
-    required Color side,
-    required Color top,
-    bool isFirst = false,
-    bool showSide = true,
-  }) {
-    const double depth = 16.0;
-
-    return GestureDetector(
-      onTap: () => _showUserDialog(user, rank),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isFirst)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 6),
-              child: Icon(
-                Icons.emoji_events,
-                color: Color(0xFFFFCC00),
-                size: 36,
-              ),
-            ),
-          if (!isFirst) SizedBox(height: isFirst ? 0 : 36),
-
-          Container(
-            width: isFirst ? 72 : 60,
-            height: isFirst ? 72 : 60,
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: CircleAvatar(
-              backgroundImage: user.imgUrl.isNotEmpty
-                  ? NetworkImage(user.imgUrl)
-                  : null,
-              backgroundColor: Colors.grey.shade300,
-              child: user.imgUrl.isEmpty
-                  ? const Icon(Icons.person, color: Colors.grey)
-                  : null,
-            ),
-          ),
-
-          SizedBox(
-            width: width + 20,
-            child: Text(
-              user.firstName,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-                shadows: [
-                  Shadow(
-                    color: Colors.black26,
-                    offset: Offset(0, 1),
-                    blurRadius: 2,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          Container(
-            margin: const EdgeInsets.only(top: 4, bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.25),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              "${user.orderCount} Orders",
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-
-          SizedBox(
-            width: width,
-            height: height,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: BlockPainter(
-                      front: front,
-                      top: top,
-                      side: side,
-                      showSide: showSide,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 50, // Align to bottom to keep numbers in one line
-                  left: 0,
-                  width: showSide ? width - depth : width,
-                  child: Center(
-                    child: Transform.translate(
-                      offset: const Offset(-4, 0), // Shift left as requested
-                      child: Text(
-                        "$rank",
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
-                          fontSize: 56,
-                          fontWeight: FontWeight.w900,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -1433,64 +1527,7 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
   }
 
   Widget _buildLoadingState() {
-    return Container(
-      key: const ValueKey('loading'),
-      width: double.infinity,
-      height: double.infinity,
-      decoration: BoxDecoration(
-        color: _matteDark, // Matte background as requested
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [_matteDark, _matteCard], // Subtle matte gradient
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const _PremiumTrendLoader(), // New Premium Loader
-          const SizedBox(height: 48),
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: 0.0, end: 1.0),
-            duration: const Duration(milliseconds: 800),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.translate(
-                  offset: Offset(0, 20 * (1 - value)),
-                  child: child,
-                ),
-              );
-            },
-            child: const Column(
-              children: [
-                Text(
-                  "GATHERING TRENDS",
-                  style: TextStyle(
-                    fontFamily: 'Outfit',
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 2.0,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  "Curating the best for you...",
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    color: Colors.white70,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return const LeaderboardSkeleton();
   }
 
   Widget _buildErrorState() {
@@ -1501,120 +1538,6 @@ class _CampaignsScreenState extends State<CampaignsScreen> {
       ),
     );
   }
-}
-
-class _PremiumTrendLoader extends StatefulWidget {
-  const _PremiumTrendLoader();
-
-  @override
-  State<_PremiumTrendLoader> createState() => _PremiumTrendLoaderState();
-}
-
-class _PremiumTrendLoaderState extends State<_PremiumTrendLoader>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return CustomPaint(
-          size: const Size(120, 120),
-          painter: _SleekGraphPainter(
-            animationValue: _controller.value,
-            color: Colors.white,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _SleekGraphPainter extends CustomPainter {
-  final double animationValue;
-  final Color color;
-
-  _SleekGraphPainter({required this.animationValue, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final glowPaint = Paint()
-      ..color = color.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8.0
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-
-    final path = Path();
-    final w = size.width;
-    final h = size.height;
-
-    // Create a dynamic flowing line graph
-    // We'll use multiple sine waves to create an organic looking trend line
-    path.moveTo(0, h * 0.8);
-
-    for (double x = 0; x <= w; x++) {
-      // Normalize x
-      final nx = x / w;
-
-      // Dynamic offset based on animation
-      final offset = animationValue * 2 * math.pi;
-
-      // Complex wave function
-      final y =
-          h * 0.5 +
-          math.sin(nx * 2 * math.pi + offset) * (h * 0.2) +
-          math.sin(nx * 4 * math.pi - offset) * (h * 0.1);
-
-      path.lineTo(x, y);
-    }
-
-    // Draw Glow
-    canvas.drawPath(path, glowPaint);
-    // Draw Line
-    canvas.drawPath(path, paint);
-
-    // Draw a moving dot at the "leading edge" of the trend?
-    // Let's just draw a pulsing dot at the center-ish based on the wave
-    final dotX = w * 0.5;
-    final dotY =
-        h * 0.5 +
-        math.sin(0.5 * 2 * math.pi + animationValue * 2 * math.pi) * (h * 0.2) +
-        math.sin(0.5 * 4 * math.pi - animationValue * 2 * math.pi) * (h * 0.1);
-
-    canvas.drawCircle(Offset(dotX, dotY), 6, Paint()..color = Colors.white);
-    canvas.drawCircle(
-      Offset(dotX, dotY),
-      12 + (math.sin(animationValue * 4 * math.pi) * 4),
-      Paint()..color = Colors.white.withOpacity(0.2),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SleekGraphPainter oldDelegate) => true;
 }
 
 class BlockPainter extends CustomPainter {

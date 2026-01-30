@@ -12,12 +12,28 @@ import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/screens/HomeScreen.dart';
+import 'package:exanor/screens/cart_screen.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/components/universal_translation_wrapper.dart';
 import 'package:exanor/services/enhanced_translation_service.dart';
 
 class LocationSelectionScreen extends StatefulWidget {
-  const LocationSelectionScreen({super.key});
+  /// If true, the screen will pop with the address data instead of navigating to HomeScreen
+  final bool returnAddressOnly;
+
+  /// The screen that opened this screen (e.g., 'profileImageUpload', 'storeScreen')
+  /// Used to control navigation behavior
+  final String? referrer;
+
+  /// Store ID for navigation to CartScreen (only used when referrer is 'storeScreen')
+  final String? storeId;
+
+  const LocationSelectionScreen({
+    super.key,
+    this.returnAddressOnly = false,
+    this.referrer,
+    this.storeId,
+  });
 
   @override
   State<LocationSelectionScreen> createState() =>
@@ -150,6 +166,22 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
     _addressTimer?.cancel();
     _searchTimer?.cancel();
     super.dispose();
+  }
+
+  /// Handles back navigation based on referrer
+  /// For profileImageUpload referrer, navigates to HomeScreen instead of popping
+  void _handleBackNavigation() {
+    if (widget.referrer == 'profileImageUpload') {
+      // When coming from profile setup flow, go to HomeScreen
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    } else {
+      // Default behavior: pop back to previous screen
+      Navigator.pop(context);
+    }
   }
 
   Future<void> _requestLocationPermissionAndGetLocation() async {
@@ -785,28 +817,35 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     _isKeyboardVisible = keyboardHeight > 0;
 
-    return Scaffold(
-      body: UniversalTranslationWrapper(
-        excludePatterns: const [
-          '+',
-          '°',
-          'API',
-          'GPS',
-        ], // Don't translate coordinates, technical terms
-        child: GestureDetector(
-          onTap: () {
-            // Hide suggestions when tapping outside
-            if (_showSuggestions) {
-              setState(() {
-                _showSuggestions = false;
-              });
-            }
-            // Dismiss keyboard when tapping outside
-            FocusScope.of(context).unfocus();
-          },
-          child: Stack(
-            children: [
-              // Google Maps
+    return PopScope(
+      canPop: widget.referrer != 'profileImageUpload',
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          _handleBackNavigation();
+        }
+      },
+      child: Scaffold(
+        body: UniversalTranslationWrapper(
+          excludePatterns: const [
+            '+',
+            '°',
+            'API',
+            'GPS',
+          ], // Don't translate coordinates, technical terms
+          child: GestureDetector(
+            onTap: () {
+              // Hide suggestions when tapping outside
+              if (_showSuggestions) {
+                setState(() {
+                  _showSuggestions = false;
+                });
+              }
+              // Dismiss keyboard when tapping outside
+              FocusScope.of(context).unfocus();
+            },
+            child: Stack(
+              children: [
+                // Google Maps
               GoogleMap(
                 onMapCreated: _onMapCreated,
                 onCameraMove: _onCameraMove,
@@ -868,7 +907,7 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          onTap: () => Navigator.pop(context),
+                          onTap: _handleBackNavigation,
                           borderRadius: BorderRadius.circular(16),
                           child: Center(
                             child: Icon(
@@ -1114,7 +1153,9 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                                               suggestion['formatted_address']
                                                   .isNotEmpty)
                                             Padding(
-                                              padding: const EdgeInsets.only(top: 4),
+                                              padding: const EdgeInsets.only(
+                                                top: 4,
+                                              ),
                                               child: Text(
                                                 suggestion['formatted_address'],
                                                 style: TextStyle(
@@ -1350,7 +1391,12 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                             ),
 
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                              padding: const EdgeInsets.fromLTRB(
+                                20,
+                                16,
+                                20,
+                                24,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1567,11 +1613,12 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
                     ],
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    );
+    ); // PopScope closing
   }
 
   void _showAddressDetailsBottomSheet(BuildContext context) async {
@@ -1592,6 +1639,9 @@ class _LocationSelectionScreenState extends State<LocationSelectionScreen> {
           'adminLevel3': _storedAdminLevel3,
           'pincode': _storedPincode,
         },
+        returnAddressOnly: widget.returnAddressOnly,
+        referrer: widget.referrer,
+        storeId: widget.storeId,
       ),
     );
 
@@ -1615,6 +1665,15 @@ class AddressDetailsBottomSheet extends StatefulWidget {
   final double longitude;
   final Map<String, dynamic>? addressComponents;
 
+  /// If true, pop with address data instead of navigating to HomeScreen
+  final bool returnAddressOnly;
+
+  /// The screen that opened LocationSelectionScreen (e.g., 'profileImageUpload', 'storeScreen')
+  final String? referrer;
+
+  /// Store ID for navigation to CartScreen (only used when referrer is 'storeScreen')
+  final String? storeId;
+
   const AddressDetailsBottomSheet({
     super.key,
     required this.locationName,
@@ -1622,6 +1681,9 @@ class AddressDetailsBottomSheet extends StatefulWidget {
     required this.latitude,
     required this.longitude,
     this.addressComponents,
+    this.returnAddressOnly = false,
+    this.referrer,
+    this.storeId,
   });
 
   @override
@@ -1845,6 +1907,17 @@ class _AddressDetailsBottomSheetState extends State<AddressDetailsBottomSheet> {
 
       await prefs.setString('address_details', addressDetailsJson);
       print('💾 Saved address_details to SharedPreferences');
+
+      // CRITICAL FIX: Save the ID so HomeScreen uses the correct one
+      if (addressData['id'] != null) {
+        await prefs.setString('saved_address_id', addressData['id'].toString());
+        print('💾 Saved saved_address_id: ${addressData['id']}');
+      } else {
+        // If no ID (fallback), removing it might force HomeScreen to fetch default
+        // But better to keep previous if this one is incomplete?
+        // No, if we just added it, we want to use it.
+        // My previous fix ensures 'id' is in addressData now.
+      }
 
       // 2. Save to list of saved addresses
       List<String> savedAddressesList =
@@ -2139,7 +2212,10 @@ class _AddressDetailsBottomSheetState extends State<AddressDetailsBottomSheet> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         focusedErrorBorder: OutlineInputBorder(
-                          borderSide: const BorderSide(color: Colors.red, width: 2),
+                          borderSide: const BorderSide(
+                            color: Colors.red,
+                            width: 2,
+                          ),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
@@ -2147,7 +2223,10 @@ class _AddressDetailsBottomSheetState extends State<AddressDetailsBottomSheet> {
                           vertical: 16,
                         ),
                         errorText: _apartmentError,
-                        errorStyle: const TextStyle(color: Colors.red, fontSize: 12),
+                        errorStyle: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
 
@@ -2344,7 +2423,10 @@ class _AddressDetailsBottomSheetState extends State<AddressDetailsBottomSheet> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           focusedErrorBorder: OutlineInputBorder(
-                            borderSide: const BorderSide(color: Colors.red, width: 2),
+                            borderSide: const BorderSide(
+                              color: Colors.red,
+                              width: 2,
+                            ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           contentPadding: const EdgeInsets.symmetric(
@@ -2511,9 +2593,77 @@ class _AddressDetailsBottomSheetState extends State<AddressDetailsBottomSheet> {
                                   '✅ Success response received! Status 200',
                                 );
 
+                                // Fetch latest addresses to get the generated ID
+                                String? newAddressId;
+                                try {
+                                  print(
+                                    '🔄 Fetching updated addresses to get the ID...',
+                                  );
+                                  final listResponse = await ApiService.post(
+                                    '/user-address/',
+                                    body: {'query': {}},
+                                    useBearerToken: true,
+                                  );
+
+                                  if (listResponse['data'] != null &&
+                                      listResponse['data']['status'] == 200 &&
+                                      listResponse['data']['response']
+                                          is List) {
+                                    final List<dynamic> allAddresses =
+                                        listResponse['data']['response'];
+
+                                    // Find our address
+                                    final match = allAddresses.firstWhere((
+                                      addr,
+                                    ) {
+                                      final nameMatch =
+                                          addr['address_name']
+                                              ?.toString()
+                                              .toLowerCase() ==
+                                          requestBody['address_name']
+                                              ?.toString()
+                                              .toLowerCase();
+                                      // Use contains for safer matching of address lines which might be trimmed differently
+                                      final line1Match =
+                                          addr['address_line_1']
+                                              ?.toString()
+                                              .contains(
+                                                requestBody['address_line_1']
+                                                    .toString(),
+                                              ) ??
+                                          false;
+                                      return nameMatch && line1Match;
+                                    }, orElse: () => null);
+
+                                    if (match != null) {
+                                      newAddressId = match['id'];
+                                      print(
+                                        '✅ Found matching address ID: $newAddressId',
+                                      );
+                                    } else {
+                                      print(
+                                        '⚠️ Could not find exact match for new address.',
+                                      );
+                                      // Fallback: use the last one if available?
+                                      // Risky, let's stick to null and rely on future fetches if strict match fails.
+                                    }
+                                  }
+                                } catch (e) {
+                                  print(
+                                    '❌ Error fetching updated address list: $e',
+                                  );
+                                }
+
+                                // Update requestBody with real ID
+                                final Map<String, dynamic> dataToSave =
+                                    Map.from(requestBody);
+                                if (newAddressId != null) {
+                                  dataToSave['id'] = newAddressId;
+                                }
+
                                 // Save address details to local storage
                                 print('💾 Saving address to local storage...');
-                                await _saveAddressToLocalStorage(requestBody);
+                                await _saveAddressToLocalStorage(dataToSave);
                                 print('✅ Address saved to local storage');
 
                                 // Show success message
@@ -2527,15 +2677,53 @@ class _AddressDetailsBottomSheetState extends State<AddressDetailsBottomSheet> {
                                   ),
                                 );
 
-                                // Navigate to HomeScreen
-                                print('🏠 Navigating to HomeScreen...');
-                                Navigator.pushAndRemoveUntil(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const HomeScreen(),
-                                  ),
-                                  (route) => false,
-                                );
+                                // Check if we should return data or navigate based on referrer
+                                if (widget.returnAddressOnly) {
+                                  // Pop back with the address data (for cart flow via SavedAddressesScreen)
+                                  print(
+                                    '📤 Returning address data to previous screen...',
+                                  );
+                                  Navigator.pop(context, dataToSave);
+                                } else if (widget.referrer == 'storeScreen' &&
+                                    widget.storeId != null) {
+                                  // Navigate to CartScreen when opened from StoreScreen
+                                  print(
+                                    '🛒 Navigating to CartScreen (referrer: storeScreen)...',
+                                  );
+
+                                  // Get address details from saved data
+                                  final prefs =
+                                      await SharedPreferences.getInstance();
+                                  final userAddressId =
+                                      dataToSave['id']?.toString() ??
+                                      prefs.getString('saved_address_id') ??
+                                      '';
+                                  final lat = widget.latitude;
+                                  final lng = widget.longitude;
+
+                                  Navigator.pushAndRemoveUntil(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => CartScreen(
+                                        storeId: widget.storeId!,
+                                        userAddressId: userAddressId,
+                                        lat: lat,
+                                        lng: lng,
+                                      ),
+                                    ),
+                                    (route) => false,
+                                  );
+                                } else {
+                                  // Navigate to HomeScreen (default behavior)
+                                  print('🏠 Navigating to HomeScreen...');
+                                  Navigator.pushAndRemoveUntil(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const HomeScreen(),
+                                    ),
+                                    (route) => false,
+                                  );
+                                }
                                 print('✅ Navigation completed');
                               } else {
                                 print('❌ API Error: Status is not 200');

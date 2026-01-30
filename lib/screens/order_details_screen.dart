@@ -1,28 +1,21 @@
 import 'dart:async';
-import 'package:intl/intl.dart';
 import 'dart:ui' as ui;
 import 'package:exanor/components/translation_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:exanor/screens/order_rating_screen.dart';
-
-import 'package:exanor/screens/product_rating_screen.dart'; // Add import
 
 class OrderDetailsScreen extends StatefulWidget {
   final String orderId;
   final String storeId;
-  final bool autoTriggerProductRating;
-  final double? initialOverallRating;
 
   const OrderDetailsScreen({
     super.key,
     required this.orderId,
     required this.storeId,
-    this.autoTriggerProductRating = false,
-    this.initialOverallRating,
   });
 
   @override
@@ -37,7 +30,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
   bool _isLoadingProducts = true;
   bool _isLoadingStatuses = true;
   bool _isScrolled = false;
-  bool _hasTriggeredRatingFlow = false;
 
   Map<String, dynamic>? _orderData;
   List<dynamic> _products = [];
@@ -54,67 +46,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
     )..repeat();
     _scrollController.addListener(_onScroll);
     _fetchOrderDetails();
-    _fetchOrderProducts().then((_) {
-      if (widget.autoTriggerProductRating && !_hasTriggeredRatingFlow) {
-        _triggerProductRatingFlow();
-      }
-    });
+    _fetchOrderProducts();
     _startStatusPolling();
-  }
-
-  Future<void> _triggerProductRatingFlow() async {
-    _hasTriggeredRatingFlow = true;
-    if (!mounted) return;
-
-    // Wait a brief moment for UI to settle if valid
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Iterate through unrated products
-    for (int i = 0; i < _products.length; i++) {
-      final product = _products[i];
-      if (product['is_rated'] != true) {
-        // Show rating screen
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductRatingScreen(
-              orderId: widget.orderId,
-              productId:
-                  product['id']?.toString() ??
-                  product['product_combination_id']?.toString() ??
-                  '',
-              productName: product['product_name'] ?? 'Item',
-              productImage:
-                  product['image'] ??
-                  product['product_image'] ??
-                  product['image_url'],
-              initialRating: widget.initialOverallRating,
-            ),
-          ),
-        );
-
-        if (result != null && result is double) {
-          // Update local state to show rated immediately
-          setState(() {
-            _products[i]['is_rated'] = true;
-            _products[i]['rating'] = result;
-          });
-
-          // Small delay before next
-          await Future.delayed(const Duration(milliseconds: 300));
-        } else {
-          // User cancelled rating this product.
-          // Optional: Break loop? Or continue to next?
-          // Usually if user cancels one, they might want to stop.
-          // Let's ask or just break. For now, we continue to give them chance to rate others?
-          // No, usually "close" means stop flow.
-          break;
-        }
-      }
-    }
-
-    // Refresh details at the end to ensure sync with server
-    _fetchOrderDetails();
   }
 
   @override
@@ -364,7 +297,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
           ),
         ],
       ),
-      bottomNavigationBar: _buildBottomBar(theme),
+      bottomNavigationBar: _orderData != null ? _buildBottomBar(theme) : null,
     );
   }
 
@@ -383,7 +316,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       lightStartBase.withOpacity(0.35),
       Colors.white,
     );
-    const lightModeEnd = Colors.white;
+    final lightModeEnd = Colors.white;
 
     final startColor = isDark
         ? _hexToColor(
@@ -399,9 +332,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         : lightModeEnd;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.transparent, // Ensure container itself is transparent
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
         // No Shadow on Header
       ),
       child: ClipRRect(
@@ -541,9 +474,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       if (mainStatus != null) title = _formatStatus(mainStatus.toString());
     }
 
+    // Determine Colors
     Color statusColor;
-    IconData statusIcon = Icons.hourglass_top_rounded;
-
     final processingColorHex =
         FirebaseRemoteConfigService.getOrderProcessingStatusColor();
     final processingColor = _hexToColor(
@@ -551,25 +483,86 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       defaultColor: theme.colorScheme.primary,
     );
 
-    if (title.toLowerCase().contains('cancelled') ||
-        title.toLowerCase().contains('failed')) {
+    bool isCancelled =
+        title.toLowerCase().contains('cancelled') ||
+        title.toLowerCase().contains('failed');
+    bool isDelivered =
+        title.toLowerCase().contains('delivered') ||
+        title.toLowerCase().contains('completed');
+
+    if (isCancelled) {
       statusColor = theme.colorScheme.error;
-      statusIcon = Icons.cancel_rounded;
-    } else if (title.toLowerCase().contains('delivered') ||
-        title.toLowerCase().contains('completed')) {
+    } else if (isDelivered) {
       statusColor = const Color(0xFF00C853);
-      statusIcon = Icons.check_circle_rounded;
     } else if (title.toLowerCase().contains('ready') ||
-        title.toLowerCase().contains('prepared')) {
+        title.toLowerCase().contains('prepared') ||
+        title.toLowerCase().contains('out')) {
       statusColor = Colors.orange.shade700;
-      statusIcon = Icons.restaurant_rounded;
     } else {
       statusColor = processingColor;
     }
 
-    // New "Timeline" Style Banner
+    // Tracker Logic
+    // Step 1: Placed (Always true unless empty, which shouldn't happen)
+    bool step1 = true;
+    // Step 2: Preparing (Active if not just placed/pending)
+    bool step2 =
+        !title.toLowerCase().contains('pending') &&
+        !title.toLowerCase().contains('placed');
+    // Step 4: Delivered
+    bool step4 = isDelivered;
+
+    // If cancelled, simplified view
+    if (isCancelled) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: theme.colorScheme.error.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.cancel_rounded,
+              color: theme.colorScheme.error,
+              size: 32,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.error,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  if (description.isNotEmpty)
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Standard Premium Tracker
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
@@ -578,167 +571,187 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 8),
-            spreadRadius: 0,
           ),
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
-            spreadRadius: 0,
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                16,
-                24,
-                24,
-                24,
-              ), // Adjusted padding left
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          shape: BoxShape.circle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top Row: Status Text
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    if (description.isNotEmpty &&
+                        description != 'Order is being processed')
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          fontWeight: FontWeight.w500,
                         ),
-                        child: Icon(statusIcon, color: statusColor, size: 24),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.0,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                            if (description.isNotEmpty &&
-                                description != 'Order is being processed')
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text(
-                                  description,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(0.6),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  // Visual Timeline Bar (Simulated)
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      _buildTimelineStep(theme, true, statusColor),
-                      _buildTimelineLine(theme, true, statusColor),
-                      _buildTimelineStep(
-                        theme,
-                        !title.toLowerCase().contains('pending'),
-                        statusColor,
-                      ),
-                      _buildTimelineLine(
-                        theme,
-                        title.toLowerCase().contains('out_for_delivery') ||
-                            title.toLowerCase().contains('delivered') ||
-                            title.toLowerCase().contains('completed'),
-                        statusColor,
-                      ),
-                      _buildTimelineStep(
-                        theme,
-                        title.toLowerCase().contains('delivered') ||
-                            title.toLowerCase().contains('completed'),
-                        statusColor,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Placed", style: _timelineTextStyle(theme)),
-                      Text("Processing", style: _timelineTextStyle(theme)),
-                      Text("Completed", style: _timelineTextStyle(theme)),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
+              // Status Icon Badge
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isDelivered
+                      ? Icons.check_circle_rounded
+                      : (title.toLowerCase().contains('out') ||
+                            title.toLowerCase().contains('shipped'))
+                      ? Icons.local_shipping_rounded
+                      : Icons.inventory_2_rounded,
+                  color: statusColor,
+                  size: 28,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+
+          // 4-Step Tracker
+          Row(
+            children: [
+              _buildTrackerItem(
+                theme,
+                Icons.receipt_long_rounded,
+                "Placed",
+                step1,
+                step1, // Placed is always passed if active
+                statusColor,
+              ),
+              _buildTrackerLine(theme, step2, statusColor),
+              _buildTrackerItem(
+                theme,
+                Icons.inventory_2_rounded,
+                "Processing",
+                step2,
+                step4, // If step 4 (Delivered) is active, Step 2 is completed
+                statusColor,
+              ),
+              _buildTrackerLine(theme, step4, statusColor),
+              _buildTrackerItem(
+                theme,
+                Icons.home_rounded,
+                "Delivered",
+                step4,
+                step4,
+                statusColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackerItem(
+    ThemeData theme,
+    IconData icon,
+    String label,
+    bool isActive,
+    bool isCompleted,
+    Color activeColor,
+  ) {
+    return Column(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: isActive ? activeColor : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isActive
+                  ? activeColor
+                  : theme.dividerColor.withOpacity(0.5),
+              width: 1.5,
             ),
-          ],
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: activeColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(
+            // If completed (and not just active current step), show check?
+            // Actually, keep distinctive icons for clarity as requested.
+            // But maybe outline vs filled?
+            icon,
+            color: isActive
+                ? Colors.white
+                : theme.colorScheme.onSurface.withOpacity(0.4),
+            size: 20,
+          ),
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+            color: isActive
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.onSurface.withOpacity(0.4),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildTimelineStep(ThemeData theme, bool isActive, Color color) {
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        color: isActive ? color : theme.dividerColor.withOpacity(0.2),
-        shape: BoxShape.circle,
-        border: isActive ? Border.all(color: Colors.white, width: 2) : null,
-        // No shadow to match user request
-      ),
-    );
-  }
-
-  Widget _buildTimelineLine(ThemeData theme, bool isActive, Color color) {
+  Widget _buildTrackerLine(ThemeData theme, bool isActive, Color color) {
     return Expanded(
       child: Container(
         height: 3,
+        // Move line up to align with center of circle (40 height -> center 20)
+        // With Column, it's tricky. Best to just center in Row.
+        // But wrapped in Column(Icon + Text) makes centering hard.
+        // Actually, the transform logic or just spacing can work.
+        // Let's use simple Container margin.
+        margin: const EdgeInsets.only(bottom: 20, left: 2, right: 2),
         decoration: BoxDecoration(
-          color: isActive ? color : theme.dividerColor.withOpacity(0.1),
+          color: isActive ? color : theme.dividerColor.withOpacity(0.2),
           borderRadius: BorderRadius.circular(1.5),
         ),
       ),
     );
   }
 
-  TextStyle _timelineTextStyle(ThemeData theme) {
-    return TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w700,
-      color: theme.colorScheme.onSurface.withOpacity(0.4),
-      letterSpacing: 0.5,
-    );
-  }
-
   // 2. Order ID & Date Widget (Refined Sizing & Shadows)
   Widget _buildOrderIdCard(ThemeData theme, bool isDark) {
-    String dateStr = "Date not available";
-    if (_orderData != null) {
-      final timestamp = _orderData!['timestamp'] ?? _orderData!['created_at'];
-      if (timestamp != null) {
-        try {
-          final DateTime parsed = DateTime.parse(timestamp.toString());
-          dateStr = DateFormat('dd MMM yyyy, hh:mm a').format(parsed);
-        } catch (e) {
-          dateStr = timestamp.toString();
-        }
-      }
-    }
-
     return Container(
       padding: const EdgeInsets.all(20), // Reduced loading
       decoration: BoxDecoration(
@@ -749,13 +762,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 8),
-            spreadRadius: 0,
           ),
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
-            spreadRadius: 0,
           ),
         ],
       ),
@@ -792,7 +803,23 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  dateStr,
+                  (() {
+                    final timestamp =
+                        _orderData?['timestamp'] ?? _orderData?['created_at'];
+                    if (timestamp != null) {
+                      try {
+                        final DateTime parsed = DateTime.parse(
+                          timestamp.toString(),
+                        );
+                        return DateFormat(
+                          'dd MMM yyyy, hh:mm a',
+                        ).format(parsed);
+                      } catch (e) {
+                        return timestamp.toString();
+                      }
+                    }
+                    return "Date not available";
+                  })(),
                   style: TextStyle(
                     fontSize: 13,
                     color: theme.colorScheme.onSurface.withOpacity(0.6),
@@ -818,13 +845,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 8),
-            spreadRadius: 0,
           ),
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
-            spreadRadius: 0,
           ),
         ],
       ),
@@ -879,23 +904,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
               itemBuilder: (context, index) {
                 final product = _products[index];
                 final quantity = product['quantity'] ?? 0;
-                double total =
+                final price =
                     double.tryParse(
                       product['amount_including_tax']?.toString() ?? '0',
                     ) ??
                     0.0;
-
-                // Fallback: If amount_including_tax is 0, check for other keys or assume it was unit price if needed?
-                // But usually 'amount' implies total.
-                // Let's also check if 'total' is available directly.
-                if (total == 0) {
-                  final p =
-                      double.tryParse(product['price']?.toString() ?? '0') ??
-                      0.0;
-                  if (p != 0) total = p * quantity;
-                }
-
-                final unitPrice = quantity > 0 ? total / quantity : 0.0;
+                final total = price * quantity;
                 final variant = product['variant_name'];
                 // Check multiple keys for image, or default to null
                 final imageUrl =
@@ -1020,7 +1034,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                                   ),
                                 ),
                               Text(
-                                "₹${unitPrice.toStringAsFixed(0)} / unit",
+                                "₹${price.toStringAsFixed(0)} / unit",
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: theme.colorScheme.onSurface
@@ -1028,43 +1042,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-
-                              // Rating Badge (New Addition)
-                              if (product['is_rated'] == true)
-                                Container(
-                                  margin: const EdgeInsets.only(left: 8),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: Colors.amber.withOpacity(0.35),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(
-                                        Icons.star_rounded,
-                                        size: 10,
-                                        color: Colors.amber,
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        "${product['rating'] ?? 0}",
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                             ],
                           ),
                         ],
@@ -1085,6 +1062,47 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                             letterSpacing: -0.5,
                           ),
                         ),
+                        if (product['rating'] != null ||
+                            product['user_rating'] != null ||
+                            product['is_rated'] == true)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: Colors.amber.withOpacity(0.5),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 10,
+                                    color: Colors.amber,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    product['rating']?.toString() ??
+                                        product['user_rating']?.toString() ??
+                                        "Rated",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.amber.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ],
@@ -1147,13 +1165,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 8),
-            spreadRadius: 0,
           ),
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
-            spreadRadius: 0,
           ),
         ],
       ),
@@ -1204,23 +1220,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
 
             String displayValue = "₹0.00";
             final value = item['value'];
-            double parsedValue = 0.0;
-
             if (value is num) {
-              parsedValue = value.toDouble();
-            } else if (value != null) {
-              // Robust parsing: remove non-numeric chars except dot and minus
-              final cleaned = value.toString().replaceAll(
-                RegExp(r'[^0-9.-]'),
-                '',
-              );
-              parsedValue = double.tryParse(cleaned) ?? 0.0;
+              displayValue = "₹${value.toStringAsFixed(2)}";
+            } else if (value is String && double.tryParse(value) != null) {
+              displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
             }
 
-            displayValue = "₹${parsedValue.abs().toStringAsFixed(2)}";
-
             final isDiscount =
-                parsedValue < 0 || (value.toString().contains('-'));
+                (value is num && value < 0) ||
+                (value is String && value.startsWith('-'));
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -1293,7 +1301,48 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          "TOTAL PAID",
+                          (() {
+                            // Determine Payment Method Name
+                            final paymentData = _orderData?['payment_details'];
+                            String paymentMethod = '';
+                            if (paymentData is Map) {
+                              paymentMethod =
+                                  (paymentData['payment_method_name'] ?? '')
+                                      .toString()
+                                      .toLowerCase();
+                            } else {
+                              paymentMethod =
+                                  (_orderData?['payment_method'] ?? '')
+                                      .toString()
+                                      .toLowerCase();
+                            }
+
+                            // Determine Status
+                            final status = (_orderData?['status'] ?? '')
+                                .toString()
+                                .toLowerCase();
+
+                            // Use negation of final states to capture all processing states (placed, confirmed, shipped, etc.)
+                            final isFinalState =
+                                status.contains('delivered') ||
+                                status.contains('completed') ||
+                                status.contains('cancelled') ||
+                                status.contains('failed') ||
+                                status.contains('returned');
+
+                            final isProcessing = !isFinalState;
+
+                            final isCashOrUpi =
+                                paymentMethod.contains('cash') ||
+                                paymentMethod.contains('cod') ||
+                                paymentMethod.contains('pay on delivery') ||
+                                paymentMethod.contains('upi');
+
+                            if (isProcessing && isCashOrUpi) {
+                              return "AMOUNT TO BE PAID";
+                            }
+                            return "TOTAL PAID";
+                          })(),
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
@@ -1367,13 +1416,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 8),
-            spreadRadius: 0,
           ),
           BoxShadow(
             color: Colors.black.withOpacity(isDark ? 0.1 : 0.05),
             blurRadius: 4,
             offset: const Offset(0, 1),
-            spreadRadius: 0,
           ),
         ],
       ),
@@ -1410,7 +1457,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             ),
           ),
 
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.4)),
+          Divider(
+            height: 1,
+            thickness: 1.5,
+            color: theme.dividerColor.withOpacity(0.4),
+          ),
 
           // Store Header
           Padding(
@@ -1470,7 +1521,11 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
             ),
           ),
 
-          Divider(height: 1, color: theme.dividerColor.withOpacity(0.4)),
+          Divider(
+            height: 1,
+            thickness: 1.5,
+            color: theme.dividerColor.withOpacity(0.4),
+          ),
 
           // Info Grid - Symmetrical Boxes
           Padding(
@@ -1553,7 +1608,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.dividerColor.withOpacity(0.3)),
+          border: Border.all(color: theme.dividerColor.withOpacity(0.4)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1592,15 +1647,15 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
   }
 
   Widget _buildBottomBar(ThemeData theme) {
-    if (_orderData == null) return const SizedBox.shrink();
-
-    final status =
-        _orderData!['order_status_title'] ?? _orderData!['status'] ?? '';
+    // Check status for Rating Button
+    final status = (_orderData?['status'] ?? '').toString().toLowerCase();
     final isDelivered =
-        status.toString().toLowerCase().contains('delivered') ||
-        status.toString().toLowerCase().contains('completed');
+        status.contains('delivered') || status.contains('completed');
+
+    // Check availability for Invoice Button
     final hasInvoice = _orderData!['invoice_url'] != null;
 
+    // If neither is valid, hide bar
     if (!isDelivered && !hasInvoice) return const SizedBox.shrink();
 
     return Container(
@@ -1618,6 +1673,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
       child: SafeArea(
         child: Row(
           children: [
+            // Invoice Button (Left Side)
             if (hasInvoice)
               Expanded(
                 child: OutlinedButton.icon(
@@ -1645,117 +1701,164 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
                   ),
                 ),
               ),
-            if (hasInvoice && isDelivered) const SizedBox(width: 12),
-            if (isDelivered)
-              Expanded(
-                child: _orderData!['is_rated'] == true
-                    ? Container(
-                        height: 52, // Match standard button height
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A1A1A), // Premium Dark
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.amber.withOpacity(0.35),
-                            width: 1,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.amber.withOpacity(0.15),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "RATED",
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.5,
-                                color: Colors.white.withOpacity(0.6),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              height: 16,
-                              width: 1,
-                              color: Colors.white.withOpacity(0.2),
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.star_rounded,
-                              size: 18,
-                              color: Colors.amber,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              "${_orderData!['rating'] ?? 0}",
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => OrderRatingScreen(
-                                orderId: widget.orderId,
-                                storeName: _orderData!['store_name'],
-                              ),
-                            ),
-                          ).then((result) {
-                            if (result is Map &&
-                                (result['action'] == 'auto_rate_products' ||
-                                    result['action'] == 'rate_products')) {
-                              final double rating = result['rating'] is double
-                                  ? result['rating']
-                                  : double.tryParse(
-                                          result['rating'].toString(),
-                                        ) ??
-                                        5.0;
-                              final String review = result['review'] ?? '';
 
-                              _rateAllProducts(rating, review);
-                            } else if (result != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Order rated successfully!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              _fetchOrderDetails();
-                            }
-                          });
-                        },
-                        icon: const Icon(Icons.star_rounded, size: 20),
-                        label: const Text(
-                          "Rate Order",
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: theme.colorScheme.onPrimary,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 0,
-                        ),
+            // Spacer if both elements exist
+            if (isDelivered && hasInvoice) const SizedBox(width: 12),
+
+            // Rate Order Button or Badge (Right Side)
+            if (isDelivered)
+              if (_orderData?['is_rated'] != true)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showRatingDialog(_orderData),
+                    icon: Icon(
+                      Icons.star_outline_rounded,
+                      size: 20,
+                      color: theme.colorScheme.primary,
+                    ),
+                    label: Text(
+                      "Rate Order",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
                       ),
-              ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      side: BorderSide(
+                        color: theme.colorScheme.primary.withOpacity(0.2),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                // Rating Badge (Same Size as Button)
+                Expanded(
+                  child: Container(
+                    height:
+                        52, // Match button height with border (16*2 padding + 20 icon approx ~ 52-56)
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1A1A1A), // Premium Dark
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.amber.withOpacity(0.35),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.amber.withOpacity(0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 24,
+                          color: Colors.amber,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          "${_orderData?['rating'] ?? 0}",
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
           ],
         ),
       ),
     );
+  }
+
+  void _showRatingDialog(dynamic order) {
+    if (order == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OrderRatingScreen(
+          orderId: order['id']?.toString() ?? widget.orderId,
+          storeName: order['store_name'],
+        ),
+      ),
+    ).then((result) {
+      if (result != null) {
+        if (result is Map) {
+          if (result['action'] == 'auto_rate_products' ||
+              result['action'] == 'rate_products') {
+            final double rating = result['rating'] is double
+                ? result['rating']
+                : double.tryParse(result['rating'].toString()) ?? 5.0;
+            final String review = result['review'] ?? '';
+
+            // Rate products automatically
+            _rateAllProducts(order, rating, review);
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: TranslatedText('Order rated successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            _fetchOrderDetails();
+            _fetchOrderProducts();
+          } else if (result['rating'] != null) {
+            _fetchOrderDetails();
+            _fetchOrderProducts();
+          }
+        } else if (result is double) {
+          _fetchOrderDetails();
+          _fetchOrderProducts();
+        }
+      }
+    });
+  }
+
+  Future<void> _rateAllProducts(
+    dynamic order,
+    double rating,
+    String review,
+  ) async {
+    final List items = _products; // Use local products list
+    if (items.isEmpty) return;
+
+    for (var item in items) {
+      if (item['is_rated'] == true) continue;
+
+      try {
+        await ApiService.post(
+          '/review-product/',
+          body: {
+            "order_id": order['id'] ?? widget.orderId,
+            "product_id": item['id'] ?? item['product_combination_id'],
+            "rating": rating,
+            "review": review,
+          },
+          useBearerToken: true,
+        );
+      } catch (e) {
+        debugPrint(
+          "Failed to auto-rate product ${item['id']}: $e",
+        ); // Silent fail
+      }
+    }
+    // Refresh again after products are rated to show their status if needed
+    if (mounted) {
+      _fetchOrderDetails();
+      _fetchOrderProducts();
+    }
   }
 
   Widget _buildErrorView(ThemeData theme) {
@@ -1786,262 +1889,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen>
     );
   }
 
-  Future<void> _rateAllProducts(double rating, String review) async {
-    if (_products.isEmpty) return;
-
-    for (var item in _products) {
-      if (item['is_rated'] == true) continue;
-
-      try {
-        await ApiService.post(
-          '/review-product/',
-          body: {
-            "order_id": widget.orderId,
-            "product_id": item['id'] ?? item['product_combination_id'],
-            "rating": rating,
-            "review": review,
-          },
-          useBearerToken: true,
-        );
-      } catch (e) {
-        debugPrint("Failed to auto-rate product ${item['id']}: $e");
-      }
-    }
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Order and products rated successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      _fetchOrderDetails();
-      _fetchOrderProducts();
-    }
-  }
-
   Widget _buildLoadingView(ThemeData theme) {
-    final isDark = theme.brightness == Brightness.dark;
-    final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
-    final highlightColor = isDark ? Colors.grey[700]! : Colors.grey[100]!;
-
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        MediaQuery.of(context).padding.top + 100,
-        16,
-        40,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: CircularProgressIndicator(color: theme.colorScheme.primary),
       ),
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        // 1. Status Banner Skeleton
-        Container(
-          height: 140,
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Shimmer.fromColors(
-            baseColor: baseColor,
-            highlightColor: highlightColor,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 120,
-                            height: 16,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            width: 180,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // 2. Order ID Skeleton
-        Container(
-          height: 88,
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Shimmer.fromColors(
-            baseColor: baseColor,
-            highlightColor: highlightColor,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 100,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        width: 80,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // 3. Items Skeleton
-        Container(
-          height: 200,
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-                spreadRadius: 0,
-              ),
-            ],
-          ),
-          child: Shimmer.fromColors(
-            baseColor: baseColor,
-            highlightColor: highlightColor,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 100,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 140,
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              width: 80,
-                              height: 12,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

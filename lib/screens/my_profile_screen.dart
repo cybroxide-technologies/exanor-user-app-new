@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
@@ -8,7 +9,8 @@ import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:exanor/services/user_service.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:exanor/components/my_profile_skeleton.dart';
+import 'dart:io';
+import 'package:in_app_update/in_app_update.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -163,6 +165,33 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     }
   }
 
+  Future<void> _checkForUpdate() async {
+    if (Platform.isAndroid) {
+      try {
+        final AppUpdateInfo updateInfo = await InAppUpdate.checkForUpdate();
+        if (updateInfo.updateAvailability ==
+            UpdateAvailability.updateAvailable) {
+          await InAppUpdate.performImmediateUpdate();
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: TranslatedText('App is up to date')),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error checking for update: $e')),
+          );
+        }
+      }
+    } else if (Platform.isIOS) {
+      // For iOS, redirect to the App Store using the download URL
+      _launchUrl(FirebaseRemoteConfigService.getAppDownloadUrl());
+    }
+  }
+
   Color _hexToColor(String hex) {
     try {
       return Color(int.parse(hex.replaceFirst('#', '0xFF')));
@@ -184,7 +213,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          _isLoadingUserData ? const MyProfileSkeleton() : _buildBody(isDark),
+          _isLoadingUserData
+              ? const Center(child: CircularProgressIndicator())
+              : _buildBody(isDark),
 
           // 1. Sliding "Curtain" Header (Background + Title)
           Positioned(
@@ -207,127 +238,136 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
 
   Widget _buildBody(bool isDark) {
     final topPadding = MediaQuery.of(context).padding.top;
-    const headerHeight = 70.0;
+    final headerHeight = 70.0;
 
-    return RefreshIndicator(
-      onRefresh: () => _loadUserData(forceRefresh: true),
-      // Apple-style rubber banding
-      notificationPredicate: (notification) {
-        // Allow refresh only when at top
-        return notification.depth == 0;
-      },
-      color: Theme.of(context).colorScheme.primary,
-      backgroundColor: Theme.of(context).cardColor,
-      child: ListView(
-        controller: _scrollController,
-        // Ensure always scrollable to allow pull to refresh even when content is short
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: EdgeInsets.only(top: topPadding + headerHeight, bottom: 40),
-        children: [
-          // 1. Profile Section
-          _buildProfileSection(isDark),
+    return ListView(
+      controller: _scrollController,
+      padding: EdgeInsets.only(top: topPadding + headerHeight, bottom: 40),
+      children: [
+        // 1. Profile Section
+        _buildProfileSection(isDark),
 
-          const SizedBox(height: 24),
+        const SizedBox(height: 24),
 
-          // 2. Main Actions (Orders, Address, Wallet)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionHeader('MY ACCOUNT'),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: isDark
-                            ? Colors.black.withOpacity(0.6)
-                            : Colors.black.withOpacity(0.15),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _buildSettingsTile(
-                        icon: Icons.receipt_long_rounded,
-                        title: 'My Orders',
-                        iconColor: Colors.blue,
-                        onTap: () => Navigator.pushNamed(context, '/orders'),
-                        isDark: isDark,
-                      ),
-                      _buildDivider(isDark),
-                      _buildSettingsTile(
-                        icon: Icons.pin_drop_rounded,
-                        title: 'Saved Addresses',
-                        iconColor: Colors.green,
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const SavedAddressesScreen(),
-                          ),
+        // 2. Main Actions (Orders, Address, Wallet)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader('MY ACCOUNT'),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withOpacity(0.6)
+                          : Colors.black.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _buildSettingsTile(
+                      icon: Icons.receipt_long_rounded,
+                      title: 'My Orders',
+                      iconColor: Colors.blue,
+                      onTap: () => Navigator.pushNamed(context, '/orders'),
+                      isDark: isDark,
+                    ),
+                    _buildDivider(isDark),
+                    _buildSettingsTile(
+                      icon: Icons.pin_drop_rounded,
+                      title: 'Saved Addresses',
+                      iconColor: Colors.green,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SavedAddressesScreen(),
                         ),
-                        isDark: isDark,
                       ),
-                      _buildDivider(isDark),
-                      _buildSettingsTile(
-                        icon: Icons.account_balance_wallet_rounded,
-                        title: 'Wallet',
-                        iconColor: Colors.orange,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: TranslatedText('Wallet coming soon!'),
-                            ),
-                          );
-                        },
-                        isDark: isDark,
-                      ),
-                    ],
-                  ),
+                      isDark: isDark,
+                    ),
+                    _buildDivider(isDark),
+                    _buildSettingsTile(
+                      icon: Icons.account_balance_wallet_rounded,
+                      title: 'Wallet',
+                      iconColor: Colors.orange,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: TranslatedText('Wallet coming soon!'),
+                          ),
+                        );
+                      },
+                      isDark: isDark,
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // 3. Promo Banner - REMOVED
+        // Padding(
+        //   padding: const EdgeInsets.symmetric(horizontal: 16),
+        //   child: _buildReferBanner(isDark),
+        // ),
+        // const SizedBox(height: 12),
+        const SizedBox(height: 24),
+
+        // 4. Settings Section
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionHeader('SETTINGS & SUPPORT'),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(children: _buildSettingsAndSupportItems(isDark)),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // 5. Danger Zone / Logout
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: _buildSettingsTile(
+              icon: Icons.logout_rounded,
+              title: 'Log Out',
+              iconColor: Colors.red,
+              isDestructive: true,
+              onTap: _showLogoutConfirmationDialog,
+              isDark: isDark,
+              showChevron: false,
             ),
           ),
+        ),
 
-          const SizedBox(height: 24),
-
-          // 3. Promo Banner - REMOVED
-          // Padding(
-          //   padding: const EdgeInsets.symmetric(horizontal: 16),
-          //   child: _buildReferBanner(isDark),
-          // ),
-          // const SizedBox(height: 12),
-          const SizedBox(height: 24),
-
-          // 4. Settings Section
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionHeader('SETTINGS & SUPPORT'),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: _buildSettingsAndSupportItems(isDark),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
-          // 5. Danger Zone / Logout
+        const SizedBox(height: 12),
+        // Delete Account - conditionally shown
+        if (FirebaseRemoteConfigService.shouldShowDeleteAccount())
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -336,53 +376,30 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: _buildSettingsTile(
-                icon: Icons.logout_rounded,
-                title: 'Log Out',
+                icon: Icons.delete_forever_rounded,
+                title: 'Delete Account',
                 iconColor: Colors.red,
                 isDestructive: true,
-                onTap: _showLogoutConfirmationDialog,
+                onTap: () => _launchUrl(
+                  FirebaseRemoteConfigService.getDeleteAccountUrl(),
+                ),
                 isDark: isDark,
-                showChevron: false,
               ),
             ),
           ),
 
-          const SizedBox(height: 12),
-          // Delete Account - conditionally shown
-          if (FirebaseRemoteConfigService.shouldShowDeleteAccount())
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: _buildSettingsTile(
-                  icon: Icons.delete_forever_rounded,
-                  title: 'Delete Account',
-                  iconColor: Colors.red,
-                  isDestructive: true,
-                  onTap: () => _launchUrl(
-                    FirebaseRemoteConfigService.getDeleteAccountUrl(),
-                  ),
-                  isDark: isDark,
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 32),
-          Center(
-            child: TranslatedText(
-              'Version ${FirebaseRemoteConfigService.getMinAppVersion()}',
-              style: TextStyle(
-                color: isDark ? Colors.grey[600] : Colors.grey[400],
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
+        const SizedBox(height: 32),
+        Center(
+          child: TranslatedText(
+            'Version ${FirebaseRemoteConfigService.getMinAppVersion()}',
+            style: TextStyle(
+              color: isDark ? Colors.grey[600] : Colors.grey[400],
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -643,10 +660,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           colors: [
-            Color(0xFF6366F1), // Indigo
-            Color(0xFF8B5CF6), // Violet
+            const Color(0xFF6366F1), // Indigo
+            const Color(0xFF8B5CF6), // Violet
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -869,6 +886,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         title: 'Help & Support',
         iconColor: Colors.purple,
         onTap: () => _launchUrl('https://chat.exanor.com'),
+        isDark: isDark,
+      ),
+    );
+
+    // Check for Updates
+    items.add(_buildDivider(isDark));
+    items.add(
+      _buildSettingsTile(
+        icon: Icons.system_update_rounded,
+        title: 'Check for Updates',
+        iconColor: Colors.teal,
+        onTap: _checkForUpdate,
         isDark: isDark,
       ),
     );

@@ -9,9 +9,7 @@ import 'package:exanor/services/analytics_service.dart';
 import 'package:exanor/services/contact_service.dart';
 import 'package:exanor/services/user_service.dart';
 
-import 'dart:ui' as ui;
 import 'package:exanor/models/refer_and_earn_data.dart';
-import 'package:exanor/components/refer_and_earn_skeleton.dart';
 
 class ReferAndEarnScreen extends StatefulWidget {
   const ReferAndEarnScreen({super.key});
@@ -154,416 +152,195 @@ class _ReferAndEarnScreenState extends State<ReferAndEarnScreen>
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    // Gradients
     return Scaffold(
-      backgroundColor: isDark
-          ? Colors.black
-          : const Color(0xFFF8F9FA), // Light grey background
+      backgroundColor: theme.scaffoldBackgroundColor,
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Content
+          // Background Gradient Spots
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                color: theme.primaryColor.withOpacity(0.2),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.primaryColor.withOpacity(0.2),
+                    blurRadius: 100,
+                    spreadRadius: 50,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -50,
+            left: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                color: Colors.purple.withOpacity(0.15),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.purple.withOpacity(0.15),
+                    blurRadius: 100,
+                    spreadRadius: 50,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Main Content
           RefreshIndicator(
             onRefresh: _refreshData,
             color: theme.colorScheme.primary,
-            backgroundColor: theme.cardColor,
-            displacement: 140, // Push spinner below the header
-            edgeOffset: 130, // Offset from top to account for header
-            child: _isLoadingCode
-                ? const SingleChildScrollView(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 130),
-                      child: ReferAndEarnSkeleton(),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.only(top: 130, bottom: 40),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildContentHeader(theme, isDark),
-                        const SizedBox(height: 10),
-                        _buildReferralCodeSection(theme, isDark),
-                        const SizedBox(height: 48),
-                        _buildBenefitsGrid(theme, isDark),
-                        const SizedBox(height: 48),
-                        _buildContactsSection(theme, isDark),
-                        const SizedBox(height: 48),
-                        _buildTermsAndConditions(theme, isDark),
-                        const SizedBox(height: 60),
-                      ],
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // Header Space
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+
+                // Title & Description
+                SliverToBoxAdapter(child: _buildHeaderSection(theme, isDark)),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+                // Referral Code "Ticket"
+                SliverToBoxAdapter(
+                  child: _buildReferralCodeSection(theme, isDark),
+                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+
+                // "How it Works" / Benefits Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      "Your Rewards",
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                // Benefits Grid (The "Boxes")
+                _buildBenefitsGrid(theme, isDark),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+
+                // Contacts Section
+                SliverToBoxAdapter(child: _buildContactsSection(theme, isDark)),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+
+                // Terms
+                SliverToBoxAdapter(
+                  child: _buildTermsAndConditions(theme, isDark),
+                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            ),
           ),
 
-          // Pinned Header
+          // Custom App Bar
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: _buildHeader(theme, isDark),
+            child: _buildCustomAppBar(theme, isDark),
           ),
         ],
       ),
     );
   }
 
-  // Pinned Header - Gradient Blur Style (Matches Order List)
-  Widget _buildHeader(ThemeData theme, bool isDark) {
+  Widget _buildCustomAppBar(ThemeData theme, bool isDark) {
     final topPadding = MediaQuery.of(context).padding.top;
-
-    // Animate opacity/blur based on scroll
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
-      tween: Tween<double>(begin: 0.0, end: _isScrolled ? 1.0 : 0.0),
-      builder: (context, value, child) {
-        final double blurSigma = value * 15.0;
-        // Gradient is always visible (0.95) and becomes slightly more opaque when scrolled (1.0)
-        final double opacity = 0.95 + (value * 0.05);
-
-        // Calculate Light Mode Colors to match HomeScreen logic (Immersive Light)
-        final lightStartBase = _hexToColor(
-          FirebaseRemoteConfigService.getThemeGradientLightStart(),
-        );
-        final lightModeStart = Color.alphaBlend(
-          lightStartBase.withOpacity(0.35),
-          Colors.white,
-        );
-        const lightModeEnd = Colors.white;
-
-        final startColor = isDark
-            ? _hexToColor(
-                FirebaseRemoteConfigService.getThemeGradientDarkStart(),
-              )
-            : lightModeStart;
-        final endColor = isDark
-            ? _hexToColor(FirebaseRemoteConfigService.getThemeGradientDarkEnd())
-            : lightModeEnd;
-
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(20),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: isDark
-                    ? Colors.black.withOpacity(0.4)
-                    : Colors.black.withOpacity(0.1),
-                blurRadius: 25,
-                offset: const Offset(0, 12),
-                spreadRadius: -5,
+    return Container(
+      height: topPadding + 60,
+      padding: EdgeInsets.only(top: topPadding),
+      child: Row(
+        children: [
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withOpacity(0.5),
+                shape: BoxShape.circle,
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(20),
+              child: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
             ),
-            child: ClipRect(
-              child: BackdropFilter(
-                filter: ui.ImageFilter.blur(
-                  sigmaX: blurSigma,
-                  sigmaY: blurSigma,
-                ),
-                child: Container(
-                  height:
-                      topPadding +
-                      80, // Increased height for bigger banner feel
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        startColor.withOpacity(opacity),
-                        endColor.withOpacity(opacity),
-                      ],
-                    ),
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(20),
-                    ),
-                    border: Border(
-                      bottom: BorderSide(
-                        color: theme.dividerColor.withOpacity(value * 0.1),
-                        width: 0.5,
-                      ),
-                    ),
-                  ),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Center(
-                      // Center content vertically in the taller header
-                      child: SizedBox(
-                        height: 60, // Keep content height standard
-                        child: Stack(
-                          children: [
-                            // Left Back Button
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 20),
-                                child: Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.05),
-                                    borderRadius: BorderRadius.circular(
-                                      16,
-                                    ), // Squircle
-                                    border: Border.all(
-                                      color: theme.colorScheme.onSurface
-                                          .withOpacity(0.1),
-                                      width: 1,
-                                    ),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: BackdropFilter(
-                                      filter: ui.ImageFilter.blur(
-                                        sigmaX: 10,
-                                        sigmaY: 10,
-                                      ),
-                                      child: InkWell(
-                                        onTap: () => Navigator.pop(context),
-                                        child: Icon(
-                                          Icons.arrow_back_ios_new_rounded,
-                                          size: 22,
-                                          color: theme.colorScheme.onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            // Center Title
-                            Center(
-                              child: Text(
-                                _data.title,
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
-                                  color: theme.colorScheme.onSurface,
-                                  letterSpacing: -0.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+          ),
+          Expanded(
+            child: AnimatedOpacity(
+              opacity: _isScrolled ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Text(
+                "Refer & Earn",
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ),
-        );
-      },
-    );
-  }
-
-  Color _hexToColor(String code) {
-    if (code.isEmpty) return Colors.transparent;
-    try {
-      return Color(int.parse(code.substring(1, 7), radix: 16) + 0xFF000000);
-    } catch (e) {
-      return Colors.transparent;
-    }
-  }
-
-  Widget _buildContentHeader(ThemeData theme, bool isDark) {
-    // "Doodle Art" aesthetic purely via Code
-    // White/Cream background + Black Outlines + Orange Accents
-    final cardBgColor = isDark
-        ? const Color(0xFF2C2C2C)
-        : const Color(0xFFFFF8F0);
-    const accentColor = Color(0xFFFF7043); // Vivid Orange
-    final contentColor = isDark ? Colors.white : const Color(0xFF2D2424);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: cardBgColor,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: isDark ? Colors.white10 : Colors.black12,
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-              blurRadius: 0,
-              offset: const Offset(4, 4), // Hard shadow for "sticker" look
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Stack(
-            children: [
-              // 1. Code-based Doodle Decorations
-
-              // Top Right: Organic Blob shape
-              Positioned(
-                top: -30,
-                right: -30,
-                child: Transform.rotate(
-                  angle: -0.1,
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: accentColor.withOpacity(0.1),
-                      borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(60),
-                        topLeft: Radius.circular(60),
-                        bottomRight: Radius.circular(60),
-                        topRight: Radius.circular(20),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // Bottom Left: Dotted Pattern or Squiggle
-              Positioned(
-                bottom: -20,
-                left: -20,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: contentColor.withOpacity(0.05),
-                      width: 2,
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-
-              // Floating Doodle Icons (Simulating the line art)
-              _buildDoodleIcon(
-                icon: Icons.favorite_rounded,
-                color: accentColor,
-                size: 24,
-                top: 20,
-                left: 30,
-                angle: -0.2,
-              ),
-
-              _buildDoodleIcon(
-                icon: Icons.star_outline_rounded,
-                color: contentColor.withOpacity(0.4),
-                size: 28,
-                bottom: 40,
-                right: 30,
-                angle: 0.2,
-              ),
-
-              _buildDoodleIcon(
-                icon: Icons.card_giftcard_rounded,
-                color: contentColor.withOpacity(0.2),
-                size: 40,
-                top: 30,
-                right: 40,
-                angle: 0.15,
-              ),
-
-              // 2. Central Content
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 50, // Reverted to 50
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Main "Sticker" Icon
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.black12, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: accentColor.withOpacity(0.2),
-                            blurRadius: 0,
-                            offset: const Offset(3, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.card_giftcard_rounded,
-                        size: 48,
-                        color: accentColor,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-
-                    // Title
-                    Text(
-                      _data.title,
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: contentColor,
-                        letterSpacing: -0.5,
-                        fontSize: 28,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Description
-                    Text(
-                      _data.description,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: contentColor.withOpacity(0.6),
-                        height: 1.4,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+          const SizedBox(width: 48), // Balance back button
+        ],
       ),
     );
   }
 
-  // Helper for placing playful icons
-  Widget _buildDoodleIcon({
-    required IconData icon,
-    required Color color,
-    required double size,
-    double? top,
-    double? bottom,
-    double? left,
-    double? right,
-    required double angle,
-  }) {
-    return Positioned(
-      top: top,
-      bottom: bottom,
-      left: left,
-      right: right,
-      child: Transform.rotate(
-        angle: angle,
-        child: Icon(icon, color: color, size: size),
+  Widget _buildHeaderSection(ThemeData theme, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        children: [
+          // Animated Icon or Illustration
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.card_giftcard_rounded,
+              size: 48,
+              color: theme.primaryColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _data.title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _data.description,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              height: 1.5,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -798,166 +575,75 @@ class _ReferAndEarnScreenState extends State<ReferAndEarnScreen>
   }
 
   Widget _buildBenefitsGrid(ThemeData theme, bool isDark) {
-    if (_data.benefits.isEmpty) return const SizedBox.shrink();
+    if (_data.benefits.isEmpty) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "How it Works",
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: theme.colorScheme.onSurface,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                "Simple steps to start earning",
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withOpacity(0.6),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.85,
         ),
-        const SizedBox(height: 20),
-
-        // Horizontal Scrollable Cards
-        SizedBox(
-          height: 240, // Fixed height for the horizontal list
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            scrollDirection: Axis.horizontal,
-            itemCount: _data.benefits.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 16),
-            itemBuilder: (context, index) {
-              final benefit = _data.benefits[index];
-
-              return Container(
-                width: 260,
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: theme.dividerColor.withOpacity(0.1),
-                    width: 1,
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final benefit = _data.benefits[index];
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(isDark ? 0.3 : 0.04),
-                      blurRadius: 15,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
+                  child: Icon(
+                    _getIconData(benefit.iconName),
+                    color: theme.primaryColor,
+                    size: 24,
+                  ),
                 ),
-                child: Stack(
-                  children: [
-                    // Watermark Number (Aesthetic touch)
-                    Positioned(
-                      right: -10,
-                      top: -10,
-                      child: Text(
-                        "0${index + 1}",
-                        style: TextStyle(
-                          fontSize: 100,
-                          fontWeight: FontWeight.w900,
-                          color: theme.primaryColor.withOpacity(0.05),
-                          fontFamily: 'Inter',
-                        ),
-                      ),
-                    ),
-
-                    // Content
-                    Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Icon Badge
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: theme.primaryColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Icon(
-                              _getIconData(benefit.iconName),
-                              color: theme.primaryColor,
-                              size: 28,
-                            ),
-                          ),
-                          const Spacer(),
-
-                          // Step Badge
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.05,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              "STEP ${index + 1}",
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.6,
-                                ),
-                                letterSpacing: 1,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Title
-                          Text(
-                            benefit.title,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              height: 1.2,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 8),
-
-                          // Description
-                          Text(
-                            benefit.subtitle,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.6,
-                              ),
-                              height: 1.5,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                const Spacer(),
+                Text(
+                  benefit.title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              );
-            },
-          ),
-        ),
-      ],
+                const SizedBox(height: 8),
+                Text(
+                  benefit.subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    height: 1.4,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          );
+        }, childCount: _data.benefits.length),
+      ),
     );
   }
 

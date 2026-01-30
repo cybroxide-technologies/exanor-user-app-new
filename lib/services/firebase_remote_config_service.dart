@@ -75,7 +75,7 @@ class FirebaseRemoteConfigService {
   static const String _splashScreenColorKey = 'splashScreenColor';
 
   // Refer & Earn Data
-  static const String _referAndEarnDataKey = 'refer_and_earn_data';
+  static const String _referAndEarnDataKey = 'refer_and_earn_screen_data';
 
   // Default values
   static const Map<String, dynamic> _defaults = {

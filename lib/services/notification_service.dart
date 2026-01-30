@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:ui';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'dart:developer' as developer;
 
 /// Notification Service for handling in-app notifications
@@ -17,7 +19,7 @@ class NotificationService {
   }
 
   /// Show in-app notification for foreground messages
-  static void showInAppNotification(RemoteMessage message) {
+  static Future<void> showInAppNotification(RemoteMessage message) async {
     if (_navigatorKey?.currentContext == null) {
       developer.log(
         '❌ NotificationService: No context available for in-app notification',
@@ -41,6 +43,43 @@ class NotificationService {
       '🔔 NotificationService: Showing in-app notification',
       name: 'Notification',
     );
+
+    // 1. Play Haptic Feedback (Graceful handling, runs in parallel)
+    Future(() async {
+      try {
+        // Continuous vibration for ~5 seconds (10 pulses x 500ms)
+        for (int i = 0; i < 10; i++) {
+          // Stop if context is gone (app closed/backgrounded)
+          if (_navigatorKey?.currentContext == null) break;
+
+          await HapticFeedback.vibrate();
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      } catch (e) {
+        // Ignore vibration errors
+        developer.log(
+          '⚠️ NotificationService: Haptics failed (non-fatal): $e',
+          name: 'Notification',
+        );
+      }
+    });
+
+    // 2. Play Custom Notification Sound (Graceful handling)
+    try {
+      final player = AudioPlayer();
+      // Configure player for notifications
+      await player.setReleaseMode(ReleaseMode.stop);
+      // Play the sound
+      await player.play(
+        AssetSource('notification_tone/system-notification-02-352442.mp3'),
+        volume: 0.5, // Reasonable volume
+      );
+    } catch (e) {
+      developer.log(
+        '⚠️ NotificationService: Sound playback failed (non-fatal): $e',
+        name: 'Notification',
+      );
+    }
 
     // Show a premium glassmorphic SnackBar
     ScaffoldMessenger.of(context).showSnackBar(

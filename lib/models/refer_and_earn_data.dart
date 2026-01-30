@@ -14,7 +14,7 @@ class ReferAndEarnData {
   });
 
   factory ReferAndEarnData.fromJson(Map<String, dynamic> json) {
-    var referData = json['refer_and_earn'] ?? json;
+    var referData = json['refer_and_earn'] ?? {};
     return ReferAndEarnData(
       enabled: referData['enabled'] ?? false,
       title: referData['title'] ?? 'Refer & Earn Rewards',

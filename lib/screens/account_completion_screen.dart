@@ -1,7 +1,6 @@
-import 'package:exanor/screens/location_selection_screen.dart';
+import 'package:exanor/screens/profile_image_upload_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:exanor/services/api_service.dart';
-import 'package:exanor/screens/HomeScreen.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,6 +40,9 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
   void initState() {
     super.initState();
 
+    // Pre-populate fields with existing user data if available
+    _prefillFormFields();
+
     // Initialize animation controller
     _animationController = AnimationController(
       vsync: this,
@@ -63,6 +65,55 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
     _animationController.forward();
   }
 
+  /// Pre-fill form fields with existing user data
+  void _prefillFormFields() {
+    final userData = widget.userData;
+
+    // Pre-fill first name (only if not 'unnamed')
+    final firstName = userData['first_name'];
+    if (firstName != null &&
+        firstName != 'unnamed' &&
+        firstName.toString().isNotEmpty) {
+      _firstNameController.text = firstName.toString();
+    }
+
+    // Pre-fill last name (only if not 'user')
+    final lastName = userData['last_name'];
+    if (lastName != null &&
+        lastName != 'user' &&
+        lastName.toString().isNotEmpty) {
+      _lastNameController.text = lastName.toString();
+    }
+
+    // Pre-fill email if available
+    final email = userData['email'];
+    if (email != null && email.toString().isNotEmpty) {
+      _emailController.text = email.toString();
+    }
+
+    // Pre-fill gender if available and valid
+    final gender = userData['gender'];
+    if (gender != null && gender != 'undefined') {
+      final genderStr = gender.toString().toLowerCase();
+      if (genderStr == 'male' ||
+          genderStr == 'female' ||
+          genderStr == 'other') {
+        _selectedGender = genderStr;
+      }
+    }
+
+    // Pre-fill date of birth if available
+    final dob = userData['date_of_birth'];
+    if (dob != null && dob.toString().isNotEmpty) {
+      try {
+        _selectedDateOfBirth = DateTime.parse(dob.toString());
+      } catch (e) {
+        // If parsing fails, leave it null
+        print('⚠️ Failed to parse date of birth: $dob');
+      }
+    }
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
@@ -75,148 +126,207 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(height: screenHeight * 0.08),
+      body: Stack(
+        children: [
+          // Ambient Background
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(color: theme.colorScheme.surface),
+            ),
+          ),
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.primary.withOpacity(0.1),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withOpacity(0.2),
+                    blurRadius: 100,
+                    spreadRadius: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -50,
+            left: -50,
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.secondary.withOpacity(0.05),
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.secondary.withOpacity(0.1),
+                    blurRadius: 80,
+                    spreadRadius: 10,
+                  ),
+                ],
+              ),
+            ),
+          ),
 
-                      // Welcome Header
-                      _buildHeader(theme),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SlideTransition(
+                  position: _slideAnimation,
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(height: screenHeight * 0.02),
 
-                      const SizedBox(height: 40),
+                        // Header
+                        _buildHeader(theme, isDark),
 
-                      // First Name Field
-                      _buildTextField(
-                        controller: _firstNameController,
-                        label: 'First Name',
-                        hint: 'Enter your first name',
-                        icon: Icons.person_outline,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter your first name';
-                          }
-                          return null;
-                        },
-                      ),
+                        const SizedBox(height: 40),
 
-                      const SizedBox(height: 20),
+                        // Form Fields
+                        _buildSectionLabel(theme, 'Personal Info'),
+                        const SizedBox(height: 16),
 
-                      // Last Name Field
-                      _buildTextField(
-                        controller: _lastNameController,
-                        label: 'Last Name',
-                        hint: 'Enter your last name',
-                        icon: Icons.person_outline,
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Please enter your last name';
-                          }
-                          return null;
-                        },
-                      ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildTextField(
+                                controller: _firstNameController,
+                                label: 'First Name',
+                                hint: 'John',
+                                icon: Icons.person_outline_rounded,
+                                theme: theme,
+                                isDark: isDark,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Required';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _buildTextField(
+                                controller: _lastNameController,
+                                label: 'Last Name',
+                                hint: 'Doe',
+                                icon: Icons.person, // Or leave empty if desired
+                                theme: theme,
+                                isDark: isDark,
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return 'Required';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
 
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 24),
 
-                      // Gender Selection
-                      _buildGenderSelector(theme),
+                        _buildDateOfBirthPicker(theme, isDark),
 
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 24),
 
-                      // Date of Birth Picker
-                      _buildDateOfBirthPicker(theme),
+                        _buildSectionLabel(theme, 'Gender Identity'),
+                        const SizedBox(height: 16),
+                        _buildGenderSelector(theme, isDark),
 
-                      const SizedBox(height: 20),
+                        const SizedBox(height: 32),
 
-                      // Email Field (Optional)
-                      _buildTextField(
-                        controller: _emailController,
-                        label: 'Email (Optional)',
-                        hint: 'Enter your email address',
-                        icon: Icons.email_outlined,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (value) {
-                          // Email is optional, but if provided, should be valid
-                          if (value != null && value.trim().isNotEmpty) {
-                            final emailRegex = RegExp(
-                              r'^[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-zA-Z]+',
-                            );
-                            if (!emailRegex.hasMatch(value)) {
-                              return 'Please enter a valid email';
+                        _buildSectionLabel(theme, 'Contact'),
+                        const SizedBox(height: 16),
+                        _buildTextField(
+                          controller: _emailController,
+                          label: 'Email Address',
+                          hint: 'john.doe@example.com (Optional)',
+                          icon: Icons.alternate_email_rounded,
+                          keyboardType: TextInputType.emailAddress,
+                          theme: theme,
+                          isDark: isDark,
+                          validator: (value) {
+                            if (value != null && value.trim().isNotEmpty) {
+                              final emailRegex = RegExp(
+                                r'^[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-zA-Z]+',
+                              );
+                              if (!emailRegex.hasMatch(value)) {
+                                return 'Invalid email address';
+                              }
                             }
-                          }
-                          return null;
-                        },
-                      ),
+                            return null;
+                          },
+                        ),
 
-                      const SizedBox(height: 40),
+                        const SizedBox(height: 50),
 
-                      // Continue Button
-                      _buildContinueButton(theme),
+                        // Action Button
+                        _buildContinueButton(theme),
 
-                      const SizedBox(height: 20),
-                    ],
+                        const SizedBox(height: 40),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
+  Widget _buildHeader(ThemeData theme, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Decorative element
-        Container(
-          width: 60,
-          height: 6,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                theme.colorScheme.primary,
-                theme.colorScheme.primary.withOpacity(0.4),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-        const SizedBox(height: 24),
-
+        const SizedBox(height: 12),
         TranslatedText(
-          'Complete Your Profile',
+          'Finish Setting Up',
           style: theme.textTheme.headlineLarge?.copyWith(
             fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface,
-            letterSpacing: -0.5,
+            color: isDark ? Colors.white : Colors.black,
+            fontSize: 32,
+            letterSpacing: -1.0,
           ),
         ),
         const SizedBox(height: 12),
-
         TranslatedText(
-          'Please provide a few details to personalize your experience',
+          "Let's personalize your profile to get the best experience.",
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            color: isDark ? Colors.grey[400] : Colors.grey[600],
             height: 1.5,
+            fontSize: 16,
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSectionLabel(ThemeData theme, String label) {
+    return TranslatedText(
+      label,
+      style: theme.textTheme.labelMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: theme.colorScheme.primary,
+        letterSpacing: 0.5,
+        fontSize: 13,
+      ),
     );
   }
 
@@ -225,87 +335,84 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
     required String label,
     required String hint,
     required IconData icon,
+    required ThemeData theme,
+    required bool isDark,
     String? Function(String?)? validator,
     TextInputType? keyboardType,
   }) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TranslatedText(
-          label,
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          validator: validator,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: isDark ? Colors.white : Colors.black87,
           ),
-        ),
-        const SizedBox(height: 8),
-
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 400),
-          builder: (context, value, child) {
-            return Transform.scale(
-              scale: 0.95 + (0.05 * value),
-              child: Opacity(opacity: value, child: child),
-            );
-          },
-          child: TextFormField(
-            controller: controller,
-            keyboardType: keyboardType,
-            validator: validator,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurface,
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: TextStyle(
+              color: isDark ? Colors.grey[500] : Colors.grey[600],
+              fontSize: 14,
             ),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurface.withOpacity(0.4),
+            hintText: hint,
+            hintStyle: TextStyle(
+              color: isDark ? Colors.grey[700] : Colors.grey[400],
+              fontSize: 14,
+            ),
+            prefixIcon: Icon(
+              icon,
+              color: isDark ? Colors.grey[600] : Colors.grey[500],
+              size: 20,
+            ),
+            filled: true,
+            fillColor: isDark
+                ? const Color(0xFF1C1C1E)
+                : const Color(0xFFF9FAFB),
+
+            errorStyle: const TextStyle(
+              height: 0,
+              fontSize: 0,
+            ), // Hidden, handled by border color usually or custom UI. keeping standard for now but cleaner. Actually lets keep text.
+            // Reverting error style to default for UX safety, but styled.
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                width: 1,
               ),
-              prefixIcon: Icon(
-                icon,
-                color: theme.colorScheme.primary.withOpacity(0.7),
-                size: 22,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: theme.colorScheme.primary,
+                width: 1.5,
               ),
-              filled: true,
-              fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide.none,
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: theme.colorScheme.error.withOpacity(0.5),
+                width: 1,
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: theme.colorScheme.outline.withOpacity(0.1),
-                  width: 1,
-                ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: theme.colorScheme.error,
+                width: 1.5,
               ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: theme.colorScheme.primary,
-                  width: 2,
-                ),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: theme.colorScheme.error,
-                  width: 1,
-                ),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(
-                  color: theme.colorScheme.error,
-                  width: 2,
-                ),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 18,
-              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 20,
             ),
           ),
         ),
@@ -313,43 +420,37 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
     );
   }
 
-  Widget _buildGenderSelector(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildGenderSelector(ThemeData theme, bool isDark) {
+    return Row(
       children: [
-        TranslatedText(
-          'Gender',
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
+        Expanded(
+          child: _buildGenderOption(
+            'Male',
+            'male',
+            Icons.male_rounded,
+            theme,
+            isDark,
           ),
         ),
-        const SizedBox(height: 12),
-
-        Row(
-          children: [
-            Expanded(
-              child: _buildGenderOption('Male', 'male', Icons.male, theme),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildGenderOption(
-                'Female',
-                'female',
-                Icons.female,
-                theme,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildGenderOption(
-                'Other',
-                'other',
-                Icons.transgender,
-                theme,
-              ),
-            ),
-          ],
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildGenderOption(
+            'Female',
+            'female',
+            Icons.female_rounded,
+            theme,
+            isDark,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildGenderOption(
+            'Other',
+            'other',
+            Icons.transgender_rounded,
+            theme,
+            isDark,
+          ),
         ),
       ],
     );
@@ -360,8 +461,14 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
     String value,
     IconData icon,
     ThemeData theme,
+    bool isDark,
   ) {
     final isSelected = _selectedGender == value;
+    final activeColor = theme.colorScheme.primary;
+    final inactiveBg = isDark
+        ? const Color(0xFF1C1C1E)
+        : const Color(0xFFF9FAFB);
+    final activeBg = activeColor.withOpacity(0.1);
 
     return GestureDetector(
       onTap: () {
@@ -370,38 +477,45 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
         });
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: isSelected
-              ? theme.colorScheme.primary.withOpacity(0.1)
-              : theme.colorScheme.surfaceVariant.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(14),
+          color: isSelected ? activeBg : inactiveBg,
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.outline.withOpacity(0.1),
-            width: isSelected ? 2 : 1,
+                ? activeColor
+                : (isDark ? Colors.grey[800]! : Colors.grey[200]!),
+            width: isSelected ? 1.5 : 1,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: activeColor.withOpacity(0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [],
         ),
         child: Column(
           children: [
             Icon(
               icon,
               color: isSelected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface.withOpacity(0.5),
-              size: 28,
+                  ? activeColor
+                  : (isDark ? Colors.grey[500] : Colors.grey[500]),
+              size: 26,
             ),
             const SizedBox(height: 8),
             TranslatedText(
               label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 color: isSelected
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurface.withOpacity(0.7),
+                    ? activeColor
+                    : (isDark ? Colors.grey[400] : Colors.grey[600]),
               ),
             ),
           ],
@@ -410,19 +524,12 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
     );
   }
 
-  Widget _buildDateOfBirthPicker(ThemeData theme) {
+  Widget _buildDateOfBirthPicker(ThemeData theme, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TranslatedText(
-          'Date of Birth',
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
-        const SizedBox(height: 8),
-
+        _buildSectionLabel(theme, 'Date of Birth'),
+        const SizedBox(height: 16),
         GestureDetector(
           onTap: () async {
             final DateTime? picked = await showDatePicker(
@@ -452,36 +559,38 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+              color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF9FAFB),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: theme.colorScheme.outline.withOpacity(0.1),
+                color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
                 width: 1,
               ),
             ),
             child: Row(
               children: [
                 Icon(
-                  Icons.calendar_today_outlined,
-                  color: theme.colorScheme.primary.withOpacity(0.7),
-                  size: 22,
+                  Icons.calendar_today_rounded,
+                  color: isDark ? Colors.grey[500] : Colors.grey[600],
+                  size: 20,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: TranslatedText(
                     _selectedDateOfBirth != null
                         ? '${_selectedDateOfBirth!.day.toString().padLeft(2, '0')}/${_selectedDateOfBirth!.month.toString().padLeft(2, '0')}/${_selectedDateOfBirth!.year}'
-                        : 'Select your date of birth',
-                    style: theme.textTheme.bodyLarge?.copyWith(
+                        : 'Select Date',
+                    style: TextStyle(
+                      fontSize: 16,
                       color: _selectedDateOfBirth != null
-                          ? theme.colorScheme.onSurface
-                          : theme.colorScheme.onSurface.withOpacity(0.4),
+                          ? (isDark ? Colors.white : Colors.black87)
+                          : (isDark ? Colors.grey[600] : Colors.grey[400]),
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
                 Icon(
-                  Icons.arrow_drop_down,
-                  color: theme.colorScheme.onSurface.withOpacity(0.4),
+                  Icons.keyboard_arrow_down_rounded,
+                  color: isDark ? Colors.grey[600] : Colors.grey[400],
                 ),
               ],
             ),
@@ -492,20 +601,33 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
   }
 
   Widget _buildContinueButton(ThemeData theme) {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: 56,
+      height: 60,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: _isLoading ? null : _completeProfile,
         style: ElevatedButton.styleFrom(
-          backgroundColor: theme.colorScheme.primary,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           foregroundColor: Colors.white,
-          elevation: 0,
-          shadowColor: theme.colorScheme.primary.withOpacity(0.3),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
           ),
-          disabledBackgroundColor: theme.colorScheme.outline.withOpacity(0.3),
         ),
         child: _isLoading
             ? const SizedBox(
@@ -519,18 +641,18 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
             : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TranslatedText(
-                    'Continue',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
+                  const TranslatedText(
+                    'Complete Profile',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                       letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(width: 8),
                   const Icon(
                     Icons.arrow_forward_rounded,
-                    size: 20,
+                    size: 24,
                     color: Colors.white,
                   ),
                 ],
@@ -594,11 +716,27 @@ class _AccountCompletionScreenState extends State<AccountCompletionScreen>
           // Update local storage with new data
           await _updateLocalUserData();
 
-          // Navigate to HomeScreen
+          // Navigate to ProfileImageUploadScreen with Slide Transition
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(
-              builder: (context) => const LocationSelectionScreen(),
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const ProfileImageUploadScreen(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    const begin = Offset(1.0, 0.0);
+                    const end = Offset.zero;
+                    const curve = Curves.easeInOut;
+                    var tween = Tween(
+                      begin: begin,
+                      end: end,
+                    ).chain(CurveTween(curve: curve));
+                    var offsetAnimation = animation.drive(tween);
+                    return SlideTransition(
+                      position: offsetAnimation,
+                      child: child,
+                    );
+                  },
             ),
             (route) => false,
           );

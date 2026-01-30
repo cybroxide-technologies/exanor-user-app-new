@@ -89,8 +89,14 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
 
       if (!mounted) return;
 
+      if (!mounted) return;
+
       // Handle success
-      _showSuccessDialog();
+      Navigator.pop(context, {
+        'action': 'auto_rate_products',
+        'rating': rating,
+        'review': review,
+      });
     } catch (e) {
       if (!mounted) return;
 
@@ -119,49 +125,10 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
     }
   }
 
-  void _showSuccessDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text("Thank You!"),
-        content: const Text(
-          "Your overall rating has been submitted. Would you like to rate individual products?",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(
-                context,
-                _getApiRating(_ratingValue),
-              ); // Close screen
-            },
-            child: const Text("No, Thanks"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context); // Close dialog
-              // TODO: Navigate to individual product rating screen
-              // For now, we'll just close and maybe show a message
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Individual product rating coming soon!"),
-                ),
-              );
-              Navigator.pop(context, _getApiRating(_ratingValue));
-            },
-            child: const Text("Rate Products"),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final bgColor = _getBackgroundColor(_ratingValue);
-    final textColor = Colors.black87;
+    const textColor = Colors.black87;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -182,7 +149,7 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
                       const SizedBox(height: 60), // Space for close button
                       const Spacer(flex: 1),
                       const Spacer(flex: 1),
-                      Text(
+                      const Text(
                         "How was your\nexperience?",
                         textAlign: TextAlign.center,
                         style: TextStyle(
@@ -246,25 +213,40 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
                       ),
                       const SizedBox(height: 20),
                       // Review Text Field
+                      // Minimal Review Input
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: TextField(
-                          controller: _reviewController,
-                          decoration: InputDecoration(
-                            hintText: "Write a review (optional)...",
-                            hintStyle: TextStyle(
-                              color: Colors.black.withOpacity(0.4),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                            child: TextField(
+                              controller: _reviewController,
+                              decoration: InputDecoration(
+                                hintText: "Write a review (optional)...",
+                                hintStyle: TextStyle(
+                                  color: Colors.black.withOpacity(0.4),
+                                  fontSize: 15,
+                                ),
+                                filled: true,
+                                fillColor: Colors.white.withOpacity(0.3),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 16,
+                                ),
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                              ),
+                              maxLines: 2,
+                              minLines: 1,
+                              style: const TextStyle(
+                                color: Colors.black87,
+                                fontSize: 16,
+                              ),
+                              textCapitalization: TextCapitalization.sentences,
                             ),
-                            filled: true,
-                            fillColor: Colors.white.withOpacity(0.5),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.all(16),
                           ),
-                          maxLines: 2,
-                          style: const TextStyle(color: Colors.black87),
                         ),
                       ),
                       const Spacer(flex: 2),
@@ -313,22 +295,33 @@ class _OrderRatingScreenState extends State<OrderRatingScreen>
               ),
             ),
             // Floating Close Button
+            // Floating Back Button
             Positioned(
               left: 20,
               top: 20,
-              child: GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.05),
-                    shape: BoxShape.circle,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Colors.black.withOpacity(0.1),
+                    width: 1,
                   ),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    size: 18,
-                    color: Colors.black87,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 18,
+                        color: Colors.black87,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -368,7 +361,7 @@ class _FacePainter extends CustomPainter {
 
     final eyeOffset = size.width * 0.2;
     final eyeY = size.height * 0.35;
-    final eyeRadius = 15.0;
+    const eyeRadius = 15.0;
 
     // Pupils (move slightly based on rating to look at the "grade")
     final pupilOffset = (rating - 0.5) * 10;
@@ -404,19 +397,19 @@ class _FacePainter extends CustomPainter {
     // 0.0 -> Angry/Sad ( \ / )
     // 1.0 -> Happy ( / \ or raised )
     final browY = eyeY - 40;
-    final browWidth = 40.0;
+    const browWidth = 40.0;
     final browAngle = (0.5 - rating) * 0.8; // Tilt angle
 
     canvas.save();
     canvas.translate(center.dx - eyeOffset, browY);
     canvas.rotate(-browAngle);
-    canvas.drawLine(Offset(-browWidth / 2, 0), Offset(browWidth / 2, 0), paint);
+    canvas.drawLine(const Offset(-browWidth / 2, 0), const Offset(browWidth / 2, 0), paint);
     canvas.restore();
 
     canvas.save();
     canvas.translate(center.dx + eyeOffset, browY);
     canvas.rotate(browAngle);
-    canvas.drawLine(Offset(-browWidth / 2, 0), Offset(browWidth / 2, 0), paint);
+    canvas.drawLine(const Offset(-browWidth / 2, 0), const Offset(browWidth / 2, 0), paint);
     canvas.restore();
 
     // Mouth
@@ -428,7 +421,7 @@ class _FacePainter extends CustomPainter {
 
     final mouthY = size.height * 0.65;
     final mouthWidth = size.width * 0.4;
-    final maxCurve = 60.0;
+    const maxCurve = 60.0;
     final curveValue = (rating - 0.5) * 2 * maxCurve; // -60 to +60
 
     final path = Path();

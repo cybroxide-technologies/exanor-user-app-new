@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/services/analytics_service.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:fast_contacts/fast_contacts.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:ui';
-import 'package:exanor/services/api_service.dart';
-// ticket_painter no longer needed if we use clipper, but keeping import just in case or we can remove it.
+import 'package:exanor/services/contact_service.dart';
+import 'package:exanor/services/user_service.dart';
+
+import 'package:exanor/models/refer_and_earn_data.dart';
 
 class ReferAndEarnScreen extends StatefulWidget {
   const ReferAndEarnScreen({super.key});
@@ -20,26 +19,21 @@ class ReferAndEarnScreen extends StatefulWidget {
 }
 
 class _ReferAndEarnScreenState extends State<ReferAndEarnScreen>
-    with TickerProviderStateMixin {
-  late AnimationController _coinController;
-  late Animation<double> _coinBounceAnimation;
-
+    with SingleTickerProviderStateMixin {
+  late ReferAndEarnData _data;
   String _referralCode = '';
   bool _isLoadingCode = true;
-  bool _hasContactPermission = false;
-  bool _isLoadingContacts = false;
-  List<Map<String, String>> _contacts = [];
-  List<Map<String, String>> _filteredContacts = [];
-  String _searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-  int _rewardAmount = 100; // Default value
-  bool _isLoadingReward = true;
-  bool _isUsingApiContacts =
-      false; // Track if we're using API or native contacts
+  bool _isSyncing = false;
+  bool _isScrolled = false;
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+    _loadData();
+    _loadReferralCode();
 
     // Track screen view
     AnalyticsService().logEvent(
@@ -50,26 +44,48 @@ class _ReferAndEarnScreenState extends State<ReferAndEarnScreen>
       },
     );
 
-    _coinController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
-      vsync: this,
-    );
+    // Automatically sync contacts after frame is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncContacts(silent: true);
+    });
+  }
 
-    _coinBounceAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _coinController,
-        curve: Curves.elasticOut,
-        reverseCurve: Curves.easeOut,
-      ),
-    );
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _coinController.repeat(reverse: true);
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      final isScrolled = _scrollController.offset > 10;
+      if (isScrolled != _isScrolled) {
+        setState(() {
+          _isScrolled = isScrolled;
+        });
+      }
+    }
+  }
+
+  Future<void> _refreshData() async {
+    setState(() {
+      _isLoadingCode = true;
     });
 
-    _loadReferralCode();
-    _loadRewardAmount();
-    _requestContactPermission();
+    // Fetch latest config & user data
+    await Future.wait([
+      FirebaseRemoteConfigService.fetchAndActivate(),
+      UserService.viewUserData(), // Refresh user profile including phone
+    ]);
+
+    _loadData();
+    await _loadReferralCode();
+  }
+
+  void _loadData() {
+    setState(() {
+      _data = FirebaseRemoteConfigService.getReferAndEarnData();
+    });
   }
 
   Future<void> _loadReferralCode() async {
@@ -84,1124 +100,872 @@ class _ReferAndEarnScreenState extends State<ReferAndEarnScreen>
         });
       } else {
         setState(() {
-          _referralCode = 'No phone number found';
+          _referralCode = 'No phone number';
           _isLoadingCode = false;
         });
       }
     } catch (e) {
       setState(() {
-        _referralCode = 'Error loading phone number';
+        _referralCode = 'Error';
         _isLoadingCode = false;
       });
     }
   }
 
-  Future<void> _loadRewardAmount() async {
-    try {
-      // Get reward amount from Firebase Remote Config
-      final rewardAmount =
-          FirebaseRemoteConfigService.getReferralRewardAmount();
-      setState(() {
-        _rewardAmount = rewardAmount;
-        _isLoadingReward = false;
-      });
-      print('📊 Loaded reward amount: ₹$_rewardAmount');
-    } catch (e) {
-      print('❌ Error loading reward amount: $e');
-      setState(() {
-        _rewardAmount = 100; // Fallback to default
-        _isLoadingReward = false;
-      });
-    }
-  }
-
-  Future<void> _requestContactPermission() async {
-    try {
-      print('📞 Requesting contact permission using permission_handler...');
-
-      // Check current permission status
-      PermissionStatus currentStatus = await Permission.contacts.status;
-      print('📞 Current contact permission status: $currentStatus');
-
-      if (currentStatus.isGranted) {
-        print('📞 Permission already granted, loading contacts...');
-        setState(() {
-          _hasContactPermission = true;
-        });
-        await _loadContacts();
-        return;
-      }
-
-      // Request permission
-      final status = await Permission.contacts.request();
-      print('📞 Permission request result: $status');
-
-      setState(() {
-        _hasContactPermission = status.isGranted;
-      });
-
-      if (status.isGranted) {
-        print('📞 Permission granted, loading contacts...');
-        await _loadContacts();
-      } else if (status.isPermanentlyDenied) {
-        print('📞 Permission permanently denied - Silent fallback');
-        // Fallback to API contacts without nagging the user
-        await _loadContacts();
-      } else {
-        print('📞 Permission denied: $status - Silent fallback');
-        // Fallback to API contacts without nagging the user
-        await _loadContacts();
-      }
-    } catch (e) {
-      print('❌ Error requesting contact permission: $e');
-      setState(() {
-        _hasContactPermission = false;
-      });
-      // Try to load strictly from API/Local fallback even if permission errored
-      await _loadContacts();
-    }
-  }
-
-  /// Fetch contacts from API
-  Future<List<Map<String, dynamic>>> _fetchContactsFromApi() async {
-    try {
-      print('📞 Fetching contacts from API...');
-
-      final response = await ApiService.post(
-        '/get-user-contacts/',
-        body: {"limit": 10000},
-        useBearerToken: true,
-      );
-
-      print('📞 API contacts response: $response');
-
-      if (response['data'] != null && response['data']['status'] == 200) {
-        final data = response['data']['data'];
-        final List<dynamic> contacts = data['contacts'] ?? [];
-
-        print('📞 API returned ${contacts.length} contacts');
-
-        return contacts.cast<Map<String, dynamic>>();
-      } else {
-        print('📞 API returned no contacts or error status');
-        return [];
-      }
-    } catch (e) {
-      print('❌ Error fetching contacts from API: $e');
-      return [];
-    }
-  }
-
-  Future<void> _loadContacts() async {
-    print('📞 Starting contact loading...');
-    setState(() {
-      _isLoadingContacts = true;
-    });
-
-    List<Map<String, String>> localContacts = [];
-
-    try {
-      // Always try to fetch fresh contacts from device first
-      // Check permission status before loading native contacts
-      PermissionStatus status = await Permission.contacts.status;
-
-      if (status.isGranted) {
-        print('📞 Loading fresh contacts from device using fast_contacts...');
-        final List<Contact> contacts = await FastContacts.getAllContacts();
-
-        print('📞 Raw contacts loaded: ${contacts.length}');
-
-        final List<Map<String, String>> formattedContacts = [];
-
-        for (int i = 0; i < contacts.length; i++) {
-          final Contact contact = contacts[i];
-          // Check if contact has phones and display name
-          if (contact.phones.isNotEmpty &&
-              contact.displayName.isNotEmpty &&
-              contact.displayName.trim().isNotEmpty) {
-            final phoneNumber = contact.phones.first.number;
-            final displayName = contact.displayName.trim();
-
-            // Extract additional contact information (only what's available)
-            final String email = contact.emails.isNotEmpty
-                ? contact.emails.first.address
-                : '';
-
-            final String address = '';
-            final String city = '';
-            final String state = '';
-            final String country = '';
-
-            // Basic phone number validation - be more lenient
-            final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
-            if (phoneNumber.isNotEmpty && cleanPhone.length >= 10) {
-              formattedContacts.add({
-                'id': contact.id,
-                'name': displayName,
-                'phone': phoneNumber,
-                'email': email,
-                'address': address,
-                'city': city,
-                'state': state,
-                'country': country,
-                'is_user': 'false',
-                'contact_user_id': '',
-                'img_url': '',
-              });
-            }
-          }
-        }
-
-        // Sort contacts alphabetically
-        formattedContacts.sort(
-          (a, b) =>
-              a['name']!.toLowerCase().compareTo(b['name']!.toLowerCase()),
-        );
-
-        print('📞 Formatted device contacts: ${formattedContacts.length}');
-        localContacts = formattedContacts;
-
-        // Always upload fresh contacts to server
-        await _bulkSyncContacts(formattedContacts);
-
-        // After uploading, fetch updated contacts from server
-        print('📞 Fetching updated contacts from server after upload...');
-        final List<Map<String, dynamic>> apiContacts =
-            await _fetchContactsFromApi();
-
-        if (apiContacts.isNotEmpty) {
-          // Use server contacts (with updated info like is_contact_an_user)
-          print('📞 Using updated server contacts: ${apiContacts.length}');
-
-          final List<Map<String, String>>
-          serverFormattedContacts = apiContacts.map((contact) {
-            return {
-              'id': contact['id']?.toString() ?? '',
-              'name': contact['contact_name']?.toString() ?? '',
-              'phone': contact['contact_phone_number']?.toString() ?? '',
-              'email': contact['contact_email']?.toString() ?? '',
-              'is_user': contact['is_contact_an_user']?.toString() ?? 'false',
-              'contact_user_id': contact['contact_user_id']?.toString() ?? '',
-              'img_url': contact['contact_img_url']?.toString() ?? '',
-              'address': '',
-              'city': '',
-              'state': '',
-              'country': '',
-            };
-          }).toList();
-
-          // Sort contacts alphabetically
-          serverFormattedContacts.sort(
-            (a, b) =>
-                a['name']!.toLowerCase().compareTo(b['name']!.toLowerCase()),
-          );
-
-          setState(() {
-            _contacts = serverFormattedContacts;
-            _filteredContacts = serverFormattedContacts;
-            _isLoadingContacts = false;
-            _isUsingApiContacts = true;
-          });
-
-          return;
-        }
-      } else {
-        print('❌ Contact permission not granted, trying API fallback...');
-
-        // Fallback: try to get contacts from API if permission not granted
-        final List<Map<String, dynamic>> apiContacts =
-            await _fetchContactsFromApi();
-
-        if (apiContacts.isNotEmpty) {
-          print('📞 Using API contacts as fallback: ${apiContacts.length}');
-
-          final List<Map<String, String>> formattedContacts = apiContacts.map((
-            contact,
-          ) {
-            return {
-              'id': contact['id']?.toString() ?? '',
-              'name': contact['contact_name']?.toString() ?? '',
-              'phone': contact['contact_phone_number']?.toString() ?? '',
-              'email': contact['contact_email']?.toString() ?? '',
-              'is_user': contact['is_contact_an_user']?.toString() ?? 'false',
-              'contact_user_id': contact['contact_user_id']?.toString() ?? '',
-              'img_url': contact['contact_img_url']?.toString() ?? '',
-              'address': '',
-              'city': '',
-              'state': '',
-              'country': '',
-            };
-          }).toList();
-
-          // Sort contacts alphabetically
-          formattedContacts.sort(
-            (a, b) =>
-                a['name']!.toLowerCase().compareTo(b['name']!.toLowerCase()),
-          );
-
-          setState(() {
-            _contacts = formattedContacts;
-            _filteredContacts = formattedContacts;
-            _isLoadingContacts = false;
-            _isUsingApiContacts = true;
-          });
-
-          // Still sync API contacts (in case they were updated)
-          await _bulkSyncContacts(formattedContacts);
-          return;
-        }
-      }
-
-      // Final fallback: display local contacts if server fetch failed
-      if (localContacts.isNotEmpty) {
-        print('📞 Displaying local contacts as final fallback');
-        setState(() {
-          _contacts = localContacts;
-          _filteredContacts = localContacts;
-          _isLoadingContacts = false;
-          _isUsingApiContacts = false;
-        });
-        return;
-      }
-
-      // If everything failed, show empty state
-      print('📞 No contacts available from any source');
-      setState(() {
-        _contacts = [];
-        _filteredContacts = [];
-        _isLoadingContacts = false;
-        _isUsingApiContacts = false;
-      });
-
-      // Still make empty sync call to ensure server is up to date
-      await _bulkSyncContacts([]);
-    } catch (e, stackTrace) {
-      print('❌ Error loading contacts: $e');
-      print('❌ Stack trace: $stackTrace');
-
-      // Fallback to local contacts if available
-      if (localContacts.isNotEmpty) {
-        print('📞 Using local contacts due to error');
-        setState(() {
-          _contacts = localContacts;
-          _filteredContacts = localContacts;
-          _isLoadingContacts = false;
-          _isUsingApiContacts = false;
-        });
-      } else {
-        setState(() {
-          _isLoadingContacts = false;
-          _contacts = [];
-          _filteredContacts = [];
-          _isUsingApiContacts = false;
-        });
-      }
-
-      // Still make empty sync call even on error
-      await _bulkSyncContacts([]);
-    }
-  }
-
-  void _filterContacts(String query) {
-    setState(() {
-      _searchQuery = query;
-      if (query.isEmpty) {
-        _filteredContacts = _contacts;
-      } else {
-        _filteredContacts = _contacts.where((contact) {
-          final name = contact['name']?.toLowerCase() ?? '';
-          final phone = contact['phone']?.toLowerCase() ?? '';
-          return name.contains(query.toLowerCase()) ||
-              phone.contains(query.toLowerCase());
-        }).toList();
-      }
-    });
-  }
-
-  void _inviteContact(String name, String phone) async {
-    // Optimized SMS message with only essential info
-    final message =
-        '''Hi $name! Join KaamBazar with my code $_referralCode and get ₹$_rewardAmount ad credits! ${FirebaseRemoteConfigService.getAppDownloadUrl()}''';
-
-    try {
-      AnalyticsService().logEvent(
-        eventName: 'individual_contact_invited',
-        parameters: {
-          'contact_name': name,
-          'contact_phone': phone,
-          'referral_code': _referralCode,
-          'invitation_method': 'sms',
-        },
-      );
-
-      // Clean phone number for SMS
-      final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
-
-      // Create SMS URI
-      final Uri smsUri = Uri(
-        scheme: 'sms',
-        path: cleanPhone,
-        queryParameters: {'body': message},
-      );
-
-      // Try to launch SMS app
-      if (await canLaunchUrl(smsUri)) {
-        await launchUrl(smsUri);
-      } else {
-        // Fallback to clipboard if SMS can't be opened
-        await Clipboard.setData(ClipboardData(text: message));
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: TranslatedText(
-                'SMS app not available. Invitation message copied to clipboard!',
-              ),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      print('❌ Error opening SMS app: $e');
-
-      // Fallback to clipboard
-      await Clipboard.setData(ClipboardData(text: message));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: TranslatedText(
-              'Failed to open SMS. Invitation message copied to clipboard!',
-            ),
-            backgroundColor: Colors.orange,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
-
-  /// Bulk sync contacts to backend - Silent and One-time
-  Future<void> _bulkSyncContacts(List<Map<String, String>> contacts) async {
-    if (!mounted) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final bool alreadySynced = prefs.getBool('contacts_synced_v1') ?? false;
-
-      if (alreadySynced) {
-        return;
-      }
-
-      await prefs.setBool('contacts_synced_v1', true);
-
-      if (contacts.isEmpty) {
-        return;
-      }
-
-      // Prepare contacts data for bulk upload
-      final List<Map<String, dynamic>> contactsData = contacts
-          .map((contact) {
-            // Clean phone number - remove all non-digit characters
-            String cleanPhone =
-                contact['phone']?.replaceAll(RegExp(r'[^\d]'), '') ?? '';
-
-            // Add 91 prefix if phone number is exactly 10 digits
-            if (cleanPhone.length == 10) {
-              cleanPhone = '91$cleanPhone';
-            }
-
-            final phoneNumber = int.tryParse(cleanPhone);
-
-            if (phoneNumber == null) {
-              return <String, dynamic>{};
-            }
-
-            // Build contact data with all available fields
-            final Map<String, dynamic> contactData = {
-              'contact_phone_number': phoneNumber,
-              'contact_name': contact['name'],
-            };
-
-            // Add optional fields if they exist
-            if (contact['email']?.isNotEmpty == true) {
-              contactData['contact_email'] = contact['email'];
-            }
-            if (contact['address']?.isNotEmpty == true) {
-              contactData['contact_address'] = contact['address'];
-            }
-            if (contact['city']?.isNotEmpty == true) {
-              contactData['contact_city'] = contact['city'];
-            }
-            if (contact['state']?.isNotEmpty == true) {
-              contactData['contact_state'] = contact['state'];
-            }
-            if (contact['country']?.isNotEmpty == true) {
-              contactData['contact_country'] = contact['country'];
-            }
-            if (contact['img_url']?.isNotEmpty == true) {
-              contactData['contact_img_url'] = contact['img_url'];
-            }
-            if (contact['contact_user_id']?.isNotEmpty == true) {
-              contactData['contact_user_id'] = contact['contact_user_id'];
-            }
-
-            return contactData;
-          })
-          .where((data) => data.isNotEmpty)
-          .toList();
-
-      if (contactsData.isEmpty) return;
-
-      await ApiService.post(
-        '/create-user-contacts-bulk/',
-        body: {'contacts': contactsData},
-        useBearerToken: true,
-      );
-
-      print('📞 Bulk sync request completed silently');
-    } catch (e) {
-      print('❌ Error bulk syncing contacts: $e');
-    }
-  }
-
   void _copyReferralCode() {
     Clipboard.setData(ClipboardData(text: _referralCode));
-
-    AnalyticsService().logEvent(
-      eventName: 'referral_code_copied',
-      parameters: {'referral_code': _referralCode},
-    );
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const TranslatedText('Referral code copied!'),
-        backgroundColor: const Color(0xFF6366F1),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
 
-  void _shareReferralCode() async {
+  void _shareReferralCode() {
     final appDownloadUrl = FirebaseRemoteConfigService.getAppDownloadUrl();
-
     final message =
-        '''🎁 Join KaamBazar and get ₹$_rewardAmount ad credits!
+        '''${_data.title}\n\n${_data.description}\n\nUse my referral code: $_referralCode\n\nDownload: $appDownloadUrl''';
 
-Use my referral code: $_referralCode
-
-Download KaamBazar: $appDownloadUrl
-
-#KaamBazar #FreeCredits #ReferAndEarn''';
-
-    try {
-      AnalyticsService().logEvent(
-        eventName: 'referral_code_shared',
-        parameters: {
-          'referral_code': _referralCode,
-          'share_method': 'system_share',
-        },
-      );
-
-      await Share.share(
-        message,
-        subject: 'Join KaamBazar - Get ₹$_rewardAmount ad credits!',
-      );
-    } catch (e) {
-      Clipboard.setData(ClipboardData(text: message));
-
-      AnalyticsService().logEvent(
-        eventName: 'referral_share_fallback_copy',
-        parameters: {'referral_code': _referralCode, 'error': e.toString()},
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const TranslatedText(
-              'Referral message copied to clipboard!',
-            ),
-            backgroundColor: const Color(0xFF6366F1),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-        );
-      }
-    }
+    Share.share(message);
   }
 
-  @override
-  void dispose() {
-    _coinController.dispose();
-    _searchController.dispose();
-    super.dispose();
+  IconData _getIconData(String name) {
+    switch (name) {
+      case 'account_balance_wallet':
+        return Icons.account_balance_wallet_rounded;
+      case 'card_giftcard':
+        return Icons.card_giftcard_rounded;
+      case 'groups':
+        return Icons.groups_rounded;
+      case 'schedule':
+        return Icons.schedule_rounded;
+      default:
+        return Icons.star_rounded;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Premium Design Setup
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark
-          ? const Color(0xFF101010)
-          : const Color(0xFFF8F9FC),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new,
-            color: isDark ? Colors.white : Colors.black,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          "Refer & Earn",
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        child: Column(
-          children: [
-            // 1. Header Text
-            const SizedBox(height: 10),
-            RichText(
-              textAlign: TextAlign.center,
-              text: TextSpan(
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w900,
-                  color: isDark ? Colors.white : const Color(0xFF1E293B),
-                  height: 1.2,
-                  fontFamily: 'Roboto',
-                ),
-                children: const [
-                  TextSpan(text: "Refer & Earn \n"),
-                  TextSpan(
-                    text: "= ₹₹ Unlimited",
-                    style: TextStyle(color: Color(0xFFFFD700)), // Gold/Yellow
+      backgroundColor: theme.scaffoldBackgroundColor,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          // Background Gradient Spots
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                color: theme.primaryColor.withOpacity(0.2),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.primaryColor.withOpacity(0.2),
+                    blurRadius: 100,
+                    spreadRadius: 50,
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              "Invite friends and earn rewards",
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.white70 : const Color(0xFF64748B),
-                fontWeight: FontWeight.w500,
+          ),
+          Positioned(
+            bottom: -50,
+            left: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                color: Colors.purple.withOpacity(0.15),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.purple.withOpacity(0.15),
+                    blurRadius: 100,
+                    spreadRadius: 50,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 40),
+          ),
 
-            // 2. The Main "Ticket" Card
-            Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.topCenter,
-              children: [
-                // The Card Itself
-                Container(
-                  margin: const EdgeInsets.only(top: 20), // Space for ribbon
-                  child: ClipPath(
-                    clipper: SideTicketClipper(),
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(24, 60, 24, 32),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 30,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
+          // Main Content
+          RefreshIndicator(
+            onRefresh: _refreshData,
+            color: theme.colorScheme.primary,
+            child: CustomScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // Header Space
+                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+
+                // Title & Description
+                SliverToBoxAdapter(child: _buildHeaderSection(theme, isDark)),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+                // Referral Code "Ticket"
+                SliverToBoxAdapter(
+                  child: _buildReferralCodeSection(theme, isDark),
+                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+
+                // "How it Works" / Benefits Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      "Your Rewards",
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                      child: Column(
-                        children: [
-                          // Referral Code Section
-                          Text(
-                            "Your Referral Code",
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? Colors.white60
-                                  : const Color(0xFF94A3B8),
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                          // Code Display
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? Colors.black26
-                                  : const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SelectableText(
-                                  _referralCode.isEmpty
-                                      ? "LOADING..."
-                                      : _referralCode,
-                                  style: TextStyle(
-                                    fontFamily: 'RobotoMono',
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    color: isDark
-                                        ? Colors.white
-                                        : const Color(0xFF0F172A),
-                                    letterSpacing: 2,
-                                  ),
+                // Benefits Grid (The "Boxes")
+                _buildBenefitsGrid(theme, isDark),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+
+                // Contacts Section
+                SliverToBoxAdapter(child: _buildContactsSection(theme, isDark)),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+
+                // Terms
+                SliverToBoxAdapter(
+                  child: _buildTermsAndConditions(theme, isDark),
+                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            ),
+          ),
+
+          // Custom App Bar
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildCustomAppBar(theme, isDark),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomAppBar(ThemeData theme, bool isDark) {
+    final topPadding = MediaQuery.of(context).padding.top;
+    return Container(
+      height: topPadding + 60,
+      padding: EdgeInsets.only(top: topPadding),
+      child: Row(
+        children: [
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withOpacity(0.5),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            ),
+          ),
+          Expanded(
+            child: AnimatedOpacity(
+              opacity: _isScrolled ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: Text(
+                "Refer & Earn",
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 48), // Balance back button
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderSection(ThemeData theme, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        children: [
+          // Animated Icon or Illustration
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: theme.primaryColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.card_giftcard_rounded,
+              size: 48,
+              color: theme.primaryColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _data.title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _data.description,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReferralCodeSection(ThemeData theme, bool isDark) {
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final backgroundColor = isDark
+        ? const Color(0xFF121212)
+        : const Color(0xFFF5F5F5);
+
+    // Ticket Style Card using standard widgets + Clipper for notches
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Container(
+        // Background color that will show through the notches
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: PhysicalShape(
+            clipper: TicketClipper(),
+            color: cardColor,
+            elevation: 8,
+            shadowColor: Colors.black.withOpacity(0.2),
+            child: Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(color: cardColor),
+              child: Column(
+                children: [
+                  // Top Section: Code
+                  Text(
+                    'Your Referral Code',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Code Display - Centered, Large but Fitted
+                  _isLoadingCode
+                      ? const Center(
+                          child: SizedBox(
+                            height: 40,
+                            width: 40,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Referral Code - Centered
+                            Center(
+                              child: SelectableText(
+                                _referralCode,
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 2,
+                                  color: theme.colorScheme.onSurface,
+                                  fontFamily: 'Inter',
                                 ),
-                                const SizedBox(width: 12),
-                                GestureDetector(
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Copy Button - Centered
+                            Center(
+                              child: Material(
+                                color: theme.primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                child: InkWell(
                                   onTap: _copyReferralCode,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(8),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
-                                          blurRadius: 4,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.copy_rounded,
+                                          color: theme.primaryColor,
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Copy Code',
+                                          style: TextStyle(
+                                            color: theme.primaryColor,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
                                         ),
                                       ],
                                     ),
-                                    child: const Icon(
-                                      Icons.copy_rounded,
-                                      size: 18,
-                                      color: Color(0xFF64748B),
-                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 32),
-
-                          // Separator with "REFER VIA"
-                          Row(
-                            children: [
-                              Expanded(
-                                child: CustomPaint(
-                                  painter: DashedLinePainter(
-                                    color: isDark
-                                        ? Colors.white24
-                                        : const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      size: 14,
-                                      color: Color(0xFF94A3B8),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      "REFER VIA",
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: isDark
-                                            ? Colors.white38
-                                            : const Color(0xFF94A3B8),
-                                        letterSpacing: 1.2,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      size: 14,
-                                      color: Color(0xFF94A3B8),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Expanded(
-                                child: CustomPaint(
-                                  painter: DashedLinePainter(
-                                    color: isDark
-                                        ? Colors.white24
-                                        : const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Social Icons
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              _buildSocialBtn(
-                                icon: Icons.share_rounded,
-                                color: const Color(0xFF3B82F6), // Blue
-                                onTap: _shareReferralCode,
-                              ),
-                              const SizedBox(width: 20),
-                              _buildSocialBtn(
-                                icon: Icons.message_rounded,
-                                color: const Color(0xFF10B981), // Green
-                                onTap: () {
-                                  // Default SMS intent
-                                  _inviteContact("Friend", "");
-                                },
-                              ),
-                              const SizedBox(width: 20),
-                              _buildSocialBtn(
-                                icon: Icons.qr_code_rounded,
-                                color: const Color(0xFF8B5CF6), // Purple
-                                onTap: _copyReferralCode,
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Track Referrals Link
-                          TextButton(
-                            onPressed: () {
-                              // Placeholder for tracking navigation
-                            },
-                            child: Text(
-                              "Track My Referrals",
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
                               ),
                             ),
+                          ],
+                        ),
+
+                  const SizedBox(height: 32),
+
+                  // Divider Section with "REFER VIA"
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: CustomPaint(
+                          painter: _DashedLinePainter(
+                            color: theme.dividerColor.withOpacity(0.5),
                           ),
-                        ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          "REFER VIA",
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.5,
+                            color: theme.colorScheme.onSurface.withOpacity(0.4),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: CustomPaint(
+                          painter: _DashedLinePainter(
+                            color: theme.dividerColor.withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Bottom Section: Social Share Icons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildSocialButton(
+                        theme,
+                        Icons.share_rounded,
+                        Colors.blue,
+                        _shareReferralCode,
+                      ),
+                      _buildSocialButton(
+                        theme,
+                        Icons.message_rounded,
+                        Colors.green,
+                        _shareReferralCode,
+                      ),
+                      _buildSocialButton(
+                        theme,
+                        Icons.email_rounded,
+                        Colors.redAccent,
+                        _shareReferralCode,
+                      ),
+                      _buildSocialButton(
+                        theme,
+                        Icons.more_horiz_rounded,
+                        Colors.grey,
+                        _shareReferralCode,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Footer Link
+                  InkWell(
+                    onTap: () {
+                      // Track referrals
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        "Track My Referrals",
+                        style: TextStyle(
+                          color: Colors.blue, // Blue as requested
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Helper for social buttons
+  Widget _buildSocialButton(
+    ThemeData theme,
+    IconData icon,
+    Color bg,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(50),
+      child: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: bg.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: bg, size: 24),
+      ),
+    );
+  }
+
+  Widget _buildBenefitsGrid(ThemeData theme, bool isDark) {
+    if (_data.benefits.isEmpty) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.85,
+        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final benefit = _data.benefits[index];
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    _getIconData(benefit.iconName),
+                    color: theme.primaryColor,
+                    size: 24,
                   ),
                 ),
-
-                // The Ribbon (Top)
-                Positioned(
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 40,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFFFFD700),
-                          Color(0xFFFFA000),
-                        ], // Gold Gradient
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.orange.withOpacity(0.4),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text(
-                      "  WIN ₹ 100 / REFER  ",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                        letterSpacing: 1,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black26,
-                            offset: Offset(0, 1),
-                            blurRadius: 2,
-                          ),
-                        ],
-                      ),
-                    ),
+                const Spacer(),
+                Text(
+                  benefit.title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  benefit.subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    height: 1.4,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
+          );
+        }, childCount: _data.benefits.length),
+      ),
+    );
+  }
 
-            const SizedBox(height: 40),
+  Widget _buildContactsSection(ThemeData theme, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: theme.dividerColor.withOpacity(0.05),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Icon
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: theme.primaryColor.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.sync_rounded,
+                color: theme.primaryColor,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
 
-            // 3. Contact List Section
-            _buildContactListSection(theme),
+            // Text
+            Text(
+              "Sync Contacts",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Sync your contacts to find friends who are already on Exanor.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Button
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isSyncing
+                    ? null
+                    : () => _syncContacts(silent: false),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black, // Premium Black
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: _isSyncing
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.sync_rounded, size: 20),
+                          SizedBox(width: 12),
+                          Text(
+                            "Sync Contacts",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: OutlinedButton(
+                onPressed: _shareReferralCode,
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(
+                    color: theme.colorScheme.onSurface.withOpacity(0.1),
+                    width: 1,
+                  ),
+                  foregroundColor: theme.colorScheme.onSurface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.share_rounded, size: 20),
+                    SizedBox(width: 12),
+                    Text(
+                      "Invite a Friend",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSocialBtn({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Icon(icon, color: color, size: 24),
-      ),
-    );
-  }
-
-  Widget _buildContactListSection(ThemeData theme) {
-    if (_hasContactPermission == false && !_isUsingApiContacts) {
-      return Column(
-        children: [
-          Icon(Icons.lock_outline, size: 48, color: theme.disabledColor),
-          const SizedBox(height: 16),
-          const Text("Contact access needed to invite friends"),
-          TextButton(
-            onPressed: _requestContactPermission,
-            child: const Text("Allow Access"),
-          ),
-        ],
-      );
+  Future<void> _syncContacts({bool silent = false}) async {
+    if (!silent) {
+      setState(() => _isSyncing = true);
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Contacts on KaamBazar",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface,
+    try {
+      // 1. Get Contacts
+      final contacts = await ContactService.getAllContacts();
+
+      // 2. Sync to Backend
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Syncing ${contacts.length} contacts...')),
+        );
+      }
+
+      await ContactService.syncContacts(contacts);
+
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Contacts synced successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!silent && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sync contacts: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (!silent && mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  Widget _buildTermsAndConditions(ThemeData theme, bool isDark) {
+    if (_data.termsAndConditions.points.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
           ),
         ),
-        const SizedBox(height: 16),
-
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10),
-            ],
-          ),
-          child: TextField(
-            controller: _searchController,
-            onChanged: _filterContacts,
-            decoration: const InputDecoration(
-              hintText: "Search contacts...",
-              border: InputBorder.none,
-              icon: Icon(Icons.search),
+        child: Theme(
+          data: theme.copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 24,
+              vertical: 8,
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        if (_isLoadingContacts)
-          const Center(child: CircularProgressIndicator())
-        else if (_filteredContacts.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(32),
-            child: Center(
-              child: Text(
-                "No contacts found",
-                style: TextStyle(color: theme.disabledColor),
+            childrenPadding: const EdgeInsets.only(
+              left: 24,
+              right: 24,
+              bottom: 24,
+            ),
+            title: Text(
+              _data.termsAndConditions.title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface.withOpacity(0.8),
               ),
             ),
-          )
-        else
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _filteredContacts.take(20).length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final contact = _filteredContacts[index];
-              final isUser = contact['is_user'] == 'true';
-
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  backgroundColor: isUser
-                      ? Colors.green.withOpacity(0.1)
-                      : theme.colorScheme.primary.withOpacity(0.1),
-                  child: Text(
-                    contact['name']!.isNotEmpty
-                        ? contact['name']!.substring(0, 1).toUpperCase()
-                        : "?",
-                    style: TextStyle(
-                      color: isUser ? Colors.green : theme.colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                title: Text(
-                  contact['name']!,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(contact['phone']!),
-                trailing: isUser
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          "Joined",
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    : TextButton(
-                        onPressed: () =>
-                            _inviteContact(contact['name']!, contact['phone']!),
-                        style: TextButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary
-                              .withOpacity(0.1),
-                          foregroundColor: theme.colorScheme.primary,
-                        ),
-                        child: const Text("Invite"),
+            iconColor: theme.colorScheme.onSurface.withOpacity(0.6),
+            collapsedIconColor: theme.colorScheme.onSurface.withOpacity(0.4),
+            children: _data.termsAndConditions.points.map((point) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "• ",
+                      style: TextStyle(
+                        color: theme.primaryColor,
+                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        point,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface.withOpacity(0.7),
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
-            },
+            }).toList(),
           ),
-
-        if (_filteredContacts.length > 20)
-          Padding(
-            padding: const EdgeInsets.only(top: 16),
-            child: Center(
-              child: Text(
-                "+${_filteredContacts.length - 20} more contacts",
-                style: TextStyle(color: theme.disabledColor),
-              ),
-            ),
-          ),
-      ],
+        ),
+      ),
     );
   }
 }
 
-// Custom Clipper for the Ticket Shape (Side Notches)
-class SideTicketClipper extends CustomClipper<Path> {
+class TicketClipper extends CustomClipper<Path> {
+  final double holeRadius;
+  final double holeHeightRatio;
+  final double cornerRadius;
+
+  TicketClipper({
+    this.holeRadius = 16.0,
+    this.holeHeightRatio = 0.55,
+    this.cornerRadius = 24.0,
+  });
+
   @override
   Path getClip(Size size) {
-    final path = Path();
-    final notchRadius = 12.0;
-    final notchY = 190.0;
+    Path path = Path();
 
-    path.moveTo(0, 0);
-    path.lineTo(size.width, 0);
-
-    // Right Side
-    path.lineTo(size.width, notchY - notchRadius);
-    path.arcToPoint(
-      Offset(size.width, notchY + notchRadius),
-      radius: Radius.circular(notchRadius),
-      clockwise: false,
+    // Start with a rounded rectangle
+    path.addRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Radius.circular(cornerRadius),
+      ),
     );
-    path.lineTo(size.width, size.height);
 
-    // Bottom
-    path.lineTo(0, size.height);
-
-    // Left Side
-    path.lineTo(0, notchY + notchRadius);
-    path.arcToPoint(
-      Offset(0, notchY - notchRadius),
-      radius: Radius.circular(notchRadius),
-      clockwise: false,
+    // Right Notch
+    path.addOval(
+      Rect.fromCircle(
+        center: Offset(size.width, size.height * holeHeightRatio),
+        radius: holeRadius,
+      ),
     );
-    path.lineTo(0, 0);
 
-    path.close();
+    // Left Notch
+    path.addOval(
+      Rect.fromCircle(
+        center: Offset(0.0, size.height * holeHeightRatio),
+        radius: holeRadius,
+      ),
+    );
+
+    path.fillType = PathFillType.evenOdd;
     return path;
   }
 
   @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+  bool shouldReclip(CustomClipper<Path> oldClipper) => true;
 }
 
-// Dashed Line Painter
-class DashedLinePainter extends CustomPainter {
+class _DashedLinePainter extends CustomPainter {
   final Color color;
-  DashedLinePainter({required this.color});
+  final double dashWidth;
+  final double dashSpace;
+
+  _DashedLinePainter({
+    this.color = Colors.black,
+    this.dashWidth = 4.0,
+    this.dashSpace = 3.0,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    double startX = 0;
     final paint = Paint()
       ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-
-    final double dashWidth = 6;
-    final double dashSpace = 4;
-    double startX = 0;
+      ..strokeWidth = 1;
 
     while (startX < size.width) {
-      canvas.drawLine(
-        Offset(startX, size.height / 2),
-        Offset(startX + dashWidth, size.height / 2),
-        paint,
-      );
+      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
       startX += dashWidth + dashSpace;
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(CustomPainter oldDelegate) => false;
 }

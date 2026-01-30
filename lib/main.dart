@@ -1,18 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
-import 'package:exanor/services/firebase_messaging_service.dart';
 import 'package:exanor/services/notification_service.dart';
 import 'package:exanor/services/translation_service.dart';
 import 'package:exanor/screens/SplashScreen.dart';
 import 'package:exanor/screens/onboarding_screen.dart';
-import 'package:exanor/screens/phone_registration_screen.dart';
+import 'package:exanor/screens/simple_phone_registration_screen.dart';
 import 'package:exanor/screens/otp_verification_screen.dart';
-import 'package:exanor/screens/account_completion_screen.dart';
 import 'package:exanor/screens/HomeScreen.dart';
 import 'package:exanor/screens/location_selection_screen.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
@@ -40,6 +36,8 @@ import 'package:exanor/services/crashlytics_service.dart';
 import 'package:exanor/services/performance_service.dart';
 import 'package:exanor/components/navigation_performance_tracker.dart';
 import 'package:exanor/screens/refer_and_earn_screen.dart';
+import 'package:exanor/widgets/connectivity_overlay.dart';
+import 'package:exanor/screens/campaigns_screen.dart';
 
 /// Top-level function to handle background messages
 /// This must be a top-level function, not a class method
@@ -154,241 +152,178 @@ Future<void> _initializeMobileAds() async {
   }
 }
 
-void main() async {
-  // Ensure Flutter bindings are initialized
-  WidgetsFlutterBinding.ensureInitialized();
-
-  developer.log(
-    '🚀 main() started - beginning app initialization',
-    name: 'Main',
-  );
-
-  // Initialize API Service configuration with defaults first
-  developer.log('🔧 Initializing API Service configuration...', name: 'Main');
+/// Critical initialization that must complete before showing the app
+/// This should be as minimal as possible to reduce startup time
+Future<void> _criticalInitialization() async {
+  // Only the absolute essentials needed before showing UI
+  developer.log('🔧 Critical initialization starting...', name: 'Main');
 
   try {
-    await ApiService.initializeConfiguration();
-    developer.log(
-      '✅ API Service configuration initialized successfully',
-      name: 'Main',
-    );
+    // Load environment variables (needed for API calls)
+    await dotenv.load(fileName: ".env");
+    developer.log('✅ Environment variables loaded', name: 'Main');
   } catch (e) {
-    developer.log('❌ API Service configuration failed: $e', name: 'Main');
-    developer.log('📝 Stack trace: ${StackTrace.current}', name: 'Main');
+    developer.log('❌ Failed to load .env: $e', name: 'Main');
   }
 
-  // Log current API configuration for debugging
-  ApiService.logCurrentConfiguration();
-
-  // Load environment variables
-  await dotenv.load(fileName: ".env");
-
-  // Initialize theme manager
+  // Initialize theme manager (sync operation, very fast)
   ThemeManager().initialize();
 
-  // Initialize image picker
-  // await _initializeImagePicker();
-
-  // Set up the API service auth failure callback for navigation
-  // This allows the API service to navigate to the login screen when auth fails
-  ApiService.setAuthFailureCallback(() {
-    // Navigate to phone registration screen when auth fails
-    // You can use your navigation service or GoRouter here
-    runApp(
-      MaterialApp(home: SplashScreen(), navigatorKey: ApiService.navigatorKey),
-    );
-    // Note: The ApiService will handle navigation automatically through navigatorKey
-    // We don't need to call runApp here as it restarts the entire app
-  });
-
-  // Initialize Firebase
+  // Initialize Firebase Core (required for other Firebase services)
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    developer.log('✅ Firebase Core initialized successfully', name: 'Main');
+    developer.log('✅ Firebase Core initialized', name: 'Main');
+
+    // Set up background message handler (lightweight)
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   } catch (e) {
     developer.log('❌ Firebase Core initialization failed: $e', name: 'Main');
-    // We cannot proceed without Firebase for many features, but we should try to keep the app alive
-    // potentially showing an error screen later
   }
 
-  // Set up Firebase Messaging background handler
-  try {
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    developer.log('✅ Firebase Messaging background handler set', name: 'Main');
-  } catch (e) {
-    developer.log(
-      '❌ Firebase Messaging handler setup failed: $e',
-      name: 'Main',
+  // Set up auth failure callback
+  ApiService.setAuthFailureCallback(() {
+    runApp(
+      MaterialApp(
+        home: const SplashScreen(),
+        navigatorKey: ApiService.navigatorKey,
+      ),
     );
+  });
+}
+
+/// Background initialization that runs while splash screen is visible
+/// These services can take longer as the user is seeing the animation
+Future<void> _backgroundInitialization() async {
+  developer.log('🔄 Background initialization starting...', name: 'Main');
+
+  // Initialize API Service configuration
+  try {
+    await ApiService.initializeConfiguration();
+    ApiService.logCurrentConfiguration();
+    developer.log('✅ API Service configuration initialized', name: 'Main');
+  } catch (e) {
+    developer.log('❌ API Service configuration failed: $e', name: 'Main');
   }
 
-  // NOW we can safely start performance tracing after Firebase is initialized
-  developer.log('📊 Starting app startup performance trace...', name: 'Main');
+  // Initialize Performance Tracing (after Firebase is ready)
   try {
     await PerformanceService.instance.initialize();
     await PerformanceService.instance.traceAppStartup();
-    developer.log('✅ Performance tracing started successfully', name: 'Main');
+    developer.log('✅ Performance tracing started', name: 'Main');
   } catch (e) {
     developer.log('❌ Performance tracing failed: $e', name: 'Main');
   }
 
-  // Initialize Firebase Crashlytics
-  developer.log('💥 Initializing Firebase Crashlytics...', name: 'Main');
+  // Initialize Crashlytics
   try {
-    // Initialize the Crashlytics service
     await CrashlyticsService.instance.initialize();
 
-    // Pass all uncaught "fatal" errors from the framework to Crashlytics
     FlutterError.onError = (errorDetails) {
       developer.log(
-        '💥 Flutter Error caught: ${errorDetails.exception}',
+        '💥 Flutter Error: ${errorDetails.exception}',
         name: 'Crashlytics',
       );
       CrashlyticsService.instance.recordFlutterFatalError(errorDetails);
     };
 
-    // Pass all uncaught asynchronous errors that aren't handled by the Flutter framework to Crashlytics
     PlatformDispatcher.instance.onError = (error, stack) {
-      developer.log('💥 Platform Error caught: $error', name: 'Crashlytics');
+      developer.log('💥 Platform Error: $error', name: 'Crashlytics');
       CrashlyticsService.instance.recordError(error, stack, fatal: true);
       return true;
     };
-
-    developer.log(
-      '✅ Firebase Crashlytics initialized successfully',
-      name: 'Main',
-    );
+    developer.log('✅ Crashlytics initialized', name: 'Main');
   } catch (e) {
-    developer.log(
-      '❌ Firebase Crashlytics initialization failed: $e',
-      name: 'Main',
-    );
-    developer.log('📝 Will continue without crash reporting', name: 'Main');
+    developer.log('❌ Crashlytics initialization failed: $e', name: 'Main');
   }
 
-  // Firebase Performance is already initialized above, just log success
-  developer.log(
-    '✅ Firebase Performance initialized successfully',
-    name: 'Main',
-  );
-
-  // Initialize Firebase Remote Config
-  developer.log('🔧 Initializing Firebase Remote Config...', name: 'Main');
+  // Initialize Remote Config and refresh API configuration
   try {
     await FirebaseRemoteConfigService.initialize();
-    developer.log(
-      '✅ Firebase Remote Config initialized successfully',
-      name: 'Main',
-    );
-
-    // IMPORTANT: Refresh API Service configuration after Remote Config loads
-    developer.log(
-      '🔄 Refreshing API Service with Remote Config values...',
-      name: 'Main',
-    );
     await ApiService.refreshConfiguration();
-    developer.log(
-      '✅ API Service refreshed with Remote Config values',
-      name: 'Main',
-    );
-
-    // Log updated configuration
     ApiService.logCurrentConfiguration();
+    developer.log('✅ Remote Config initialized', name: 'Main');
   } catch (e) {
-    developer.log(
-      '❌ Firebase Remote Config initialization failed: $e',
-      name: 'Main',
-    );
-    developer.log('📝 Will continue with default values', name: 'Main');
+    developer.log('❌ Remote Config initialization failed: $e', name: 'Main');
   }
 
-  // Initialize Translation Service (run in parallel with other non-critical services)
-  final translationFuture = _initializeServices()
-      .then((_) {
-        developer.log(
-          '✅ Translation Service initialized successfully',
-          name: 'Main',
-        );
-      })
-      .catchError((e) {
-        developer.log(
-          '❌ Translation Service initialization failed: $e',
-          name: 'Main',
-        );
-        developer.log('📝 Will continue with English only', name: 'Main');
-      });
-
-  // Initialize Mobile Ads SDK (run in parallel)
-  // Skip in debug mode to prevent video decoder crashes on some devices
-  final adsFuture = kDebugMode
-      ? Future<void>(() {
-          developer.log(
-            '🐛 Debug mode: Skipping Mobile Ads SDK initialization',
-            name: 'Main',
-          );
+  // Initialize non-critical services in parallel
+  await Future.wait([
+    // Translation Services
+    _initializeServices()
+        .then((_) {
+          developer.log('✅ Translation Services initialized', name: 'Main');
         })
-      : _initializeMobileAds()
-            .then((_) {
-              developer.log(
-                '✅ Mobile Ads SDK initialized successfully',
-                name: 'Main',
-              );
-            })
-            .catchError((e) {
-              developer.log(
-                '❌ Mobile Ads SDK initialization failed: $e',
-                name: 'Main',
-              );
-              developer.log('📝 Will continue without ads', name: 'Main');
-            });
+        .catchError((e) {
+          developer.log('❌ Translation Services failed: $e', name: 'Main');
+        }),
 
-  // Initialize Analytics Service (run in parallel)
-  final analyticsFuture =
-      Future(() {
-        AnalyticsService().initialize();
-        developer.log(
-          '✅ Analytics Service initialized successfully',
-          name: 'Main',
-        );
-      }).catchError((e) {
-        developer.log(
-          '❌ Analytics Service initialization failed: $e',
-          name: 'Main',
-        );
-        developer.log('📝 Will continue without analytics', name: 'Main');
-      });
+    // Mobile Ads SDK (skip in debug mode)
+    kDebugMode
+        ? Future<void>.value()
+        : _initializeMobileAds()
+              .then((_) {
+                developer.log('✅ Mobile Ads SDK initialized', name: 'Main');
+              })
+              .catchError((e) {
+                developer.log('❌ Mobile Ads SDK failed: $e', name: 'Main');
+              }),
 
-  // Wait for all non-critical services to complete (run in parallel to improve startup time)
-  developer.log(
-    '🔄 Initializing non-critical services in parallel...',
-    name: 'Main',
-  );
-  await Future.wait([translationFuture, adsFuture, analyticsFuture]);
+    // Analytics Service
+    Future(() {
+      AnalyticsService().initialize();
+      developer.log('✅ Analytics Service initialized', name: 'Main');
+    }).catchError((e) {
+      developer.log('❌ Analytics Service failed: $e', name: 'Main');
+    }),
+  ]);
 
-  developer.log('🎯 main() completed - starting Flutter app', name: 'Main');
-
-  // Complete app startup performance trace
+  // Complete startup trace
   try {
     await PerformanceService.instance.completeAppStartupTrace();
-    developer.log('✅ App startup trace completed', name: 'Main');
+    developer.log('✅ Background initialization complete', name: 'Main');
   } catch (e) {
     developer.log('❌ Failed to complete startup trace: $e', name: 'Main');
   }
+}
 
-  // Performance monitoring is now active for production use
+/// Completer to signal when background initialization is done
+/// The SplashScreen can wait on this before navigating
+final Completer<void> backgroundInitComplete = Completer<void>();
 
-  // Run the app within a zone to catch all async errors
-  runZonedGuarded<Future<void>>(
-    () async {
-      runApp(const MyApp());
-    },
-    (error, stack) {
-      developer.log('💥 Zone Error caught: $error', name: 'Crashlytics');
-      CrashlyticsService.instance.recordError(error, stack, fatal: true);
-    },
-  );
+void main() async {
+  // Ensure Flutter bindings are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  developer.log('🚀 main() started - fast startup path', name: 'Main');
+
+  // Only critical initialization before showing UI (minimal, fast)
+  await _criticalInitialization();
+
+  developer.log('🎯 Launching app immediately with SplashScreen', name: 'Main');
+
+  // Start the app IMMEDIATELY with SplashScreen
+  // This eliminates the "frozen logo" problem
+  // Note: Error handling is set up via FlutterError.onError and
+  // PlatformDispatcher.instance.onError in _backgroundInitialization()
+  runApp(const MyApp());
+
+  // Run background initialization in parallel while splash screen animates
+  // The splash screen waits on backgroundInitComplete before navigating
+  _backgroundInitialization()
+      .then((_) {
+        if (!backgroundInitComplete.isCompleted) {
+          backgroundInitComplete.complete();
+        }
+      })
+      .catchError((e) {
+        developer.log('❌ Background initialization error: $e', name: 'Main');
+        if (!backgroundInitComplete.isCompleted) {
+          backgroundInitComplete
+              .complete(); // Complete anyway so app doesn't hang
+        }
+      });
 }
 
 class MyApp extends StatefulWidget {
@@ -612,7 +547,8 @@ class _MyAppState extends State<MyApp> {
             title: 'exanor',
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeManager().materialThemeMode,
+            themeMode: ThemeMode.light, // Templorary force light mode
+
             navigatorKey: ApiService.navigatorKey,
             navigatorObservers: [
               AnalyticsService().observer,
@@ -629,10 +565,13 @@ class _MyAppState extends State<MyApp> {
             // - Profile Screen: User data and UI text translated
             // - Home Screen: Section headers and help text translated
             // Access language selector: FAB on home screen or language tools in selector
+            builder: (context, child) {
+              return ConnectivityOverlay(child: child!);
+            },
             routes: {
               '/onboarding': (context) => const OnboardingScreen(),
               '/phone_registration': (context) =>
-                  const PhoneRegistrationScreen(),
+                  const SimplePhoneRegistrationScreen(),
               '/otp_verification': (context) =>
                   const OTPVerificationScreen(phoneNumber: ''),
               '/home': (context) => const HomeScreen(),
@@ -644,6 +583,7 @@ class _MyAppState extends State<MyApp> {
               '/orders': (context) => const OrdersListScreen(),
               '/refer_and_earn': (context) => const ReferAndEarnScreen(),
               '/restart_app': (context) => const SplashScreen(),
+              '/campaigns': (context) => const CampaignsScreen(),
               // REMOVED: Routes for deleted screens (profiles, chat, subscription, etc.)
             },
           ),

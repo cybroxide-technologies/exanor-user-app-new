@@ -173,10 +173,10 @@ class ImageCarouselState extends State<ImageCarousel> {
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Unable to open link'),
+              const SnackBar(
+                content: Text('Unable to open link'),
                 backgroundColor: Colors.red,
-                duration: const Duration(seconds: 2),
+                duration: Duration(seconds: 2),
               ),
             );
           }

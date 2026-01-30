@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:exanor/components/translation_widget.dart';
@@ -7,6 +8,9 @@ import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/firebase_remote_config_service.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:exanor/models/store_model.dart';
 import 'package:exanor/models/product_model.dart';
@@ -72,8 +76,6 @@ class _CartScreenState extends State<CartScreen> {
 
   // Countdown Timer State
   bool _isCountingDown = false;
-  int _countdownSeconds = 5;
-  Timer? _countdownTimer;
 
   // Location Data
   String? _addressTitle;
@@ -87,6 +89,8 @@ class _CartScreenState extends State<CartScreen> {
 
   // Inline Payment Selector State
   bool _isPaymentSelectorOpen = false;
+
+  String? _cachedDeviceId;
 
   @override
   void initState() {
@@ -108,49 +112,39 @@ class _CartScreenState extends State<CartScreen> {
     });
 
     _initializeCartScreen();
+    _sendUserDeviceData();
   }
 
   Future<void> _checkAndNavigateToAddressSelection() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedLat = prefs.getDouble('latitude');
-      final savedLng = prefs.getDouble('longitude');
+      // Always prompt for address selection on cart screen entry as requested
+      print("⚠️ CartScreen: Prompting for address selection (always forced)");
 
-      // Check if coordinates are invalid (0 or null)
-      final bool hasInvalidCoordinates =
-          (_currentLat == 0.0 || _currentLng == 0.0) &&
-          (savedLat == null ||
-              savedLng == null ||
-              savedLat == 0.0 ||
-              savedLng == 0.0);
+      if (!mounted) return;
 
-      if (hasInvalidCoordinates) {
-        print(
-          "⚠️ CartScreen: Invalid coordinates detected, opening SavedAddressesScreen",
-        );
+      // Navigate to SavedAddressesScreen
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(builder: (context) => const SavedAddressesScreen()),
+      );
 
-        if (!mounted) return;
+      // If user selected an address, update the cart with new coordinates
+      if (result != null && result['addressSelected'] == true && mounted) {
+        print("✅ CartScreen: Address selected, updating cart data");
 
-        // Navigate to SavedAddressesScreen
-        final result = await Navigator.push<Map<String, dynamic>>(
-          context,
-          MaterialPageRoute(builder: (context) => const SavedAddressesScreen()),
-        );
+        // Reload address details from SharedPreferences
+        await _updateLocationFromPrefs();
 
-        // If user selected an address, update the cart with new coordinates
-        if (result != null && result['addressSelected'] == true && mounted) {
-          print("✅ CartScreen: Address selected, updating cart data");
+        // Refresh cart data with new coordinates
+        await _fetchCartData(forceLoading: true);
 
-          // Reload address details from SharedPreferences
-          await _updateLocationFromPrefs();
-
-          // Refresh cart data with new coordinates
-          await _fetchCartData(forceLoading: true);
-
-          // Re-initialize order with new address
-          await _initializeOrder();
-        } else if (result == null && mounted) {
-          // User dismissed without selecting - show warning
+        // Re-initialize order with new address
+        await _initializeOrder();
+      } else if (mounted) {
+        // User dismissed without selecting
+        // Check if we have valid coordinates to fallback to
+        if (_currentLat == 0.0 || _currentLng == 0.0) {
+          // No valid coordinates, show warning
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please select a delivery address to continue'),
@@ -354,7 +348,6 @@ class _CartScreenState extends State<CartScreen> {
   void dispose() {
     _scrollController.dispose();
     _suggestionsScrollController.dispose();
-    _countdownTimer?.cancel();
     super.dispose();
   }
 
@@ -429,6 +422,14 @@ class _CartScreenState extends State<CartScreen> {
 
             _isLoading = false;
             _filterSuggestions(animate: true);
+
+            // 3. Redirect if cart is empty
+            final items = _cartData!['items_available'] as List? ?? [];
+            if (items.isEmpty) {
+              if (mounted) {
+                Navigator.of(context).pop();
+              }
+            }
           });
         }
       } else {
@@ -753,13 +754,64 @@ class _CartScreenState extends State<CartScreen> {
         if (mounted) {
           setState(() {
             _paymentMethods = list;
-            // Default select first enabled one
-            if (_selectedPaymentMethod == null && _paymentMethods.isNotEmpty) {
+
+            print("💳 Payment methods fetched: ${_paymentMethods.length}");
+            for (var m in _paymentMethods) {
+              print(
+                "   - ${m['payment_method_name']} (ID: ${m['id']}, Code: ${m['payment_method_code']}, Enabled: ${m['is_enabled']})",
+              );
+            }
+
+            // Always try to select "Pay via Cash" or "Pay on Delivery" as default first
+            // even if _selectedPaymentMethod was somehow set (though it should be null on init)
+            // We prioritize this specific default over anything else.
+
+            Map<String, dynamic>? preferredMethod;
+
+            try {
+              preferredMethod = _paymentMethods.firstWhere((m) {
+                final name = (m['payment_method_name'] ?? m['name'] ?? '')
+                    .toString()
+                    .toLowerCase();
+                final title = (m['title'] ?? m['payment_method_title'] ?? '')
+                    .toString()
+                    .toLowerCase();
+                final code = (m['payment_method_code'] ?? m['code'] ?? '')
+                    .toString()
+                    .toLowerCase();
+
+                final isCashOrDelivery =
+                    name.contains('cash') ||
+                    title.contains('cash') ||
+                    name.contains('delivery') ||
+                    title.contains('delivery') ||
+                    code == 'cod' ||
+                    code.contains('cash');
+
+                return m['is_enabled'] == true && isCashOrDelivery;
+              });
+            } catch (e) {
+              // Not found
+              preferredMethod = null;
+            }
+
+            if (preferredMethod != null) {
+              print(
+                "✅ Defaulting to preferred payment method: ${preferredMethod['payment_method_name']}",
+              );
+              _selectedPaymentMethod = preferredMethod;
+            } else if (_selectedPaymentMethod == null &&
+                _paymentMethods.isNotEmpty) {
+              // Fallback to first available
               _selectedPaymentMethod = _paymentMethods.firstWhere(
                 (m) => m['is_enabled'] == true,
                 orElse: () => _paymentMethods.first,
               );
+              print(
+                "ℹ️ Defaulting to first available method: ${_selectedPaymentMethod?['payment_method_name']}",
+              );
             }
+
             _isLoadingPaymentMethods = false;
 
             // Re-initialize order as payment method might have changed (or set to default)
@@ -801,28 +853,220 @@ class _CartScreenState extends State<CartScreen> {
       );
 
       if (response['data'] != null && response['data']['status'] == 200) {
-        final responseData = response['data'];
-        final storesList = (responseData['response'] as List)
-            .map((item) => Store.fromJson(item))
-            .toList();
+        final rawResponse = response['data']['response'];
 
-        if (storesList.isNotEmpty) {
-          final store = storesList.first;
+        // If 'response' is a list, find the store
+        // If it's a map (paginated), look in 'data' or similar
+        // Typically get-stores returns list directly or pagination structure.
+        // Based on usage elsewhere, let's assume it returns a list of stores or we filter it.
+        // Actually, if we pass store_id, ideally backend filters it.
+
+        Map<String, dynamic>? targetStore;
+
+        if (rawResponse is List) {
+          targetStore = rawResponse.firstWhere(
+            (s) => s['id'] == widget.storeId,
+            orElse: () => null,
+          );
+        } else if (rawResponse is Map && rawResponse['data'] is List) {
+          // Pagination structure
+          final list = rawResponse['data'] as List;
+          targetStore = list.firstWhere(
+            (s) => s['id'] == widget.storeId,
+            orElse: () => null,
+          );
+        }
+
+        if (targetStore != null && targetStore['coupons'] != null) {
+          final couponsList = targetStore['coupons'] as List;
           if (mounted) {
             setState(() {
-              _storeCoupons = store.coupons;
-              _isLoadingCoupons = false;
+              _storeCoupons = couponsList
+                  .map((e) => Coupon.fromJson(e))
+                  .toList();
             });
           }
-        } else {
-          if (mounted) setState(() => _isLoadingCoupons = false);
         }
-      } else {
-        if (mounted) setState(() => _isLoadingCoupons = false);
       }
+
+      if (mounted) setState(() => _isLoadingCoupons = false);
     } catch (e) {
       print("Error fetching coupons: $e");
       if (mounted) setState(() => _isLoadingCoupons = false);
+    }
+  }
+
+  Future<String> _getDeviceId() async {
+    if (_cachedDeviceId != null) return _cachedDeviceId!;
+
+    final deviceInfo = DeviceInfoPlugin();
+    String deviceId = "device_unknown";
+
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        deviceId = androidInfo.id;
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        deviceId = iosInfo.identifierForVendor ?? "device_unknown";
+      }
+    } catch (e) {
+      print("Error getting device ID: $e");
+    }
+
+    _cachedDeviceId = deviceId;
+    return deviceId;
+  }
+
+  Future<void> _sendUserDeviceData() async {
+    // Initialize all fields with fallback values from sample payload
+    String deviceId = "device_unknown";
+    String deviceBrand = "BrandName";
+    String deviceModel = "ModelName";
+    String osVersion = "1.0.0";
+    String deviceBuildId = "build123";
+    String platformName =
+        "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36";
+    String browser =
+        "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Mobile Safari/537.36";
+    String userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
+    String language = "en-GB";
+    String appName = "AppName";
+    String appVersion = "1.0.0";
+    String screenWidth = "1087";
+    String screenHeight = "928";
+    String devicePixelRatio = "2";
+    String screenOrientation = "landscape-primary";
+    String customerUserId = "65311e29-c78c-47b7-88c5-02a950f4c8eb";
+
+    // Try to get device ID
+    try {
+      deviceId = await _getDeviceId();
+    } catch (e) {
+      print("⚠️ Failed to get device ID: $e");
+    }
+
+    // Try to get device info
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+
+      if (Platform.isAndroid) {
+        try {
+          final androidInfo = await deviceInfo.androidInfo;
+          deviceBrand = androidInfo.brand;
+          deviceModel = androidInfo.model;
+          osVersion = androidInfo.version.release;
+          deviceBuildId = androidInfo.id;
+          platformName = "Android ${androidInfo.version.release}";
+          browser = "Exanor App (Flutter) Android";
+          userAgent = "Exanor/Android (${androidInfo.model})";
+        } catch (e) {
+          print("⚠️ Failed to get Android info: $e");
+        }
+      } else if (Platform.isIOS) {
+        try {
+          final iosInfo = await deviceInfo.iosInfo;
+          deviceBrand = "Apple";
+          deviceModel = iosInfo.name;
+          osVersion = iosInfo.systemVersion;
+          deviceBuildId = iosInfo.utsname.release;
+          platformName = "${iosInfo.systemName} ${iosInfo.systemVersion}";
+          browser = "Exanor App (Flutter) iOS";
+          userAgent = "Exanor/iOS (${iosInfo.name})";
+        } catch (e) {
+          print("⚠️ Failed to get iOS info: $e");
+        }
+      }
+    } catch (e) {
+      print("⚠️ Failed to get device info plugin: $e");
+    }
+
+    // Try to get package info
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      appName = packageInfo.appName;
+      appVersion = packageInfo.version;
+      userAgent =
+          "Exanor/${packageInfo.version} (Flutter; ${Platform.operatingSystem})";
+    } catch (e) {
+      print("⚠️ Failed to get package info: $e");
+    }
+
+    // Try to get screen info
+    try {
+      final screenSize = MediaQuery.of(context).size;
+      final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+      screenWidth = screenSize.width.toInt().toString();
+      screenHeight = screenSize.height.toInt().toString();
+      devicePixelRatio = pixelRatio.toString();
+      screenOrientation = MediaQuery.of(context).orientation.name;
+    } catch (e) {
+      print("⚠️ Failed to get screen info: $e");
+    }
+
+    // Try to get language
+    try {
+      language = Localizations.localeOf(context).toString();
+    } catch (e) {
+      print("⚠️ Failed to get language: $e");
+    }
+
+    // Try to get user ID
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      customerUserId = prefs.getString('user_id') ?? customerUserId;
+    } catch (e) {
+      print("⚠️ Failed to get user ID: $e");
+    }
+
+    // Construct payload with all mandatory fields
+    final payload = {
+      "software_version": 1,
+      "device_id": deviceId,
+      "device_brand": deviceBrand,
+      "device_model": deviceModel,
+      "os_version": osVersion,
+      "last_online": DateTime.now().millisecondsSinceEpoch,
+      "browser": browser,
+      "device_build_id": deviceBuildId,
+      "mac_address": "00:00:00:00:00:00",
+      "user_agent": userAgent,
+      "platform": platformName,
+      "language": language,
+      "app_name": appName,
+      "app_version": appVersion,
+      "screen_width": screenWidth,
+      "screen_height": screenHeight,
+      "device_pixel_ratio": devicePixelRatio,
+      "screen_orientation": screenOrientation,
+      "color_depth": "30",
+      "cookies_enabled": "true",
+      "network_effective_type": "unknown",
+      "network_rtt": "unknown",
+      "network_downlink": "unknown",
+
+      // "store_id": widget.storeId,
+    };
+
+    try {
+      print("📤 Sending User Device Data: $payload");
+
+      final response = await ApiService.post(
+        '/add-user-devices/',
+        body: payload,
+        useBearerToken: true,
+      );
+
+      print("📥 Device Data Response: $response");
+
+      if (response['data'] != null && response['data']['status'] == 200) {
+        print("✅ Device data sent successfully");
+      } else {
+        print("⚠️ Device data response status: ${response['data']?['status']}");
+      }
+    } catch (e) {
+      print("❌ Error sending device data: $e");
+      // Gracefully handle - don't block cart screen from loading
     }
   }
 
@@ -867,6 +1111,7 @@ class _CartScreenState extends State<CartScreen> {
         "payment_method_id": _selectedPaymentMethod!['id'],
         "store_id": widget.storeId,
         "user_address_id": _currentAddressId,
+        "device_id": await _getDeviceId(),
       };
 
       print("📦 Placing Order with:");
@@ -989,43 +1234,11 @@ class _CartScreenState extends State<CartScreen> {
 
   void _showOrderCountdownBottomSheet() {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    // Start countdown
+    // Start countdown state
     setState(() {
       _isCountingDown = true;
-      _countdownSeconds = 5;
-    });
-
-    // Store the modal state setter to update bottom sheet
-    late StateSetter modalStateSetter;
-
-    // Create periodic timer
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      setState(() {
-        _countdownSeconds--;
-      });
-
-      // IMPORTANT: Also update the bottom sheet UI
-      try {
-        modalStateSetter(() {
-          // This triggers rebuild of the bottom sheet content
-        });
-      } catch (e) {
-        // Bottom sheet might be closed
-      }
-
-      if (_countdownSeconds <= 0) {
-        timer.cancel();
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop(); // Close bottom sheet only
-        }
-        _placeOrderImmediate();
-      }
     });
 
     showModalBottomSheet(
@@ -1034,269 +1247,284 @@ class _CartScreenState extends State<CartScreen> {
       isDismissible: false,
       enableDrag: false,
       backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.1), // Slight dim for focus
       builder: (context) => WillPopScope(
         onWillPop: () async => false, // Prevent back button dismiss
-        child: StatefulBuilder(
-          builder: (context, setModalState) {
-            // Capture the state setter for use in timer
-            modalStateSetter = setModalState;
-
-            return Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    theme.colorScheme.surface,
-                    theme.colorScheme.surface.withOpacity(0.95),
-                  ],
-                ),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(28),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 20,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
-              ),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-                top: 24,
-                left: 24,
-                right: 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Drag handle
-                  Container(
-                    width: 40,
-                    height: 4,
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            left: 16,
+            right: 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Refined Glassmorphism Card
+              ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: BackdropFilter(
+                  // Reduced blur for a crisp look, higher transparency for "lightness"
+                  filter: ui.ImageFilter.blur(sigmaX: 15.0, sigmaY: 15.0),
+                  child: Container(
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.onSurface.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(2),
+                      // Neutral semi-transparent background
+                      color: (isDark ? Colors.black : Colors.white).withOpacity(
+                        0.7,
+                      ),
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withOpacity(0.08),
+                        width: 1.0,
+                      ),
+                      // Soft, non-colored shadow
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 40,
+                          offset: const Offset(0, 10),
+                          spreadRadius: -2,
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Animated circular progress
-                  TweenAnimationBuilder<double>(
-                    duration: const Duration(milliseconds: 500),
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    builder: (context, value, child) {
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Outer glow effect
-                          Container(
-                            width: 200,
-                            height: 200,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: theme.colorScheme.primary.withOpacity(
-                                    0.3 * value,
-                                  ),
-                                  blurRadius: 40,
-                                  spreadRadius: 10,
-                                ),
-                              ],
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 32,
+                      horizontal: 24,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface.withOpacity(0.5),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: theme.dividerColor.withOpacity(0.1),
                             ),
                           ),
-                          // Progress circle
-                          SizedBox(
-                            width: 180,
-                            height: 180,
-                            child: CircularProgressIndicator(
-                              value: _countdownSeconds / 5,
-                              strokeWidth: 12,
-                              backgroundColor: theme
-                                  .colorScheme
-                                  .surfaceContainerHighest
-                                  .withOpacity(0.3),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                theme.colorScheme.primary,
-                              ),
-                              strokeCap: StrokeCap.round,
-                            ),
-                          ),
-                          // Center content
-                          Column(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              // Animated countdown number
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 300),
-                                transitionBuilder: (child, animation) {
-                                  return ScaleTransition(
-                                    scale: animation,
-                                    child: FadeTransition(
-                                      opacity: animation,
-                                      child: child,
-                                    ),
-                                  );
-                                },
-                                child: TranslatedText(
-                                  '$_countdownSeconds',
-                                  key: ValueKey<int>(_countdownSeconds),
-                                  style: TextStyle(
-                                    fontSize: 56,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.colorScheme.primary,
-                                    height: 1,
-                                  ),
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: theme.colorScheme.primary,
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              TranslatedText(
-                                'seconds',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: theme.colorScheme.onSurface
-                                      .withOpacity(0.6),
-                                  letterSpacing: 1.2,
+                              const SizedBox(width: 8),
+                              Text(
+                                "PROCESSING",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.5,
+                                  color: theme.colorScheme.primary,
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Title and description
-                  TranslatedText(
-                    'Placing Your Order',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TranslatedText(
-                    'Your order will be placed automatically',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.7),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Order summary card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest
-                          .withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: theme.colorScheme.outline.withOpacity(0.1),
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildSummaryRow(
-                          theme,
-                          Icons.shopping_bag_outlined,
-                          'Items',
-                          '${_cartData?['total_products_in_cart'] ?? 0}',
                         ),
-                        const Divider(height: 16),
-                        _buildSummaryRow(
-                          theme,
-                          Icons.payments_outlined,
-                          'Total',
-                          '₹${(_cartData?['grand_total'] ?? 0.0).toStringAsFixed(2)}',
+
+                        const SizedBox(height: 36),
+
+                        // Animated Countdown
+                        TweenAnimationBuilder<double>(
+                          duration: const Duration(seconds: 5),
+                          tween: Tween(begin: 1.0, end: 0.0),
+                          onEnd: () {
+                            if (mounted) {
+                              Navigator.of(context, rootNavigator: false).pop();
+                              _placeOrderImmediate();
+                            }
+                          },
+                          builder: (context, value, _) {
+                            final seconds = (value * 5).ceil();
+                            final progress = value;
+
+                            return SizedBox(
+                              width: 220,
+                              height: 220,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CustomPaint(
+                                    size: const Size(220, 220),
+                                    painter: ElegantCountdownPainter(
+                                      color: theme.colorScheme.primary,
+                                      value: progress,
+                                      isDark: isDark,
+                                    ),
+                                  ),
+                                  // Typography
+                                  Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        "$seconds",
+                                        style: TextStyle(
+                                          fontSize: 76,
+                                          height: 1.0,
+                                          fontWeight: FontWeight.w800,
+                                          color: theme.colorScheme.onSurface,
+                                          letterSpacing: -2.0,
+                                          shadows: [
+                                            Shadow(
+                                              color: theme.colorScheme.onSurface
+                                                  .withOpacity(0.1),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        "seconds",
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          letterSpacing: 0.5,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.5),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
-                        const Divider(height: 16),
-                        _buildSummaryRow(
-                          theme,
-                          Icons.payment_rounded,
-                          'Payment',
-                          _selectedPaymentMethod?['payment_method_name'] ??
-                              'N/A',
+
+                        const SizedBox(height: 36),
+
+                        // Order Summary Row
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.03),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "ITEMS",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.disabledColor,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "${_cartData?['total_products_in_cart'] ?? 0}",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                width: 1,
+                                height: 24,
+                                color: theme.dividerColor.withOpacity(0.3),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    "TOTAL PAID",
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.disabledColor,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    "₹${(_cartData?['grand_total'] ?? 0.0).toStringAsFixed(2)}",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // Cancel Button
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: _cancelOrderCountdown,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              backgroundColor: theme.colorScheme.error
+                                  .withOpacity(0.08),
+                              foregroundColor: theme.colorScheme.error,
+                            ),
+                            child: const Text(
+                              "Cancel Order",
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _cancelOrderCountdown,
-                      icon: const Icon(Icons.close_rounded),
-                      label: const TranslatedText('Cancel Order'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red, width: 2),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            );
-          },
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     ).then((_) {
-      // Cleanup when bottom sheet is dismissed (don't call _cancelOrderCountdown to avoid double pop)
-      _countdownTimer?.cancel();
       if (mounted) {
         setState(() {
           _isCountingDown = false;
-          _countdownSeconds = 5;
         });
       }
     });
   }
 
-  Widget _buildSummaryRow(
-    ThemeData theme,
-    IconData icon,
-    String label,
-    String value,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: theme.colorScheme.primary.withOpacity(0.7)),
-        const SizedBox(width: 12),
-        TranslatedText(
-          label,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withOpacity(0.7),
-          ),
-        ),
-        const Spacer(),
-        TranslatedText(
-          value,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
   void _cancelOrderCountdown() {
-    _countdownTimer?.cancel();
+    // Just closing the bottom sheet will dispose the TweenAnimationBuilder,
+    // which prevents the onEnd callback from firing.
     if (mounted) {
-      setState(() {
-        _isCountingDown = false;
-        _countdownSeconds = 5;
-      });
-      // Close bottom sheet ONLY - don't pop the cart screen
       Navigator.of(context, rootNavigator: false).pop();
     }
   }
@@ -1829,19 +2057,48 @@ class _CartScreenState extends State<CartScreen> {
                       child: Container(
                         color: Colors.transparent,
                         alignment: Alignment.center,
-                        child: AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 200),
-                          style: TextStyle(
-                            fontFamily: theme.textTheme.bodyMedium?.fontFamily,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.w500,
-                            color: isSelected
-                                ? theme.colorScheme.onSurface
-                                : theme.colorScheme.onSurface.withOpacity(0.6),
-                            fontSize: 13,
-                          ),
-                          child: TranslatedText(title),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (method['image'] != null ||
+                                method['image_url'] != null ||
+                                method['order_method_image'] != null ||
+                                method['icon'] != null) ...[
+                              Image.network(
+                                method['image'] ??
+                                    method['image_url'] ??
+                                    method['order_method_image'] ??
+                                    method['icon'],
+                                width: 18,
+                                height: 18,
+                                color: isSelected
+                                    ? theme.colorScheme.onSurface
+                                    : theme.colorScheme.onSurface.withOpacity(
+                                        0.6,
+                                      ),
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const SizedBox.shrink(),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
+                            AnimatedDefaultTextStyle(
+                              duration: const Duration(milliseconds: 200),
+                              style: TextStyle(
+                                fontFamily:
+                                    theme.textTheme.bodyMedium?.fontFamily,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? theme.colorScheme.onSurface
+                                    : theme.colorScheme.onSurface.withOpacity(
+                                        0.6,
+                                      ),
+                                fontSize: 13,
+                              ),
+                              child: TranslatedText(title),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1874,7 +2131,7 @@ class _CartScreenState extends State<CartScreen> {
           lightStartBase.withOpacity(0.35),
           Colors.white,
         );
-        final lightModeEnd = Colors.white;
+        const lightModeEnd = Colors.white;
 
         final startColor = isDark
             ? _hexToColor(
@@ -2647,11 +2904,11 @@ class _CartScreenState extends State<CartScreen> {
                                                             .withOpacity(0.2),
                                                       ),
                                                     ),
-                                                    child: Row(
+                                                    child: const Row(
                                                       mainAxisSize:
                                                           MainAxisSize.min,
                                                       children: [
-                                                        const TranslatedText(
+                                                        TranslatedText(
                                                           "REMOVE",
                                                           style: TextStyle(
                                                             fontSize: 10,
@@ -2660,10 +2917,8 @@ class _CartScreenState extends State<CartScreen> {
                                                             color: Colors.red,
                                                           ),
                                                         ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
-                                                        const Icon(
+                                                        SizedBox(width: 4),
+                                                        Icon(
                                                           Icons.close,
                                                           size: 12,
                                                           color: Colors.red,
@@ -3497,24 +3752,8 @@ class _CartScreenState extends State<CartScreen> {
                       width: double.infinity,
                       child: SwipeToPayButton(
                         onSwipeCompleted: _startOrderCountdown,
-                        text:
-                            (_selectedPaymentMethod != null &&
-                                (_selectedPaymentMethod!['payment_method_name'] ??
-                                        '')
-                                    .toString()
-                                    .toLowerCase()
-                                    .contains('pay on delivery'))
-                            ? 'Swipe to place order'
-                            : 'Swipe to pay',
-                        amount:
-                            (_selectedPaymentMethod != null &&
-                                (_selectedPaymentMethod!['payment_method_name'] ??
-                                        '')
-                                    .toString()
-                                    .toLowerCase()
-                                    .contains('pay on delivery'))
-                            ? null
-                            : '₹${((_cartData!['grand_total'] ?? 0) as num).toStringAsFixed(2)}',
+                        text: "Swipe to Place Order",
+                        amount: null,
                         isLoading: _isInitializingOrder || _isCountingDown,
                         isEnabled:
                             _isOrderPlaceable &&
@@ -3760,6 +3999,7 @@ class _CartScreenState extends State<CartScreen> {
     bool isRemoving = false,
   }) {
     final isDark = theme.brightness == Brightness.dark;
+    final isUnavailable = product.priceStartsFrom == null;
 
     return Container(
       width: 150, // Smaller, compacted width
@@ -3795,16 +4035,58 @@ class _CartScreenState extends State<CartScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // 1. Image Area (Compact)
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
-                ),
-                child: CustomCachedNetworkImage(
-                  imgUrl: product.imgUrl,
-                  height: 110, // Reduced height for squarish look
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(20),
+                    ),
+                    child: isUnavailable
+                        ? ColorFiltered(
+                            colorFilter: const ColorFilter.mode(
+                              Colors.grey,
+                              BlendMode.saturation,
+                            ),
+                            child: CustomCachedNetworkImage(
+                              imgUrl: product.imgUrl,
+                              height: 110, // Reduced height for squarish look
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : CustomCachedNetworkImage(
+                            imgUrl: product.imgUrl,
+                            height: 110, // Reduced height for squarish look
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                  ),
+                  if (isUnavailable)
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.white.withOpacity(0.3),
+                        alignment: Alignment.center,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            'Unavailable',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
 
               // 2. Dotted Line Separator
@@ -3846,11 +4128,15 @@ class _CartScreenState extends State<CartScreen> {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 2),
                             child: TranslatedText(
-                              '₹${product.priceStartsFrom?.toStringAsFixed(0) ?? "0"}',
+                              isUnavailable
+                                  ? '--'
+                                  : '₹${product.priceStartsFrom?.toStringAsFixed(0) ?? "0"}',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w900,
-                                color: theme.colorScheme.onSurface,
+                                color: isUnavailable
+                                    ? theme.disabledColor
+                                    : theme.colorScheme.onSurface,
                               ),
                             ),
                           ),
@@ -3861,10 +4147,12 @@ class _CartScreenState extends State<CartScreen> {
                             child: PeelButton(
                               height: 28,
                               borderRadius: 8,
-                              onTap: onTapAdd,
-                              text: "ADD",
-                              color: theme.colorScheme.primary,
-                              isEnabled: true,
+                              onTap: isUnavailable ? null : onTapAdd,
+                              text: isUnavailable ? "N/A" : "ADD",
+                              color: isUnavailable
+                                  ? theme.disabledColor
+                                  : theme.colorScheme.primary,
+                              isEnabled: !isUnavailable,
                             ),
                           ),
                         ],
@@ -3923,108 +4211,284 @@ class _CartScreenState extends State<CartScreen> {
         ? const Color(0xFF3D3D3D)
         : const Color(0xFFF5F5F5);
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 140, // Match header offset
-        left: 16,
-        right: 16,
-        bottom: 100,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. Order Summary Skeleton (MOVED TO TOP)
-          Container(
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Column(
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Shimmer.fromColors(
-                    baseColor: baseColor,
-                    highlightColor: highlightColor,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          width: 140,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+    return Stack(
+      children: [
+        // 1. Content
+        SingleChildScrollView(
+          padding: EdgeInsets.only(
+            top:
+                MediaQuery.of(context).padding.top + 140, // Match header offset
+            left: 16,
+            right: 16,
+            bottom: 100,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Order Summary Skeleton
+              Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  children: [
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Shimmer.fromColors(
+                        baseColor: baseColor,
+                        highlightColor: highlightColor,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Container(
+                              width: 140,
+                              height: 18,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            Container(
+                              width: 70,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ],
                         ),
-                        Container(
-                          width: 70,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
+                    Divider(
+                      height: 1,
+                      color: theme.dividerColor.withOpacity(0.1),
+                    ),
+
+                    // Items List
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Shimmer.fromColors(
+                        baseColor: baseColor,
+                        highlightColor: highlightColor,
+                        child: Column(
+                          children: List.generate(
+                            3,
+                            (index) => Padding(
+                              padding: const EdgeInsets.only(bottom: 20),
+                              child: Row(
+                                children: [
+                                  // Item Image
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Details
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Container(
+                                          width: double.infinity,
+                                          height: 14,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Container(
+                                          width: 80,
+                                          height: 12,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  // Price
+                                  Container(
+                                    width: 50,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // Suggestions Skeleton
+              Shimmer.fromColors(
+                baseColor: baseColor,
+                highlightColor: highlightColor,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 200,
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: 230,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: 3,
+                        separatorBuilder: (_, __) => const SizedBox(width: 16),
+                        itemBuilder: (context, index) {
+                          return Container(
+                            width: 150,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Coupon Skeleton
+              Shimmer.fromColors(
+                baseColor: baseColor,
+                highlightColor: highlightColor,
+                child: Container(
+                  height: 70,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 ),
-                Divider(height: 1, color: theme.dividerColor.withOpacity(0.1)),
+              ),
+              const SizedBox(height: 24),
 
-                // Items List (Simulate 3 items)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Shimmer.fromColors(
-                    baseColor: baseColor,
-                    highlightColor: highlightColor,
-                    child: Column(
-                      children: List.generate(
+              // Address Card Skeleton
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Shimmer.fromColors(
+                  baseColor: baseColor,
+                  highlightColor: highlightColor,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 120,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              width: 200,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Bill Details Skeleton
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Shimmer.fromColors(
+                  baseColor: baseColor,
+                  highlightColor: highlightColor,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 150,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      // Bill Rows
+                      ...List.generate(
                         3,
-                        (index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 20),
+                        (i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              // Item Image
                               Container(
-                                width: 48,
-                                height: 48,
+                                width: 100,
+                                height: 14,
                                 decoration: BoxDecoration(
                                   color: Colors.white,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              // Details
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: double.infinity,
-                                      height: 14,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Container(
-                                      width: 80,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              // Price
                               Container(
-                                width: 50,
-                                height: 16,
+                                width: 60,
+                                height: 14,
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(4),
@@ -4034,198 +4498,24 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-
-                // Footer
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(
-                        color: theme.dividerColor.withOpacity(0.1),
-                      ),
-                    ),
-                  ),
-                  child: Shimmer.fromColors(
-                    baseColor: baseColor,
-                    highlightColor: highlightColor,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        Container(
-                          width: 16,
-                          height: 16,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-
-          // 2. Suggestions Skeleton
-          Shimmer.fromColors(
-            baseColor: baseColor,
-            highlightColor: highlightColor,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 200,
-                  height: 18,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 230,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: 3,
-                    separatorBuilder: (_, __) => const SizedBox(width: 16),
-                    itemBuilder: (context, index) {
-                      return Container(
-                        width: 150,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 3. Coupon Skeleton
-          Shimmer.fromColors(
-            baseColor: baseColor,
-            highlightColor: highlightColor,
-            child: Container(
-              height: 70,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 4. Address Card Skeleton (MOVED FROM TOP)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Shimmer.fromColors(
-              baseColor: baseColor,
-              highlightColor: highlightColor,
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 16,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          width: 200,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // 5. Bill Details Skeleton
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Shimmer.fromColors(
-              baseColor: baseColor,
-              highlightColor: highlightColor,
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 150,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  // Bill Rows
-                  ...List.generate(
-                    3,
-                    (i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Row(
+                      const SizedBox(height: 16),
+                      Container(height: 1, color: Colors.white),
+                      const SizedBox(height: 20),
+                      // Grand Total
+                      Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Container(
                             width: 100,
-                            height: 14,
+                            height: 20,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
                           Container(
-                            width: 60,
-                            height: 14,
+                            width: 80,
+                            height: 24,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(4),
@@ -4233,40 +4523,175 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  Container(height: 1, color: Colors.white),
-                  const SizedBox(height: 20),
-                  // Grand Total
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 2. Fixed Header Placeholder (Banner)
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: Container(
+            height:
+                MediaQuery.of(context).padding.top +
+                130, // Match real header height
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 10,
+              left: 16,
+              right: 16,
+              bottom: 16,
+            ),
+            decoration: BoxDecoration(
+              color: theme.cardColor.withOpacity(0.95), // Simulate glass
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(20),
+              ),
+              boxShadow: isDark
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, 5),
+                      ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+            ),
+            child: Shimmer.fromColors(
+              baseColor: baseColor,
+              highlightColor: highlightColor,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // Title Area
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
-                        width: 100,
-                        height: 20,
+                        width: 40,
+                        height: 40,
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(4),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       Container(
-                        width: 80,
+                        width: 120,
                         height: 24,
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
+                      const SizedBox(width: 40), // spacer
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Tabs Area
+                  Container(
+                    width: double.infinity,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
+  }
+}
+
+class ElegantCountdownPainter extends CustomPainter {
+  final Color color;
+  final double value;
+  final bool isDark;
+
+  ElegantCountdownPainter({
+    required this.color,
+    required this.value,
+    required this.isDark,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2.2;
+
+    // 1. Sleek Background Track with subtle depth
+    final trackPaint = Paint()
+      ..color = (isDark ? Colors.white : Colors.black).withOpacity(0.04)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0;
+
+    // Inner track for detail
+    canvas.drawCircle(center, radius, trackPaint);
+
+    if (value > 0.01) {
+      // 2. Main Smooth Arc
+      final sweepAngle = 2 * math.pi * value;
+
+      final progressPaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6.0
+        ..strokeCap = StrokeCap.round
+        ..color = color;
+
+      // Sophisticated Gradient
+      final rect = Rect.fromCircle(center: center, radius: radius);
+      final gradient = SweepGradient(
+        startAngle: -math.pi / 2,
+        endAngle: 3 * math.pi / 2,
+        colors: [
+          color.withOpacity(0.0), // Fade in start
+          color.withOpacity(0.5),
+          color,
+        ],
+        stops: const [0.0, 0.7, 1.0],
+        transform: GradientRotation(-math.pi / 2),
+      );
+      progressPaint.shader = gradient.createShader(rect);
+
+      // Add a subtle glow/shadow to the arc itself
+      canvas.save();
+      canvas.drawArc(rect, -math.pi / 2, sweepAngle, false, progressPaint);
+      canvas.restore();
+
+      // 3. Elegant End Cap Particle
+      final endAngle = -math.pi / 2 + sweepAngle;
+      final px = center.dx + radius * math.cos(endAngle);
+      final py = center.dy + radius * math.sin(endAngle);
+
+      // Outer Glow
+      canvas.drawCircle(
+        Offset(px, py),
+        8,
+        Paint()
+          ..color = color.withOpacity(0.4)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+      // Core Pin
+      canvas.drawCircle(Offset(px, py), 3, Paint()..color = Colors.white);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant ElegantCountdownPainter oldDelegate) {
+    return oldDelegate.value != value || oldDelegate.color != color;
   }
 }
 

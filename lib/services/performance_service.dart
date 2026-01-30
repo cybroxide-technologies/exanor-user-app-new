@@ -1,6 +1,5 @@
 import 'package:firebase_performance/firebase_performance.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'dart:developer' as developer;
 import 'package:http/http.dart' as http;

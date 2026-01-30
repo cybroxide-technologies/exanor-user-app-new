@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
-import 'dart:convert';
 
 /// Singleton service to manage Google Maps instances efficiently
 /// This reduces API charges by reusing map controllers and minimizing reloads

@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
-import 'package:exanor/components/otp_input_section.dart';
+import 'package:flutter/services.dart';
 import 'package:exanor/screens/HomeScreen.dart';
 import 'package:exanor/screens/account_completion_screen.dart';
 import 'package:exanor/services/api_service.dart';
@@ -20,8 +18,7 @@ class SimpleOTPVerificationScreen extends StatefulWidget {
 }
 
 class _SimpleOTPVerificationScreenState
-    extends State<SimpleOTPVerificationScreen>
-    with SingleTickerProviderStateMixin {
+    extends State<SimpleOTPVerificationScreen> {
   String _otpCode = '';
   bool _isLoading = false;
   bool _isResendLoading = false;
@@ -29,42 +26,42 @@ class _SimpleOTPVerificationScreenState
   Timer? _timer;
   bool _canResend = false;
 
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+  final TextEditingController _otpController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
+  // Grid background colors
+  final List<Map<String, dynamic>> _gridItems = [
+    {'color': const Color(0xFFFFF7ED), 'icon': Icons.lunch_dining_rounded},
+    {'color': const Color(0xFFF0FDF4), 'icon': Icons.eco_rounded},
+    {'color': const Color(0xFFEFF6FF), 'icon': Icons.inventory_2_rounded},
+    {'color': const Color(0xFFFAF5FF), 'icon': Icons.shopping_bag_rounded},
+    {'color': const Color(0xFFFEF2F2), 'icon': Icons.favorite_rounded},
+    {'color': const Color(0xFFF0F9FF), 'icon': Icons.local_drink_rounded},
+    {'color': const Color(0xFFFFFBEB), 'icon': Icons.egg_alt_rounded},
+    {'color': const Color(0xFFFDF4FF), 'icon': Icons.checkroom_rounded},
+    {'color': const Color(0xFFECFCCB), 'icon': Icons.spa_rounded},
+    {'color': const Color(0xFFF1F5F9), 'icon': Icons.watch_rounded},
+    {
+      'color': const Color(0xFFEEF2FF),
+      'icon': Icons.local_laundry_service_rounded,
+    },
+    {'color': const Color(0xFFFDF2F8), 'icon': Icons.stroller_rounded},
+  ];
 
   @override
   void initState() {
     super.initState();
     _startResendTimer();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-          ),
-        );
-
-    _animationController.forward();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    _animationController.dispose();
+    _otpController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -88,203 +85,469 @@ class _SimpleOTPVerificationScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: isDark
+          ? const Color(0xFF0F172A)
+          : const Color(0xFFF8FAFC),
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: theme.colorScheme.onSurface),
-          onPressed: () => Navigator.pop(context),
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+          child: CircleAvatar(
+            backgroundColor: isDark ? Colors.white12 : Colors.white,
+            radius: 20,
+            child: IconButton(
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: theme.colorScheme.onSurface,
+                size: 20,
+              ),
+              onPressed: () => Navigator.pop(context),
+              padding: EdgeInsets.zero,
+            ),
+          ),
         ),
+        systemOverlayStyle: isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
       ),
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // Elegant Background
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [0.0, 1.0],
-                  colors: [
-                    theme.colorScheme.surface,
-                    theme.colorScheme.surfaceContainer.withOpacity(0.3),
-                  ],
+          // 1. Background Grid (Matches Registration)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: size.height * 0.5,
+            child: Opacity(
+              opacity: isDark ? 0.3 : 0.6, // Faded for OTP
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.0,
                 ),
+                padding: const EdgeInsets.fromLTRB(
+                  16,
+                  72,
+                  16,
+                  0,
+                ), // Top padding for AppBar
+                itemCount: _gridItems.length,
+                itemBuilder: (context, index) {
+                  final item = _gridItems[index];
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? (item['color'] as Color).withOpacity(0.1)
+                          : item['color'],
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Icon(
+                      item['icon'],
+                      size: 28,
+                      color: isDark ? Colors.white60 : Colors.black87,
+                    ),
+                  );
+                },
               ),
             ),
           ),
 
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: SizedBox(
-                height: size.height * 0.85,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Spacer(),
+          // 2. Main Content Sheet
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.easeOut,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: bottomInset,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        children: [
+                          const Spacer(), // Pushes content to bottom
 
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primaryContainer
-                                .withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            Icons.lock_outline_rounded,
-                            size: 32,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        Text(
-                          "Verify code",
-                          style: GoogleFonts.outfit(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        RichText(
-                          text: TextSpan(
-                            style: GoogleFonts.outfit(
-                              fontSize: 16,
-                              color: theme.colorScheme.onSurface.withOpacity(
-                                0.6,
+                          Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.black : Colors.white,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(32),
                               ),
-                              height: 1.4,
-                            ),
-                            children: [
-                              const TextSpan(
-                                text: "Check your SMS for the code sent to ",
-                              ),
-                              TextSpan(
-                                text: widget.phoneNumber,
-                                style: TextStyle(
-                                  color: theme.colorScheme.onSurface,
-                                  fontWeight: FontWeight.w600,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(
+                                    isDark ? 0.3 : 0.05,
+                                  ),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, -2),
+                                  spreadRadius: 0,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 48),
-
-                        // OTP Input
-                        Center(
-                          child: OTPInputSection(
-                            otpCode: _otpCode,
-                            onChanged: (code) {
-                              setState(() => _otpCode = code);
-                            },
-                          ),
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        // Verify Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 58,
-                          child: ElevatedButton(
-                            onPressed: _otpCode.length == 4 && !_isLoading
-                                ? _verifyOTP
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: theme.colorScheme.onPrimary,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              shadowColor: theme.colorScheme.primary
-                                  .withOpacity(0.4),
-                              padding: EdgeInsets.zero,
+                              ],
                             ),
-                            child: _isLoading
-                                ? SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: theme.colorScheme.onPrimary,
-                                      strokeWidth: 2.5,
+                            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Logo and Title - Brand Lockup
+                                Column(
+                                  children: [
+                                    // Logo - Big & Clean
+                                    SizedBox(
+                                      width: 88,
+                                      height: 88,
+                                      child: Image.asset(
+                                        'assets/icon/exanor_blue.png',
+                                        fit: BoxFit.contain,
+                                      ),
                                     ),
-                                  )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'Verify',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
+                                    const SizedBox(height: 32),
+
+                                    // "Cool" Editorial Typographic Lockup
+                                    Column(
+                                      children: [
+                                        Text(
+                                          "YOUR NEEDS",
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: theme.colorScheme.primary,
+                                            letterSpacing: 4.0,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          "Under One Umbrella",
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.playfairDisplay(
+                                            fontSize: 28,
+                                            fontWeight: FontWeight.w500,
+                                            fontStyle: FontStyle.italic,
+                                            color: theme.colorScheme.onSurface,
+                                            height: 1.2,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    const SizedBox(height: 24),
+
+                                    // Divider / Subtitle
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          height: 1,
+                                          width: 24,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.1),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          "Verification Code",
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: theme.colorScheme.onSurface
+                                                .withOpacity(0.6),
+                                            letterSpacing: 1.2,
+                                            height: 1.0,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Container(
+                                          height: 1,
+                                          width: 24,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.1),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    RichText(
+                                      textAlign: TextAlign.center,
+                                      text: TextSpan(
+                                        style: GoogleFonts.inter(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: theme.colorScheme.onSurface
+                                              .withOpacity(0.6),
+                                          height: 1.4,
+                                        ),
+                                        children: [
+                                          const TextSpan(
+                                            text: 'We\'ve sent a code to ',
+                                          ),
+                                          TextSpan(
+                                            text: widget.phoneNumber,
+                                            style: TextStyle(
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                Stack(
+                                  clipBehavior: Clip.none,
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // OTP Boxes
+                                    GestureDetector(
+                                      onTap: () {
+                                        FocusScope.of(
+                                          context,
+                                        ).requestFocus(_focusNode);
+                                        SystemChannels.textInput.invokeMethod(
+                                          'TextInput.show',
+                                        );
+                                      },
+                                      child: Container(
+                                        color: Colors.transparent,
+                                        width: double.infinity,
+                                        alignment: Alignment.center,
+                                        child: Wrap(
+                                          spacing: 12,
+                                          alignment: WrapAlignment.center,
+                                          children: List.generate(4, (index) {
+                                            final isFilled =
+                                                index < _otpCode.length;
+                                            final isFocused =
+                                                index == _otpCode.length &&
+                                                _focusNode.hasFocus;
+                                            final char = isFilled
+                                                ? _otpCode[index]
+                                                : '';
+
+                                            return AnimatedContainer(
+                                              duration: const Duration(
+                                                milliseconds: 200,
+                                              ),
+                                              width: 60,
+                                              height: 60,
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? const Color(0xFF0F172A)
+                                                    : Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: isFocused
+                                                      ? theme
+                                                            .colorScheme
+                                                            .primary
+                                                      : isDark
+                                                      ? Colors.white24
+                                                      : theme
+                                                            .colorScheme
+                                                            .outline
+                                                            .withOpacity(0.2),
+                                                  width: isFocused ? 2 : 1.5,
+                                                ),
+                                                boxShadow: isFocused
+                                                    ? [
+                                                        BoxShadow(
+                                                          color: theme
+                                                              .colorScheme
+                                                              .primary
+                                                              .withOpacity(
+                                                                0.25,
+                                                              ),
+                                                          blurRadius: 12,
+                                                          offset: const Offset(
+                                                            0,
+                                                            4,
+                                                          ),
+                                                        ),
+                                                      ]
+                                                    : [],
+                                              ),
+                                              child: Center(
+                                                child: Text(
+                                                  char,
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 24,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .onSurface,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          }),
                                         ),
                                       ),
-                                    ],
-                                  ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // Resend Code
-                        Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (_isResendLoading)
-                                SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: theme.colorScheme.primary,
-                                  ),
-                                )
-                              else
-                                GestureDetector(
-                                  onTap: _canResend ? _resendCode : null,
-                                  child: Text(
-                                    _canResend
-                                        ? 'Resend Code'
-                                        : 'Resend in ${_resendTimer}s',
-                                    style: GoogleFonts.outfit(
-                                      color: _canResend
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.onSurface
-                                                .withOpacity(0.4),
-                                      fontWeight: FontWeight.w600,
                                     ),
+
+                                    // Hidden text field - positioned but invisible
+                                    // We give it 1x1 size so the system treats it as "visible" for focus purposes
+                                    Positioned(
+                                      bottom: 0,
+                                      left: 0,
+                                      child: Opacity(
+                                        opacity: 0,
+                                        child: SizedBox(
+                                          width: 1,
+                                          height: 1,
+                                          child: TextField(
+                                            controller: _otpController,
+                                            focusNode: _focusNode,
+                                            keyboardType: TextInputType.number,
+                                            // Remove all borders to prevent the "blue line"
+                                            decoration: const InputDecoration(
+                                              border: InputBorder.none,
+                                              enabledBorder: InputBorder.none,
+                                              focusedBorder: InputBorder.none,
+                                              errorBorder: InputBorder.none,
+                                              disabledBorder: InputBorder.none,
+                                              counterText: '',
+                                              contentPadding: EdgeInsets.zero,
+                                            ),
+                                            style: const TextStyle(
+                                              color: Colors.transparent,
+                                            ),
+                                            showCursor: false,
+                                            inputFormatters: [
+                                              FilteringTextInputFormatter
+                                                  .digitsOnly,
+                                              LengthLimitingTextInputFormatter(
+                                                4,
+                                              ),
+                                            ],
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _otpCode = value;
+                                              });
+                                              if (value.length == 4) {
+                                                _verifyOTP();
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 20),
+
+                                // Action Button
+                                SizedBox(
+                                  height: 54,
+                                  child: ElevatedButton(
+                                    onPressed:
+                                        (_otpCode.length == 4 && !_isLoading)
+                                        ? _verifyOTP
+                                        : null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          theme.colorScheme.primary,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      disabledBackgroundColor: theme
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.12),
+                                    ),
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2.5,
+                                            ),
+                                          )
+                                        : Text(
+                                            'Verify & Proceed',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
                                   ),
                                 ),
-                            ],
-                          ),
-                        ),
 
-                        const Spacer(flex: 2),
-                        const SizedBox(height: 20),
-                      ],
+                                const SizedBox(height: 12),
+
+                                // Resend Link
+                                Center(
+                                  child: _isResendLoading
+                                      ? SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        )
+                                      : GestureDetector(
+                                          onTap: _canResend
+                                              ? _resendCode
+                                              : null,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
+                                            child: Text(
+                                              _canResend
+                                                  ? 'Resend code'
+                                                  : 'Resend code in ${_resendTimer}s',
+                                              style: GoogleFonts.inter(
+                                                color: _canResend
+                                                    ? theme.colorScheme.primary
+                                                    : theme
+                                                          .colorScheme
+                                                          .onSurface
+                                                          .withOpacity(0.4),
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
@@ -305,26 +568,41 @@ class _SimpleOTPVerificationScreenState
       if (mounted) {
         setState(() => _isResendLoading = false);
         if (response['data'] != null && response['data']['status'] == 200) {
-          _showSnackBar('Verification code resent!', isError: false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Verification code resent!',
+                style: GoogleFonts.inter(),
+              ),
+            ),
+          );
           _startResendTimer();
         } else {
-          _showSnackBar('Failed to resend OTP');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to resend OTP', style: GoogleFonts.inter()),
+            ),
+          );
         }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isResendLoading = false);
-        _showSnackBar('Network error. Please try again.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network error. Please try again.')),
+        );
       }
     }
   }
 
   void _verifyOTP() async {
+    // Minimize keyboard immediately
+    FocusScope.of(context).unfocus();
+
+    if (_isLoading) return;
     setState(() => _isLoading = true);
 
     try {
-      print('📞 Verifying OTP for phone: ${widget.phoneNumber}');
-
       final response = await ApiService.post(
         '/sign-up/',
         body: {
@@ -334,10 +612,6 @@ class _SimpleOTPVerificationScreenState
         },
       );
 
-      if (response['headers'] != null) {
-        await _saveCookiesFromHeaders(response['headers']);
-      }
-
       if (mounted) {
         setState(() => _isLoading = false);
 
@@ -346,137 +620,80 @@ class _SimpleOTPVerificationScreenState
           final status = responseData['status'];
           final statusCode = status is int
               ? status
-              : int.tryParse(
-                  status.toString(),
-                ); // Handle potential String "200"
+              : int.tryParse(status.toString());
 
           if (statusCode == 200) {
-            print(
-              '🎉 SimpleOTP: OTP Verification Successful! Storing tokens...',
-            );
-            print(
-              '📦 SimpleOTP: Response Data Keys: ${responseData.keys.toList()}',
-            );
-
-            // Save tokens and user data
             if (responseData['access_token'] != null) {
-              print(
-                '✅ SimpleOTP: Storing access_token: ${responseData['access_token'].substring(0, 20)}...',
-              );
               await _storeToken('access_token', responseData['access_token']);
-            } else {
-              print('❌ SimpleOTP: No access_token in response!');
             }
-
-            // Extract refresh_token from Set-Cookie header
-            if (response['headers'] != null) {
-              final headers = response['headers'] as Map<String, dynamic>;
-              final setCookieHeader = headers['set-cookie'];
-
-              print('🍪 SimpleOTP: Set-Cookie header: $setCookieHeader');
-
-              if (setCookieHeader != null) {
-                String? refreshToken;
-
-                // The set-cookie header can be a String or List
-                if (setCookieHeader is String) {
-                  refreshToken = _extractRefreshTokenFromCookie(
-                    setCookieHeader,
-                  );
-                } else if (setCookieHeader is List) {
-                  // Multiple cookies, find the refresh_token one
-                  for (var cookie in setCookieHeader) {
-                    refreshToken = _extractRefreshTokenFromCookie(
-                      cookie.toString(),
-                    );
-                    if (refreshToken != null) break;
-                  }
-                }
-
-                if (refreshToken != null) {
-                  print(
-                    '✅ SimpleOTP: Extracted refresh_token from cookie: ${refreshToken.substring(0, 20)}...',
-                  );
-                  await _storeToken('refresh_token', refreshToken);
-                } else {
-                  print(
-                    '❌ SimpleOTP: Could not extract refresh_token from Set-Cookie header!',
-                  );
-                }
-              } else {
-                print('❌ SimpleOTP: No Set-Cookie header found!');
-              }
-            }
-
             if (responseData['csrf_token'] != null) {
-              print('✅ SimpleOTP: Storing csrf_token');
               await _storeToken('csrf_token', responseData['csrf_token']);
             }
-
             if (responseData['user_data'] != null) {
-              print(
-                '✅ SimpleOTP: Storing user_data: ${responseData['user_data']}',
-              );
               await _storeUserData(responseData['user_data']);
-            } else {
-              print('❌ SimpleOTP: No user_data in response!');
             }
 
             final message = responseData['message'];
 
-            if (message == 'Login successful') {
-              _navigateHome();
-            } else if (message == 'User created') {
-              // Check profile completeness
-              final userData = responseData['user_data'];
-              // Simple check for completion
-              bool needsCompletion = false;
-              if (userData != null) {
-                final firstName = userData['first_name'];
-                if (firstName == 'unnamed' || firstName == null)
-                  needsCompletion = true;
-              }
+            // Check for profile completion for both login and signup
+            final userData = responseData['user_data'];
+            bool needsCompletion = false;
 
+            if (userData != null) {
+              final firstName = userData['first_name'];
+              if (firstName == 'unnamed' ||
+                  firstName == null ||
+                  firstName.toString().isEmpty) {
+                needsCompletion = true;
+              }
+            }
+
+            if (message == 'Login successful' || message == 'User created') {
               if (needsCompletion) {
+                // Profile incomplete - redirect to completion screen
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(
                     builder: (context) => AccountCompletionScreen(
                       accessToken: responseData['access_token'],
                       csrfToken: responseData['csrf_token'],
-                      userData: userData,
+                      userData: userData ?? {},
                     ),
                   ),
                   (route) => false,
                 );
               } else {
-                _navigateHome();
+                // Profile complete - go to home
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HomeScreen()),
+                  (route) => false,
+                );
               }
             } else {
-              _showSnackBar(message ?? 'Verification failed');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message ?? 'Verification failed')),
+              );
             }
           } else {
-            _showSnackBar(responseData['message'] ?? 'Verification failed');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(responseData['message'] ?? 'Verification failed'),
+              ),
+            );
           }
-        } else {
-          _showSnackBar('Invalid response from server');
         }
       }
     } catch (e) {
-      print('❌ Verification Error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        _showSnackBar('Verification failed. Please try again.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification failed. Please try again.'),
+          ),
+        );
       }
     }
-  }
-
-  void _navigateHome() {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-      (route) => false,
-    );
   }
 
   Future<void> _storeToken(String key, String token) async {
@@ -486,7 +703,6 @@ class _SimpleOTPVerificationScreenState
 
   Future<void> _storeUserData(Map<String, dynamic> userData) async {
     final prefs = await SharedPreferences.getInstance();
-    // Helper to safely store strings
     Future<void> save(String key, dynamic value) async {
       if (value != null) await prefs.setString(key, value.toString());
     }
@@ -497,92 +713,5 @@ class _SimpleOTPVerificationScreenState
     await save('phone_number', userData['phone_number']);
     await save('email', userData['email']);
     await save('img_url', userData['img_url']);
-    // ... add others as needed
-  }
-
-  /// Extract refresh_token value from Set-Cookie header
-  /// Cookie format: "refresh_token=<token_value>; Domain=...; Path=...; ..."
-  String? _extractRefreshTokenFromCookie(String cookieString) {
-    if (!cookieString.contains('refresh_token=')) {
-      return null;
-    }
-
-    try {
-      // Find the refresh_token= part
-      final startIndex = cookieString.indexOf('refresh_token=');
-      if (startIndex == -1) return null;
-
-      // Extract everything after "refresh_token="
-      final afterEquals = cookieString.substring(
-        startIndex + 'refresh_token='.length,
-      );
-
-      // The token value ends at the first semicolon or end of string
-      final endIndex = afterEquals.indexOf(';');
-      final tokenValue = endIndex == -1
-          ? afterEquals.trim()
-          : afterEquals.substring(0, endIndex).trim();
-
-      return tokenValue.isNotEmpty ? tokenValue : null;
-    } catch (e) {
-      print('❌ Error extracting refresh_token from cookie: $e');
-      return null;
-    }
-  }
-
-  Future<void> _saveCookiesFromHeaders(Map<String, String> headers) async {
-    try {
-      final setCookies = headers.entries
-          .where((entry) => entry.key.toLowerCase() == 'set-cookie')
-          .toList();
-
-      if (setCookies.isEmpty) return;
-
-      for (final cookie in setCookies) {
-        await _parseCookieString(cookie.value);
-      }
-    } catch (e) {
-      print('❌ Error saving cookies: $e');
-    }
-  }
-
-  Future<void> _parseCookieString(String cookieString) async {
-    try {
-      final parts = cookieString.split(';');
-      if (parts.isEmpty) return;
-
-      final nameValue = parts[0].trim();
-      final separatorIndex = nameValue.indexOf('=');
-      if (separatorIndex == -1) return;
-
-      final name = nameValue.substring(0, separatorIndex).trim();
-      final value = nameValue.substring(separatorIndex + 1).trim();
-
-      final prefs = await SharedPreferences.getInstance();
-
-      if (name.toLowerCase() == 'refresh_token' ||
-          name.toLowerCase() == 'refreshtoken') {
-        await prefs.setString('refresh_token_cookie', value);
-      } else if (name.toLowerCase() == 'csrf_token' ||
-          name.toLowerCase() == 'csrftoken') {
-        await prefs.setString('csrf_token_cookie', value);
-      }
-    } catch (e) {
-      print('❌ Error parsing cookie: $e');
-    }
-  }
-
-  void _showSnackBar(String message, {bool isError = true}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.outfit(color: Colors.white)),
-        backgroundColor: isError
-            ? Theme.of(context).colorScheme.error
-            : Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
   }
 }

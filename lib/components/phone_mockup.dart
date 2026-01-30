@@ -39,7 +39,7 @@ class PhoneMockup extends StatelessWidget {
               child: Stack(
                 children: [
                   // Status Bar
-                  Positioned(
+                  const Positioned(
                     top: 16,
                     left: 16,
                     right: 16,
@@ -61,9 +61,9 @@ class PhoneMockup extends StatelessWidget {
                               color: Colors.white,
                               size: 14,
                             ),
-                            const SizedBox(width: 2),
+                            SizedBox(width: 2),
                             Icon(Icons.wifi, color: Colors.white, size: 14),
-                            const SizedBox(width: 2),
+                            SizedBox(width: 2),
                             Icon(
                               Icons.battery_full,
                               color: Colors.white,
@@ -103,7 +103,7 @@ class PhoneMockup extends StatelessWidget {
                               color: theme.colorScheme.primary,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(
+                            child: const Icon(
                               Icons.travel_explore,
                               color: Colors.white,
                               size: 18,
@@ -119,7 +119,7 @@ class PhoneMockup extends StatelessWidget {
                               children: [
                                 Row(
                                   children: [
-                                    Text(
+                                    const Text(
                                       'TravelWith',
                                       style: TextStyle(
                                         fontSize: 14,
@@ -127,7 +127,7 @@ class PhoneMockup extends StatelessWidget {
                                         color: Colors.black87,
                                       ),
                                     ),
-                                    Spacer(),
+                                    const Spacer(),
                                     Text(
                                       'now',
                                       style: TextStyle(
@@ -183,7 +183,7 @@ class PhoneMockup extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
               ),
-              child: Center(
+              child: const Center(
                 child: Text(
                   '3',
                   style: TextStyle(

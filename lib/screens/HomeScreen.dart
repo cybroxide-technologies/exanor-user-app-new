@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:exanor/components/translation_widget.dart';
+import 'package:flutter/foundation.dart';
 import 'package:exanor/components/home_screen_skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart'; // Added for ScrollDirection
@@ -10,7 +11,10 @@ import 'package:exanor/services/api_service.dart';
 import 'package:exanor/components/custom_sliver_app_bar.dart';
 import 'package:exanor/components/professional_bottom_nav.dart';
 import 'package:exanor/screens/store_screen.dart';
-import 'package:exanor/screens/refer_and_earn_screen.dart';
+import 'package:exanor/services/firebase_messaging_service.dart';
+import 'package:exanor/services/firebase_remote_config_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:geolocator/geolocator.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,6 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? userName;
   String? userImage;
   bool _isLoadingUserData = true;
+  bool _showTokenSuccess = false;
 
   // Navigation
   int _bottomNavIndex = 0;
@@ -41,12 +46,25 @@ class _HomeScreenState extends State<HomeScreen> {
   final String _constAddressId = "e3d3142b-6065-4052-95f6-854a6bb039e9";
   String _userAddressId = "e3d3142b-6065-4052-95f6-854a6bb039e9";
 
-  String _addressTitle = "Home";
-  String _addressSubtitle = "Phagwara, Punjab";
+  String _addressTitle = "Select Address";
+  String? _addressSubtitle;
 
   String _selectedCategoryId = '';
 
   bool _isBottomNavVisible = true;
+  int _categoryRefreshTrigger = 0;
+
+  // Scroll throttle for performance - limits setState calls during rapid scrolling
+  DateTime? _lastScrollTime;
+
+  // Real-time location override
+  double? _currentLat;
+  double? _currentLng;
+
+  // Track if user is within 100m of a saved address (for store fetch payload)
+  bool _isWithinSavedAddress = false;
+  // Store the matched address ID when within 100m
+  String? _matchedAddressId;
 
   @override
   void initState() {
@@ -57,47 +75,417 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController.addListener(_onScroll);
 
     _loadAddressData();
+    _sendNotificationData();
+    _createNotificationToken();
   }
 
-  Future<void> _loadAddressData() async {
-    print(
-      '🔄 Home: _loadAddressData called - refreshing address from SharedPreferences',
-    );
+  Future<void> _loadAddressData([Map<String, dynamic>? addressData]) async {
+    print('🔄 Home: _loadAddressData called');
+
+    // 1. Manual Address Selection (Passed from Saved Addresses)
+    if (addressData != null) {
+      print('🔄 Home: Using passed address data');
+      final id = addressData['id'];
+      final label =
+          addressData['address_name'] ?? addressData['label'] ?? 'Home';
+
+      String subtitle = addressData['address'] ?? '';
+      if (subtitle.isEmpty) {
+        List<String> parts = [];
+        if (addressData['address_line_1'] != null)
+          parts.add(addressData['address_line_1']);
+        if (addressData['address_line_2'] != null)
+          parts.add(addressData['address_line_2']);
+        if (addressData['city'] != null) parts.add(addressData['city']);
+        if (addressData['state'] != null) parts.add(addressData['state']);
+        if (addressData['pincode'] != null)
+          parts.add(addressData['pincode'].toString());
+        subtitle = parts.join(', ');
+      }
+
+      // Explicitly clear live location overrides when user MANUALLY selects an address
+      if (mounted) {
+        setState(() {
+          _userAddressId = id;
+          _addressTitle = label.toString().toUpperCase();
+          _addressSubtitle = subtitle;
+          _categoryRefreshTrigger++;
+          _currentLat = null; // Clear override
+          _currentLng = null; // Clear override
+          _isWithinSavedAddress = true; // Manual selection means use address ID
+          _matchedAddressId = id;
+        });
+
+        // Fetch stores
+        _page = 1;
+        _fetchStores();
+      }
+      return;
+    }
+
+    // 2. New Flow: Fetch user addresses from API and check proximity
+    print('📍 Home: Fetching user addresses and checking proximity...');
+    await _fetchAddressesAndCheckProximity();
+  }
+
+  /// Fetches user addresses from API and checks if user is within 100m of any saved address
+  Future<void> _fetchAddressesAndCheckProximity() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedAddressId = prefs.getString('saved_address_id');
-      final savedTitle = prefs.getString('address_title');
-      final savedSubtitle = prefs.getString('address_subtitle');
+      await prefs.reload();
 
-      print('📍 Home: Loaded from SharedPreferences:');
-      print('   ID: $savedAddressId');
-      print('   Title: $savedTitle');
-      print('   Subtitle: $savedSubtitle');
+      // Get user ID for API call
+      final customerId = prefs.getString('user_id') ?? '';
 
-      setState(() {
-        if (savedAddressId != null && savedAddressId.isNotEmpty) {
-          _userAddressId = savedAddressId;
-          _addressTitle = prefs.getString('address_title') ?? "Home";
-          _addressSubtitle =
-              prefs.getString('address_subtitle') ?? "Phagwara, Punjab";
-        } else {
-          _userAddressId = _constAddressId;
-          // Keep default title/subtitle or set to constants
-        }
-      });
+      if (customerId.isEmpty) {
+        print('⚠️ Home: No user ID found, using fallback');
+        _setFallbackAddress();
+        return;
+      }
 
-      print(
-        '✅ Home: State updated - Title: $_addressTitle, Subtitle: $_addressSubtitle',
+      // Step 1: Fetch user addresses from /user-address/ API
+      print('📍 Home: Fetching user addresses from API...');
+      final addressResponse = await ApiService.post(
+        '/user-address/',
+        body: {
+          'customer_user_id': customerId,
+          'query': {},
+          'store_access': true,
+        },
+        useBearerToken: true,
       );
 
-      // Fetch stores after address is loaded
-      // Reset pagination
-      _page = 1;
-      _fetchStores();
+      List<Map<String, dynamic>> userAddresses = [];
+      if (addressResponse['data'] != null &&
+          addressResponse['data']['status'] == 200 &&
+          addressResponse['data']['response'] != null) {
+        userAddresses = List<Map<String, dynamic>>.from(
+          addressResponse['data']['response'],
+        );
+        print('✅ Home: Fetched ${userAddresses.length} user addresses');
+      } else {
+        print('⚠️ Home: No addresses found or API error');
+      }
+
+      // Step 2: Get user's realtime location
+      print('📍 Home: Getting realtime location...');
+      Position? currentPosition;
+      try {
+        final bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (serviceEnabled) {
+          LocationPermission permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
+
+          if (permission == LocationPermission.whileInUse ||
+              permission == LocationPermission.always) {
+            currentPosition = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+              timeLimit: const Duration(seconds: 5),
+            );
+            print(
+              '✅ Home: Current location: ${currentPosition.latitude}, ${currentPosition.longitude}',
+            );
+          }
+        }
+      } catch (e) {
+        print('⚠️ Home: Failed to get current location: $e');
+      }
+
+      // Step 3: Check if user is within 100m of any saved address
+      Map<String, dynamic>? matchedAddress;
+      if (currentPosition != null && userAddresses.isNotEmpty) {
+        print('📍 Home: Checking proximity to saved addresses...');
+        for (var addr in userAddresses) {
+          if (addr['lat'] != null && addr['lng'] != null) {
+            try {
+              double addrLat = addr['lat'] is String
+                  ? double.parse(addr['lat'])
+                  : (addr['lat'] as num).toDouble();
+              double addrLng = addr['lng'] is String
+                  ? double.parse(addr['lng'])
+                  : (addr['lng'] as num).toDouble();
+
+              double distance = Geolocator.distanceBetween(
+                currentPosition.latitude,
+                currentPosition.longitude,
+                addrLat,
+                addrLng,
+              );
+
+              print(
+                '   📍 Address "${addr['address_name']}": ${distance.toStringAsFixed(0)}m away',
+              );
+
+              if (distance <= 100) {
+                // Within 100m radius
+                matchedAddress = addr;
+                print(
+                  '✅ Home: User is within 100m of "${addr['address_name']}"!',
+                );
+                break;
+              }
+            } catch (e) {
+              print('⚠️ Home: Error parsing address coordinates: $e');
+            }
+          }
+        }
+      }
+
+      // Step 4: Update state based on proximity check
+      if (mounted) {
+        if (matchedAddress != null) {
+          // User is within 100m of a saved address - use address ID
+          final String addressId = matchedAddress['id'] ?? _constAddressId;
+          final String title =
+              matchedAddress['address_name'] ??
+              matchedAddress['label'] ??
+              'Home';
+          String subtitle = matchedAddress['address_line_1'] ?? '';
+          if (matchedAddress['city'] != null) {
+            subtitle += ', ${matchedAddress['city']}';
+          }
+
+          setState(() {
+            _userAddressId = addressId;
+            _addressTitle = title.toUpperCase();
+            _addressSubtitle = subtitle;
+            _currentLat = null; // Clear lat/lng since we're using address ID
+            _currentLng = null;
+            _isWithinSavedAddress = true;
+            _matchedAddressId = addressId;
+            _categoryRefreshTrigger++;
+          });
+
+          // Save to prefs
+          await prefs.setString('saved_address_id', addressId);
+          await prefs.setString('address_title', title);
+          await prefs.setString('address_subtitle', subtitle);
+
+          print('📍 Home: Using saved address ID for store fetch: $addressId');
+        } else if (currentPosition != null) {
+          // User is NOT within 100m of any saved address - use lat/lng
+          setState(() {
+            _currentLat = currentPosition!.latitude;
+            _currentLng = currentPosition.longitude;
+            _addressTitle = "Current Location";
+            _addressSubtitle = "Stores near you";
+            _isWithinSavedAddress = false;
+            _matchedAddressId = null;
+            _categoryRefreshTrigger++;
+          });
+
+          print(
+            '📍 Home: Using lat/lng for store fetch: ${currentPosition.latitude}, ${currentPosition.longitude}',
+          );
+        } else {
+          // No location and no matched address - fall back to saved prefs or default
+          print('📍 Home: No location available, checking saved prefs...');
+          final savedAddressId = prefs.getString('saved_address_id');
+          final savedTitle = prefs.getString('address_title');
+          final savedSubtitle = prefs.getString('address_subtitle');
+
+          if (savedAddressId != null && savedAddressId.isNotEmpty) {
+            setState(() {
+              _userAddressId = savedAddressId;
+              _addressTitle = savedTitle ?? "Home";
+              _addressSubtitle = savedSubtitle;
+              _currentLat = null;
+              _currentLng = null;
+              _isWithinSavedAddress = true;
+              _matchedAddressId = savedAddressId;
+              _categoryRefreshTrigger++;
+            });
+          } else if (userAddresses.isNotEmpty) {
+            // Use first address as default
+            final firstAddr = userAddresses.first;
+            final String addressId = firstAddr['id'] ?? _constAddressId;
+            final String title =
+                firstAddr['address_name'] ?? firstAddr['label'] ?? 'Home';
+            String subtitle = firstAddr['address_line_1'] ?? '';
+
+            setState(() {
+              _userAddressId = addressId;
+              _addressTitle = title.toUpperCase();
+              _addressSubtitle = subtitle;
+              _currentLat = null;
+              _currentLng = null;
+              _isWithinSavedAddress = true;
+              _matchedAddressId = addressId;
+              _categoryRefreshTrigger++;
+            });
+
+            await prefs.setString('saved_address_id', addressId);
+            await prefs.setString('address_title', title);
+            await prefs.setString('address_subtitle', subtitle);
+          } else {
+            _setFallbackAddress();
+            return;
+          }
+        }
+
+        // Fetch stores with appropriate payload
+        _page = 1;
+        _fetchStores();
+      }
     } catch (e) {
-      print('❌ Home: Error loading address data: $e');
-      // Fallback to const ID and fetch
-      _userAddressId = _constAddressId;
+      print('❌ Home: Error in _fetchAddressesAndCheckProximity: $e');
+      _setFallbackAddress();
+    }
+  }
+
+  Future<void> _fetchAndSetDefaultAddress(SharedPreferences prefs) async {
+    print('📍 Home: No saved address found, fetching from API...');
+    try {
+      final response = await ApiService.post(
+        '/user-address/',
+        body: {'query': {}},
+        useBearerToken: true,
+      );
+
+      if (response['data'] != null &&
+          response['data']['status'] == 200 &&
+          response['data']['response'] != null) {
+        final List<dynamic> addresses = response['data']['response'];
+
+        if (addresses.isNotEmpty) {
+          // Default to the first address
+          Map<String, dynamic> selectedAddress = addresses[0];
+
+          // Attempt to find the nearest address
+          try {
+            final bool serviceEnabled =
+                await Geolocator.isLocationServiceEnabled();
+            if (serviceEnabled) {
+              LocationPermission permission =
+                  await Geolocator.checkPermission();
+              if (permission == LocationPermission.denied) {
+                // If denied, we can try requesting or just skip.
+                // For unseen behavior on Home, we typically don't force request if not critical,
+                // but checking 'LocationPermission.denied' means we haven't asked or were denied.
+                // Let's only proceed if we have permission or can easily get it.
+                // Assuming we don't spam request here.
+              } else if (permission == LocationPermission.deniedForever) {
+                // Ignore
+              } else {
+                // Permission granted (always or whileInUse)
+                final position = await Geolocator.getCurrentPosition(
+                  desiredAccuracy: LocationAccuracy.medium,
+                  timeLimit: const Duration(seconds: 3),
+                );
+
+                double minDistance = double.infinity;
+                Map<String, dynamic>? nearestNode;
+
+                for (var addr in addresses) {
+                  if (addr['lat'] != null && addr['lng'] != null) {
+                    try {
+                      double lat = addr['lat'] is String
+                          ? double.parse(addr['lat'])
+                          : (addr['lat'] as num).toDouble();
+                      double lng = addr['lng'] is String
+                          ? double.parse(addr['lng'])
+                          : (addr['lng'] as num).toDouble();
+
+                      double dist = Geolocator.distanceBetween(
+                        position.latitude,
+                        position.longitude,
+                        lat,
+                        lng,
+                      );
+
+                      if (dist < minDistance) {
+                        minDistance = dist;
+                        nearestNode = addr;
+                      }
+                    } catch (e) {
+                      // Ignore coord parsing error
+                    }
+                  }
+                }
+
+                if (nearestNode != null) {
+                  print(
+                    '📍 Home: Auto-selected nearest address: ${nearestNode['address_name'] ?? nearestNode['label']} (${minDistance.toStringAsFixed(0)}m away)',
+                  );
+                  selectedAddress = nearestNode;
+                }
+              }
+            }
+          } catch (e) {
+            print('⚠️ Home: Location check for nearest address failed: $e');
+          }
+
+          final String id = selectedAddress['id'] ?? _constAddressId;
+          final String title =
+              selectedAddress['address_name'] ??
+              selectedAddress['label'] ??
+              'Home';
+
+          String subtitle = selectedAddress['address'] ?? '';
+          if (subtitle.isEmpty) {
+            List<String> parts = [];
+            if (selectedAddress['address_line_1'] != null)
+              parts.add(selectedAddress['address_line_1']);
+            if (selectedAddress['city'] != null)
+              parts.add(selectedAddress['city']);
+            subtitle = parts.join(', ');
+          }
+
+          // Save to SharedPreferences for next time
+          await prefs.setString('saved_address_id', id);
+          await prefs.setString('address_title', title);
+          await prefs.setString('address_subtitle', subtitle);
+
+          if (selectedAddress['lat'] != null) {
+            double lat = selectedAddress['lat'] is String
+                ? double.parse(selectedAddress['lat'])
+                : (selectedAddress['lat'] as num).toDouble();
+            await prefs.setDouble('latitude', lat);
+          }
+          if (selectedAddress['lng'] != null) {
+            double lng = selectedAddress['lng'] is String
+                ? double.parse(selectedAddress['lng'])
+                : (selectedAddress['lng'] as num).toDouble();
+            await prefs.setDouble('longitude', lng);
+          }
+
+          if (mounted) {
+            setState(() {
+              _userAddressId = id;
+              _addressTitle = title;
+              _addressSubtitle = subtitle;
+              _isWithinSavedAddress = true;
+              _matchedAddressId = id;
+            });
+            // Fetch stores with new address (OUTSIDE setState)
+            _page = 1;
+            _fetchStores();
+          }
+        } else {
+          print('⚠️ Home: No addresses found in API');
+          _setFallbackAddress();
+        }
+      } else {
+        print('⚠️ Home: Failed to fetch addresses or empty list');
+        _setFallbackAddress();
+      }
+    } catch (e) {
+      print('❌ Home: Error fetching default address: $e');
+      _setFallbackAddress();
+    }
+  }
+
+  void _setFallbackAddress() {
+    if (mounted) {
+      setState(() {
+        _userAddressId = _constAddressId;
+        _addressTitle = "Select Address";
+        _addressSubtitle = null;
+        _isWithinSavedAddress = true; // Use address ID for fallback
+        _matchedAddressId = _constAddressId;
+      });
       _page = 1;
       _fetchStores();
     }
@@ -110,6 +498,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onScroll() {
+    // Throttle scroll events to reduce setState calls (max 60fps = 16ms)
+    final now = DateTime.now();
+    if (_lastScrollTime != null &&
+        now.difference(_lastScrollTime!) < const Duration(milliseconds: 16)) {
+      // Still check for pagination even if throttled
+      _checkPagination();
+      return;
+    }
+    _lastScrollTime = now;
+
     // Handle Bottom Nav Visibility
     if (_scrollController.position.userScrollDirection ==
         ScrollDirection.reverse) {
@@ -119,6 +517,10 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!_isBottomNavVisible) setState(() => _isBottomNavVisible = true);
     }
 
+    _checkPagination();
+  }
+
+  void _checkPagination() {
     if (_scrollController.hasClients &&
         _scrollController.position.pixels >=
             _scrollController.position.maxScrollExtent - 200) {
@@ -161,15 +563,49 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      final requestBody = {
-        "user_address_id": _userAddressId,
-        "radius": 20000,
-        "page": _page,
-        if (_selectedCategoryId.isNotEmpty)
-          "store_category_id": _selectedCategoryId,
-      };
+      // Get search radius from remote config
+      final int searchRadius = FirebaseRemoteConfigService.getSearchRadius();
 
-      print('🏪 Fetching stores: Page $_page');
+      // Build request body based on whether user is within 100m of a saved address
+      Map<String, dynamic> requestBody;
+
+      if (_isWithinSavedAddress && _matchedAddressId != null) {
+        // User is within 100m of a saved address - use user_address_id
+        requestBody = {
+          "user_address_id": _matchedAddressId,
+          "radius": searchRadius,
+          "page": _page,
+          if (_selectedCategoryId.isNotEmpty)
+            "store_category_id": _selectedCategoryId,
+        };
+        print('🏪 Fetching stores (using address ID): Page $_page');
+        print('   Address ID: $_matchedAddressId');
+      } else if (_currentLat != null && _currentLng != null) {
+        // User is NOT within 100m of any saved address - use lat/lng
+        requestBody = {
+          "lat": _currentLat,
+          "lng": _currentLng,
+          "radius": searchRadius,
+          "page": _page,
+          if (_selectedCategoryId.isNotEmpty)
+            "store_category_id": _selectedCategoryId,
+        };
+        print('🏪 Fetching stores (using lat/lng): Page $_page');
+        print('   Lat: $_currentLat, Lng: $_currentLng');
+      } else {
+        // Fallback: use user_address_id
+        requestBody = {
+          "user_address_id": _userAddressId,
+          "radius": searchRadius,
+          "page": _page,
+          if (_selectedCategoryId.isNotEmpty)
+            "store_category_id": _selectedCategoryId,
+        };
+        print('🏪 Fetching stores (fallback address ID): Page $_page');
+        print('   Address ID: $_userAddressId');
+      }
+
+      print('   Request Body: $requestBody');
 
       final response = await ApiService.post(
         '/get-stores/',
@@ -193,6 +629,7 @@ class _HomeScreenState extends State<HomeScreen> {
             } else {
               _stores = storesList;
             }
+            print('✅ Loaded ${_stores.length} stores.');
 
             _hasNextPage = hasNext;
             _page++;
@@ -217,6 +654,103 @@ class _HomeScreenState extends State<HomeScreen> {
           _isMoreLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _sendNotificationData() async {
+    try {
+      final token = await FirebaseMessagingService.getStoredToken();
+      if (token != null) {
+        final platformData = {
+          'is_android':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+          'is_ios': !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
+          'is_web': kIsWeb,
+          'is_macos': !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS,
+          'is_windows':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
+          'is_linux': !kIsWeb && defaultTargetPlatform == TargetPlatform.linux,
+        };
+
+        await ApiService.post(
+          '/create-notification-data/',
+          body: {'fcm_token': token, ...platformData},
+          useBearerToken: true,
+        );
+        print('✅ Notification data sent successfully');
+      }
+    } catch (e) {
+      print('❌ Error sending notification data: $e');
+    }
+  }
+
+  Future<void> _createNotificationToken() async {
+    try {
+      String? token = await FirebaseMessagingService.getStoredToken();
+
+      // Fallback: Try to get token directly from Firebase Messaging instance
+      if (token == null) {
+        print(
+          '⚠️ Home: Stored token is null, fetching directly from instance...',
+        );
+        try {
+          token = await FirebaseMessaging.instance.getToken();
+          if (token != null) {
+            print('✅ Home: Fetched token from instance');
+          }
+        } catch (e) {
+          print('❌ Home: Failed to get token from instance: $e');
+        }
+      }
+
+      if (token != null) {
+        final platformData = {
+          'is_android':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.android,
+          'is_ios': !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS,
+          'is_web': kIsWeb,
+          'is_macos': !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS,
+          'is_windows':
+              !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
+          'is_linux': !kIsWeb && defaultTargetPlatform == TargetPlatform.linux,
+        };
+
+        print('🚀 Home: Calling /create-notification-token/ with token');
+
+        final response = await ApiService.post(
+          '/create-notification-token/',
+          body: {'fcm_token': token, ...platformData},
+          useBearerToken: true,
+        );
+
+        if (response['statusCode'] == 200 &&
+            response['data'] != null &&
+            response['data']['status'] == 200) {
+          if (mounted) {
+            setState(() {
+              _showTokenSuccess = true;
+            });
+            print('✅ Home: Token creation successful - Showing checkmark');
+
+            // Hide after 2 seconds
+            Future.delayed(const Duration(seconds: 2), () {
+              if (mounted) {
+                setState(() {
+                  _showTokenSuccess = false;
+                });
+              }
+            });
+          }
+        } else {
+          print(
+            '❌ Home: Token creation failed or invalid status: ${response['statusCode']}',
+          );
+        }
+      } else {
+        print('❌ Home: No token available to create notification token');
+      }
+    } catch (e) {
+      print('❌ Error creating notification token: $e');
     }
   }
 
@@ -247,16 +781,24 @@ class _HomeScreenState extends State<HomeScreen> {
                     onUserDataUpdated: _loadUserData,
                     addressTitle: _addressTitle,
                     addressSubtitle: _addressSubtitle,
-                    onAddressUpdated: () {
-                      _loadAddressData();
+                    onAddressUpdated: (data) {
+                      _loadAddressData(data);
                     },
                     onCategorySelected: (categoryId) {
                       setState(() {
                         _selectedCategoryId = categoryId;
                         _page = 1;
                       });
+                      if (_scrollController.hasClients) {
+                        _scrollController.animateTo(
+                          0,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut,
+                        );
+                      }
                       _fetchStores();
                     },
+                    categoryRefreshTrigger: _categoryRefreshTrigger,
                   ),
                 ),
 
@@ -319,13 +861,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
 
-                        // 2. Waves (Overlaying the text)
+                        // 2. Waves (Overlaying the text) - Wrapped in RepaintBoundary for performance
                         Positioned.fill(
-                          child: ClipRect(
-                            child: CustomPaint(
-                              painter: _SilkWavePainter(
-                                color: theme.colorScheme.onSurface,
-                                isDark: theme.brightness == Brightness.dark,
+                          child: RepaintBoundary(
+                            child: ClipRect(
+                              child: CustomPaint(
+                                painter: _SilkWavePainter(
+                                  color: theme.colorScheme.onSurface,
+                                  isDark: theme.brightness == Brightness.dark,
+                                ),
                               ),
                             ),
                           ),
@@ -407,6 +951,32 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          if (_showTokenSuccess)
+            Positioned(
+              bottom: 20,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -570,86 +1140,90 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                   // Heart / Favorite Icon
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Container(
-                      padding: const EdgeInsets.all(6), // Smaller padding
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.85),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        Icons.favorite_border_rounded,
-                        size: 18, // Smaller icon
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
+                  // Heart / Favorite Icon
+                  // Positioned(
+                  //   top: 12,
+                  //   right: 12,
+                  //   child: Container(
+                  //     padding: const EdgeInsets.all(6), // Smaller padding
+                  //     decoration: BoxDecoration(
+                  //       shape: BoxShape.circle,
+                  //       color: Colors.white.withOpacity(0.85),
+                  //       boxShadow: [
+                  //         BoxShadow(
+                  //           color: Colors.black.withOpacity(0.1),
+                  //           blurRadius: 4,
+                  //         ),
+                  //       ],
+                  //     ),
+                  //     child: Icon(
+                  //       Icons.favorite_border_rounded,
+                  //       size: 18, // Smaller icon
+                  //       color: theme.colorScheme.onSurface,
+                  //     ),
+                  //   ),
+                  // ),
 
-                  // Bottom Glass Info Bar (Time & Rating) - Tighter & Cleaner
+                  // Bottom Glass Info Bar (Time & Rating) - Optimized for performance
+                  // Note: Replaced BackdropFilter with static semi-transparent container
+                  // for better scroll performance (BackdropFilter is expensive during scrolling)
                   Positioned(
                     bottom: 12,
                     left: 12,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        // Using a darker semi-transparent background instead of live blur
+                        color: Colors.black.withOpacity(0.65),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.15),
+                          width: 0.5,
+                        ),
+                        // Subtle shadow for depth
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.1),
-                              width: 0.5,
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            size: 14,
+                            color: Color(0xFFFFB800),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            store.averageRating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.star_rounded,
-                                size: 14,
-                                color: Color(0xFFFFB800),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                store.averageRating.toStringAsFixed(1),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Container(
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                width: 1,
-                                height: 10,
-                                color: Colors.white.withOpacity(0.4),
-                              ),
-                              Text(
-                                store.fulfillmentSpeed, // e.g. "30-40 min"
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 8),
+                            width: 1,
+                            height: 10,
+                            color: Colors.white.withOpacity(0.4),
                           ),
-                        ),
+                          Text(
+                            store.fulfillmentSpeed, // e.g. "30-40 min"
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

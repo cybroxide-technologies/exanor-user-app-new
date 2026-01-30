@@ -215,7 +215,7 @@ class _TranslationTestWidgetState extends State<TranslationTestWidget> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceVariant.withOpacity(
+                          color: theme.colorScheme.surfaceContainerHighest.withOpacity(
                             0.5,
                           ),
                           borderRadius: BorderRadius.circular(8),

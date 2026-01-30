@@ -94,7 +94,7 @@ class _ComprehensiveTranslationExampleState
       ),
       body: UniversalTranslationWrapper(
         // Method 3: Wrap entire sections for automatic translation
-        excludePatterns: ['@', '.com'], // Don't translate emails/URLs
+        excludePatterns: const ['@', '.com'], // Don't translate emails/URLs
         child: Column(
           children: [
             // Header section with mixed content

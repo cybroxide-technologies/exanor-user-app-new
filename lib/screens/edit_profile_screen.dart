@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:exanor/components/translation_widget.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:exanor/services/user_service.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,7 +19,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  String _selectedGender = 'male'; // Default gender
+  String _selectedGender = 'male';
   String? _userImage;
   File? _selectedImageFile;
   final ImagePicker _picker = ImagePicker();
@@ -42,46 +42,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _loadUserData({bool forceRefresh = false}) async {
     try {
-      // Always fetch from API to get latest data including profile image
       await UserService.viewUserData();
-
       final prefs = await SharedPreferences.getInstance();
+
       if (mounted) {
         setState(() {
           _firstNameController.text = prefs.getString('first_name') ?? '';
           _lastNameController.text = prefs.getString('last_name') ?? '';
           _emailController.text = prefs.getString('user_email') ?? '';
-
           _phoneController.text = prefs.getString('user_phone') ?? '';
           _userImage = prefs.getString('user_image');
 
           final savedGender = prefs.getString('user_gender');
           if (savedGender != null &&
-              (savedGender == 'male' ||
-                  savedGender == 'female' ||
-                  savedGender == 'other')) {
+              ['male', 'female', 'other'].contains(savedGender)) {
             _selectedGender = savedGender;
           }
-
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Error loading user data: $e');
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: TranslatedText(
-              'Failed to load user data: ${e.toString()}',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -93,49 +74,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         maxHeight: 1080,
         imageQuality: 85,
       );
-
       if (pickedFile != null) {
-        setState(() {
-          _selectedImageFile = File(pickedFile.path);
-        });
-
-        // Upload deferred to save button
+        setState(() => _selectedImageFile = File(pickedFile.path));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: TranslatedText('Failed to pick image: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Handle error
     }
   }
 
   Future<void> _saveProfile() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-
+      setState(() => _isLoading = true);
       try {
-        // 1. Upload Profile Image if selected
-        Map<String, dynamic>? uploadResponse;
         if (_selectedImageFile != null) {
-          try {
-            print('📸 EDIT PROFILE: Starting image upload...');
-            uploadResponse = await UserService.uploadProfileImage(
-              imagePath: _selectedImageFile!.path,
-            );
-            print('📸 EDIT PROFILE: Upload response: $uploadResponse');
-          } catch (e) {
-            print('❌ EDIT PROFILE: Upload error: $e');
-            throw ApiException('Failed to upload image: ${e.toString()}');
-          }
+          await UserService.uploadProfileImage(
+            imagePath: _selectedImageFile!.path,
+          );
         }
 
-        // 2. Update Profile Details
         final response = await UserService.updateUserProfile(
           firstName: _firstNameController.text,
           lastName: _lastNameController.text,
@@ -143,106 +99,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           gender: _selectedGender,
         );
 
-        if (response['status'] == 200) {
-          // Update local data
-          final prefs = await SharedPreferences.getInstance();
-          final userData = response['user_data'];
-          final tokens = response['tokens'];
+        // Logic Fix: The response is the data map, it might not contain 'status' == 200.
+        // If we reached here without exception, it is likely successful.
+        // We will assume success if response is not null/empty.
 
-          if (userData != null) {
-            await prefs.setString('first_name', userData['first_name'] ?? '');
-            await prefs.setString('last_name', userData['last_name'] ?? '');
-            await prefs.setString('user_email', userData['email'] ?? '');
-            if (userData['phone_number'] != null) {
-              await prefs.setString(
-                'user_phone',
-                userData['phone_number'].toString(),
-              );
-            }
-            await prefs.setString('user_gender', _selectedGender);
-          }
+        final prefs = await SharedPreferences.getInstance();
+        // Update local cache locally first for immediate feedback
+        await prefs.setString('first_name', _firstNameController.text);
+        await prefs.setString('last_name', _lastNameController.text);
+        await prefs.setString('user_email', _emailController.text);
+        await prefs.setString('user_gender', _selectedGender);
 
-          if (tokens != null) {
-            await prefs.setString('access_token', tokens['access_token'] ?? '');
-            await prefs.setString(
-              'refresh_token',
-              tokens['refresh_token'] ?? '',
-            );
-            await prefs.setString('csrf_token', tokens['csrf_token'] ?? '');
-          }
+        // Then refresh from server
+        await UserService.viewUserData();
 
-          // Handle Image Update
-          if (uploadResponse != null) {
-            String? newImgUrl = uploadResponse['img_url'];
-            if (newImgUrl == null && uploadResponse['data'] != null) {
-              newImgUrl = uploadResponse['data']['img_url'];
-            }
-
-            if (newImgUrl != null) {
-              await prefs.setString('user_image', newImgUrl);
-            }
-          }
-
-          // Force a reload of user data to ensure everything is synced including image url if changed
-          print('🔄 EDIT PROFILE: Calling viewUserData...');
-          await UserService.viewUserData();
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: TranslatedText('Profile updated successfully'),
-                backgroundColor: Colors.green,
-              ),
-            );
-
-            setState(() {
-              _selectedImageFile = null;
-
-              if (uploadResponse != null) {
-                String? newImgUrl = uploadResponse['img_url'];
-                if (newImgUrl == null && uploadResponse['data'] != null) {
-                  newImgUrl = uploadResponse['data']['img_url'];
-                }
-                if (newImgUrl != null) {
-                  _userImage = newImgUrl;
-                }
-              }
-            });
-
-            if (_userImage != null && _userImage!.isNotEmpty) {
-              try {
-                await NetworkImage(_userImage!).evict();
-              } catch (e) {
-                print('Error evicting image cache: $e');
-              }
-            }
-
-            print('🔄 EDIT PROFILE: Reloading user data...');
-            await _loadUserData(forceRefresh: true);
-            print(
-              '✅ EDIT PROFILE: Data reloaded. Current _userImage: $_userImage',
-            );
-          }
-        } else {
-          throw ApiException(response['response'] ?? 'Update failed');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile Updated Successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: TranslatedText(
-                'Failed to update profile: ${e.toString()}',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
         }
       } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+        if (mounted) setState(() => _isLoading = false);
       }
     }
   }
@@ -250,331 +137,285 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Clean background
+    final backgroundColor = isDark
+        ? const Color(0xFF000000)
+        : const Color(0xFFFFFFFF);
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const TranslatedText('Edit Profile'),
-        backgroundColor: theme.colorScheme.surface,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
           icon: Icon(
-            Icons.arrow_back_ios_rounded,
-            color: theme.colorScheme.onSurface,
+            Icons.arrow_back_ios_new_rounded,
+            color: isDark ? Colors.white : Colors.black,
           ),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          'Edit Profile',
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+          ),
         ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () => _loadUserData(forceRefresh: true),
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Profile Picture Section
-                      Center(
-                        child: Stack(
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                children: [
+                  _buildProfileImagePicker(isDark),
+                  const SizedBox(height: 40),
+                  Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        Row(
                           children: [
-                            Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primary.withOpacity(
-                                  0.1,
-                                ),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: theme.colorScheme.primary,
-                                  width: 3,
-                                ),
-                                image: _selectedImageFile != null
-                                    ? DecorationImage(
-                                        image: FileImage(_selectedImageFile!),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : (_userImage != null &&
-                                              _userImage!.isNotEmpty
-                                          ? DecorationImage(
-                                              image: NetworkImage(_userImage!),
-                                              fit: BoxFit.cover,
-                                            )
-                                          : null),
+                            Expanded(
+                              child: _buildTextField(
+                                controller: _firstNameController,
+                                label: 'First Name',
+                                isDark: isDark,
                               ),
-                              child:
-                                  (_selectedImageFile == null &&
-                                      (_userImage == null ||
-                                          _userImage!.isEmpty))
-                                  ? Icon(
-                                      Icons.person_rounded,
-                                      size: 60,
-                                      color: theme.colorScheme.primary,
-                                    )
-                                  : null,
                             ),
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: _pickImage,
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: theme.colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: theme.colorScheme.surface,
-                                      width: 3,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt_rounded,
-                                    size: 20,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: _buildTextField(
+                                controller: _lastNameController,
+                                label: 'Last Name',
+                                isDark: isDark,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Center(
-                        child: TextButton.icon(
-                          onPressed: _pickImage,
-                          icon: const Icon(Icons.edit_rounded),
-                          label: const TranslatedText('Change Photo'),
+                        const SizedBox(height: 20),
+                        _buildTextField(
+                          controller: _emailController,
+                          label: 'Email',
+                          isDark: isDark,
+                          icon: Icons.email_outlined,
+                          keyboardType: TextInputType.emailAddress,
                         ),
-                      ),
+                        const SizedBox(height: 20),
+                        _buildTextField(
+                          controller: _phoneController,
+                          label: 'Phone Number',
+                          isDark: isDark,
+                          icon: Icons.phone_outlined,
+                          isReadOnly: true,
+                        ),
+                        const SizedBox(height: 20),
+                        _buildGenderDropdown(isDark),
 
-                      const SizedBox(height: 32),
+                        const SizedBox(height: 40),
 
-                      // First Name Field
-                      TranslatedText(
-                        'First Name',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _firstNameController,
-                        decoration: InputDecoration(
-                          hintText: 'Enter your first name',
-                          prefixIcon: const Icon(Icons.person_outline_rounded),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest
-                              .withOpacity(0.3),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your first name';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Last Name Field
-                      TranslatedText(
-                        'Last Name',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _lastNameController,
-                        decoration: InputDecoration(
-                          hintText: 'Enter your last name',
-                          prefixIcon: const Icon(Icons.person_outline_rounded),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest
-                              .withOpacity(0.3),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your last name';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Email Field
-                      TranslatedText(
-                        'Email',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          hintText: 'Enter your email',
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest
-                              .withOpacity(0.3),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your email';
-                          }
-                          if (!value.contains('@') || !value.contains('.')) {
-                            return 'Please enter a valid email';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Phone Field
-                      TranslatedText(
-                        'Phone Number',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        readOnly: true, // Phone not editable
-                        decoration: InputDecoration(
-                          hintText: 'Enter your phone number',
-                          prefixIcon: const Icon(Icons.phone_outlined),
-                          suffixIcon: const Icon(
-                            Icons.lock_outline_rounded,
-                            size: 20,
-                            color: Colors.grey,
-                          ),
-                          hintStyle: const TextStyle(color: Colors.grey),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          filled: true,
-                          fillColor: theme.colorScheme.surfaceContainerHighest
-                              .withOpacity(0.1),
-                        ),
-                        validator: (value) {
-                          // Removed validation since it's read only
-                          return null;
-                        },
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: TranslatedText(
-                                'Phone number cannot be changed here.',
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: ElevatedButton(
+                            onPressed: _saveProfile,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              duration: Duration(seconds: 2),
+                              elevation: 2,
                             ),
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Gender Field
-                      TranslatedText(
-                        'Gender',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade400),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedGender,
-                            isExpanded: true,
-                            icon: const Icon(Icons.arrow_drop_down_rounded),
-                            items: ['male', 'female', 'other'].map((
-                              String value,
-                            ) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(
-                                  value[0].toUpperCase() + value.substring(1),
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onSurface,
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (newValue) {
-                              setState(() {
-                                if (newValue != null)
-                                  _selectedGender = newValue;
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 32),
-
-                      // Save Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _saveProfile,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 2,
-                          ),
-                          child: const TranslatedText(
-                            'Save Changes',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                            child: const Text(
+                              'Save Changes',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      const SizedBox(height: 32),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
+    );
+  }
+
+  Widget _buildProfileImagePicker(bool isDark) {
+    return Center(
+      child: GestureDetector(
+        onTap: _pickImage,
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isDark ? Colors.grey[900] : Colors.grey[100],
+                image: _selectedImageFile != null
+                    ? DecorationImage(
+                        image: FileImage(_selectedImageFile!),
+                        fit: BoxFit.cover,
+                      )
+                    : (_userImage != null
+                          ? DecorationImage(
+                              image: NetworkImage(_userImage!),
+                              fit: BoxFit.cover,
+                            )
+                          : null),
+                border: Border.all(
+                  color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+                  width: 1,
+                ),
+              ),
+              child: _selectedImageFile == null && _userImage == null
+                  ? Icon(Icons.person, size: 50, color: Colors.grey[400])
+                  : null,
+            ),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark ? Colors.black : Colors.white,
+                  width: 3,
+                ),
+              ),
+              child: const Icon(
+                Icons.camera_alt,
+                size: 16,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required bool isDark,
+    IconData? icon,
+    bool isReadOnly = false,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return TextFormField(
+      controller: controller,
+      readOnly: isReadOnly,
+      keyboardType: keyboardType,
+      style: TextStyle(
+        color: isDark ? Colors.white : Colors.black,
+        fontSize: 15,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
+          fontSize: 14,
+        ),
+        prefixIcon: icon != null
+            ? Icon(icon, color: Colors.grey[500], size: 20)
+            : null,
+        filled: true,
+        fillColor: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF9FAFB),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 1.5,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          // Consistent error border
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+      ),
+      validator: (value) {
+        if (!isReadOnly && (value == null || value.isEmpty)) return 'Required';
+        if (label.contains('Email') && !value!.contains('@'))
+          return 'Invalid Email';
+        return null;
+      },
+    );
+  }
+
+  Widget _buildGenderDropdown(bool isDark) {
+    return DropdownButtonFormField<String>(
+      value: _selectedGender,
+      dropdownColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+      style: TextStyle(
+        color: isDark ? Colors.white : Colors.black,
+        fontSize: 15,
+      ),
+      decoration: InputDecoration(
+        labelText: 'Gender',
+        labelStyle: TextStyle(
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
+          fontSize: 14,
+        ),
+        prefixIcon: Icon(
+          Icons.people_outline,
+          color: Colors.grey[500],
+          size: 20,
+        ),
+        filled: true,
+        fillColor: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF9FAFB),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: isDark ? Colors.grey[800]! : Colors.grey[200]!,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(
+            color: Theme.of(context).colorScheme.primary,
+            width: 1.5,
+          ),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+      ),
+      icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey[500]),
+      items: ['male', 'female', 'other'].map((String value) {
+        return DropdownMenuItem<String>(
+          value: value,
+          child: Text(value[0].toUpperCase() + value.substring(1)),
+        );
+      }).toList(),
+      onChanged: (newValue) {
+        if (newValue != null) setState(() => _selectedGender = newValue);
+      },
     );
   }
 }

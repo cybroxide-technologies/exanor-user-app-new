@@ -58,11 +58,11 @@ class _PerformanceDebugHelperState extends State<PerformanceDebugHelper> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
               Icon(Icons.speed, color: Colors.blue, size: 20),
-              const SizedBox(width: 8),
-              const TranslatedText(
+              SizedBox(width: 8),
+              TranslatedText(
                 'Performance Debug Helper',
                 style: TextStyle(
                   fontSize: 16,
@@ -366,10 +366,10 @@ class FirebaseDebugHelper extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Column(
+    return const Column(
       children: [
         PerformanceDebugHelper(),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         // You can add CrashlyticsDebugHelper here if you want both together
       ],
     );

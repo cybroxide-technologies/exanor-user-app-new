@@ -440,23 +440,33 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       );
     }
 
-    return ListView.builder(
-      controller: _scrollController,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
-      itemCount: _stores.length + (_isLoadingMore ? 1 : 0),
-      itemBuilder: (context, index) {
-        if (index == _stores.length) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16.0),
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        return _buildStoreItem(theme, _stores[index]);
+    return RefreshIndicator(
+      onRefresh: () async {
+        // Trigger fresh search
+        await _performSearch(_searchController.text);
       },
+      color: theme.colorScheme.primary,
+      backgroundColor: theme.cardColor,
+      child: ListView.builder(
+        controller: _scrollController,
+        physics:
+            const AlwaysScrollableScrollPhysics(), // Ensure scroll for refresh
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 40),
+        itemCount: _stores.length + (_isLoadingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _stores.length) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            );
+          }
+
+          return _buildStoreItem(theme, _stores[index]);
+        },
+      ),
     );
   }
 

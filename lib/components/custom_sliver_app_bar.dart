@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:exanor/components/voice_search_sheet.dart';
 import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:exanor/screens/my_profile_screen.dart';
@@ -20,7 +21,7 @@ class CustomSliverAppBar extends StatelessWidget {
   final String? addressSubtitle;
   final String? addressArea;
   final String? addressCity;
-  final VoidCallback? onAddressUpdated;
+  final Function(Map<String, dynamic>?)? onAddressUpdated;
   final VoidCallback? onUserDataUpdated;
   final VoidCallback? onTabsRefresh;
   final VoidCallback? onRefreshNeeded;
@@ -101,9 +102,9 @@ class CustomSliverAppBar extends StatelessWidget {
                       stops: isDarkMode ? null : const [0.0, 1.0],
                     ),
                   ),
-                  child: SafeArea(
+                  child: const SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.only(
+                      padding: EdgeInsets.only(
                         left: 16.0,
                         right: 16.0,
                         top: 12.0,
@@ -140,7 +141,8 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
 
   final String? addressTitle;
   final String? addressSubtitle;
-  final VoidCallback? onAddressUpdated;
+  final Function(Map<String, dynamic>?)? onAddressUpdated;
+  final int categoryRefreshTrigger;
 
   const StoreCategoriesDelegate({
     required this.onCategorySelected,
@@ -154,6 +156,7 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
     this.addressTitle,
     this.addressSubtitle,
     this.onAddressUpdated,
+    this.categoryRefreshTrigger = 0,
   });
 
   @override
@@ -251,6 +254,7 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
                   addressTitle: addressTitle,
                   addressSubtitle: addressSubtitle,
                   onAddressUpdated: onAddressUpdated,
+                  categoryRefreshTrigger: categoryRefreshTrigger,
                 ),
               ),
             ],
@@ -264,7 +268,7 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => 225.0 + topPadding; // Optimized to remove excess whitespace
 
   @override
-  double get minExtent => 134.0 + topPadding; // Increased to add bottom padding when collapsed
+  double get minExtent => 115.0 + topPadding; // Reduced to tighten space when collapsed
 
   @override
   bool shouldRebuild(covariant StoreCategoriesDelegate oldDelegate) {
@@ -274,7 +278,8 @@ class StoreCategoriesDelegate extends SliverPersistentHeaderDelegate {
         oldDelegate.userName != userName ||
         oldDelegate.userImage != userImage ||
         oldDelegate.addressTitle != addressTitle ||
-        oldDelegate.addressSubtitle != addressSubtitle;
+        oldDelegate.addressSubtitle != addressSubtitle ||
+        oldDelegate.categoryRefreshTrigger != categoryRefreshTrigger;
   }
 }
 
@@ -291,7 +296,8 @@ class StoreCategoriesWidget extends StatefulWidget {
 
   final String? addressTitle;
   final String? addressSubtitle;
-  final VoidCallback? onAddressUpdated;
+  final Function(Map<String, dynamic>?)? onAddressUpdated;
+  final int categoryRefreshTrigger;
 
   const StoreCategoriesWidget({
     super.key,
@@ -306,6 +312,7 @@ class StoreCategoriesWidget extends StatefulWidget {
     this.addressTitle,
     this.addressSubtitle,
     this.onAddressUpdated,
+    this.categoryRefreshTrigger = 0,
   });
 
   @override
@@ -322,11 +329,20 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
     _fetchCategories();
   }
 
+  @override
+  void didUpdateWidget(StoreCategoriesWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.categoryRefreshTrigger != widget.categoryRefreshTrigger) {
+      _fetchCategories();
+    }
+  }
+
   Future<void> _fetchCategories() async {
     if (!mounted) return;
 
-    // Forced delay to visualize skeleton
-    await Future.delayed(const Duration(seconds: 2));
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
       final response = await ApiService.post(
@@ -374,10 +390,15 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
         children: [
           // Search Bar (Always visible)
           Padding(
-            padding: const EdgeInsets.only(
+            padding: EdgeInsets.only(
               left: 16,
               right: 16,
-              top: 12, // Restored breathing room
+              top:
+                  12.0 -
+                  (8.0 * widget.shrinkPercentage).clamp(
+                    0.0,
+                    8.0,
+                  ), // Moves up when pinned
               bottom: 4,
             ),
             child: Column(
@@ -419,7 +440,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                                   if (result != null &&
                                       result['addressSelected'] == true &&
                                       widget.onAddressUpdated != null) {
-                                    widget.onAddressUpdated!();
+                                    widget.onAddressUpdated!(result);
                                   }
                                 },
                                 child: Container(
@@ -612,9 +633,11 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                   ),
                 ),
 
-                // Removed SizedBox(height: 12) from here to reduce gap when expanded
-                // The gap is now enforced by the Search Bar's top padding or the layout above
-                const SizedBox(height: 10),
+                // Collapse this spacing as we scroll up
+                SizedBox(
+                  height:
+                      10.0 * (1.0 - widget.shrinkPercentage).clamp(0.0, 1.0),
+                ),
 
                 // 2. Search Bar (Full Width) - Wrapped with shadow
                 Container(
@@ -645,16 +668,16 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                         child: Container(
-                          height: 54, // Increased height
+                          height: 46, // Reduced height
                           decoration: BoxDecoration(
                             color: isDarkMode
-                                ? Colors.black.withOpacity(0.25)
-                                : Colors.white.withOpacity(0.2),
+                                ? Colors.black.withOpacity(0.6)
+                                : Colors.white.withOpacity(0.9),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: isDarkMode
                                   ? Colors.white.withOpacity(0.1)
-                                  : Colors.white.withOpacity(0.5),
+                                  : Colors.transparent,
                               width: 1,
                             ),
                           ),
@@ -662,14 +685,13 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                             children: [
                               const SizedBox(width: 16),
                               Icon(
-                                Icons.search,
+                                CupertinoIcons.search,
                                 color: isDarkMode
-                                    ? Colors
-                                          .white // "Darker" perception via brightness/full opacity
+                                    ? Colors.white.withOpacity(0.7)
                                     : const Color(
-                                        0xFF1F4C6B,
-                                      ), // Full opacity for darker, cleaner look
-                                size: 28, // Bigger icon
+                                        0xFF8E8E93,
+                                      ), // iOS System Grey for a premium look
+                                size: 24,
                               ),
                               const SizedBox(width: 12),
                               TranslatedText(
@@ -708,8 +730,8 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                                   }
                                 },
                                 child: Container(
-                                  height: 40,
-                                  width: 40,
+                                  height: 36,
+                                  width: 36,
                                   margin: const EdgeInsets.only(right: 6),
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
@@ -729,7 +751,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                                     color: isDarkMode
                                         ? Colors.white.withOpacity(0.9)
                                         : const Color(0xFF1F4C6B),
-                                    size: 22,
+                                    size: 20,
                                   ),
                                 ),
                               ),
@@ -741,7 +763,9 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                   ),
                 ),
 
-                const SizedBox(height: 8), // Reduced spacing before Categories
+                SizedBox(
+                  height: 8.0 * (1.0 - widget.shrinkPercentage).clamp(0.0, 1.0),
+                ),
               ],
             ),
           ),
@@ -771,7 +795,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                               scrollDirection: Axis.horizontal,
                               itemCount: _categories.length,
                               separatorBuilder: (context, index) =>
-                                  SizedBox(width: 16.0),
+                                  const SizedBox(width: 16.0),
                               itemBuilder: (context, index) {
                                 final category = _categories[index];
                                 final categoryId = category['id'];
@@ -816,21 +840,17 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                                                     : Colors.transparent,
                                                 width: 1.5,
                                               ),
-                                              boxShadow: isSelected
-                                                  ? [
-                                                      BoxShadow(
-                                                        color: theme
-                                                            .colorScheme
-                                                            .shadow
-                                                            .withOpacity(0.05),
-                                                        blurRadius: 4,
-                                                        offset: const Offset(
-                                                          0,
-                                                          2,
-                                                        ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(
+                                                        isDarkMode ? 0.2 : 0.08,
                                                       ),
-                                                    ]
-                                                  : null,
+                                                  blurRadius: 1.5,
+                                                  offset: Offset.zero,
+                                                  spreadRadius: 0.5,
+                                                ),
+                                              ],
                                             ),
                                             child: ClipRRect(
                                               borderRadius:
@@ -903,7 +923,7 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                       alignment: Alignment.bottomCenter,
                       child: Container(
                         height: 50, // Fixed height for chips container
-                        padding: EdgeInsets.only(
+                        padding: const EdgeInsets.only(
                           bottom: 10,
                         ), // Added bottom padding
                         child: MediaQuery.removePadding(
@@ -976,22 +996,6 @@ class _StoreCategoriesWidgetState extends State<StoreCategoriesWidget> {
                   ),
                 ),
               ],
-            ),
-          ),
-          // Cinematic Fade Line
-          Container(
-            height: 1.5,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  isDarkMode
-                      ? Colors.white.withOpacity(0.3)
-                      : Colors.black.withOpacity(0.1),
-                  Colors.transparent,
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ),
             ),
           ),
         ],

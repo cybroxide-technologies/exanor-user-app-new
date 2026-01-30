@@ -624,8 +624,8 @@ class InAppUpdateService {
         // Show up-to-date message
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Row(
+            const SnackBar(
+              content: Row(
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
                   SizedBox(width: 8),
@@ -633,7 +633,7 @@ class InAppUpdateService {
                 ],
               ),
               backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
+              duration: Duration(seconds: 2),
             ),
           );
         }

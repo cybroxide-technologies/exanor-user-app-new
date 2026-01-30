@@ -77,6 +77,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2"/>
+
+        <!-- Enable Impeller -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="true" />
     </application>
 
     <!-- Package visibility / Queries -->

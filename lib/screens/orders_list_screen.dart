@@ -31,6 +31,8 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   List<dynamic> _filteredOrders = []; // Store filtered orders
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _isSilentFetching =
+      false; // For background auto-fetch without UI indicator
   bool _hasNextPage = false;
   int _currentPage = 1;
   String? _effectiveStoreId;
@@ -42,6 +44,9 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
   // Header State
   bool _isScrolled = false;
+
+  // Minimum number of visible items before auto-fetching more
+  static const int _minVisibleItems = 6;
 
   @override
   void initState() {
@@ -85,11 +90,19 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
     }
   }
 
-  Future<void> _fetchOrders({bool isLoadMore = false}) async {
-    if (isLoadMore) {
+  Future<void> _fetchOrders({
+    bool isLoadMore = false,
+    bool silent = false,
+  }) async {
+    // Prevent concurrent fetches
+    if (silent && _isSilentFetching) return;
+
+    if (isLoadMore && !silent) {
       setState(() => _isLoadingMore = true);
-    } else {
+    } else if (!isLoadMore) {
       setState(() => _isLoading = true);
+    } else if (silent) {
+      _isSilentFetching = true;
     }
 
     try {
@@ -129,8 +142,13 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
 
             _isLoading = false;
             _isLoadingMore = false;
+            _isSilentFetching = false;
             _errorMessage = null;
           });
+
+          // Auto-fetch more if filtered list is too small and more pages exist
+          // This ensures users can always scroll to trigger more loads
+          _checkAndFetchMoreIfNeeded();
         }
       } else {
         throw Exception(result['message'] ?? 'Failed to load orders');
@@ -144,8 +162,35 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
             _isLoading = false;
           }
           _isLoadingMore = false;
+          _isSilentFetching = false;
         });
       }
+    }
+  }
+
+  /// Checks if the current filtered list has too few items and fetches more if possible.
+  /// This solves the issue where the server sends a page of orders but only a few
+  /// match the current filter (e.g., "Completed" tab), leaving the user unable to scroll.
+  void _checkAndFetchMoreIfNeeded() {
+    // Only auto-fetch if:
+    // 1. We have more pages available
+    // 2. Current filtered list is smaller than threshold
+    // 3. We're not already loading (including silent fetches)
+    if (_hasNextPage &&
+        _filteredOrders.length < _minVisibleItems &&
+        !_isLoadingMore &&
+        !_isLoading &&
+        !_isSilentFetching) {
+      // Small delay to prevent rapid-fire requests
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted &&
+            _hasNextPage &&
+            _filteredOrders.length < _minVisibleItems &&
+            !_isSilentFetching) {
+          // Use silent: true to avoid showing loading indicator
+          _fetchOrders(isLoadMore: true, silent: true);
+        }
+      });
     }
   }
 
@@ -221,6 +266,8 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
       _selectedTabIndex = index;
       _applyFilter();
     });
+    // After switching tabs, check if we need to fetch more for this filter
+    _checkAndFetchMoreIfNeeded();
   }
 
   Color _getStatusColor(String status) {
@@ -261,18 +308,68 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           storeName: order['store_name'],
         ),
       ),
-    ).then((ratingValue) {
-      if (ratingValue != null && ratingValue is double) {
-        // Handle rating submission if needed here or inside the screen
-        // The screen currently just returns the value
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Thank you for rating!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+    ).then((result) {
+      if (result != null) {
+        if (result is Map) {
+          if (result['action'] == 'auto_rate_products' ||
+              result['action'] == 'rate_products') {
+            final double rating = result['rating'] is double
+                ? result['rating']
+                : double.tryParse(result['rating'].toString()) ?? 5.0;
+            final String review = result['review'] ?? '';
+
+            // Rate products automatically
+            _rateAllProducts(order, rating, review);
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Order rated successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            _fetchOrders(); // Refresh to update UI
+          } else if (result['rating'] != null) {
+            _fetchOrders();
+          }
+        } else if (result is double) {
+          _fetchOrders();
+        }
       }
     });
+  }
+
+  Future<void> _rateAllProducts(
+    dynamic order,
+    double rating,
+    String review,
+  ) async {
+    final List items = order['product_details'] as List? ?? [];
+    if (items.isEmpty) return;
+
+    for (var item in items) {
+      // Check if already rated to avoid overwrite/errors if backend enforces it
+      if (item['is_rated'] == true) continue;
+
+      try {
+        await ApiService.post(
+          '/review-product/',
+          body: {
+            "order_id": order['id'],
+            "product_id": item['id'] ?? item['product_combination_id'],
+            "rating": rating,
+            "review":
+                review, // Same review for all? Or empty? User said "just give the rating to veryt= prodt"
+          },
+          useBearerToken: true,
+        );
+      } catch (e) {
+        debugPrint(
+          "Failed to auto-rate product ${item['id']}: $e",
+        ); // Silent fail
+      }
+    }
+    // Refresh again after products are rated to show their status if needed
+    if (mounted) _fetchOrders();
   }
 
   @override
@@ -336,7 +433,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   Widget _buildOrderList(ThemeData theme, bool isDark, Gradient bgGradient) {
     // Header = StatusBar + TopBar(60) + Tabs(60) + Padding
     final topPadding = MediaQuery.of(context).padding.top;
-    final headerContentHeight = 130.0;
+    const headerContentHeight = 130.0;
     final totalHeaderHeight = topPadding + headerContentHeight;
 
     if (_filteredOrders.isEmpty) {
@@ -345,10 +442,14 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
           SizedBox(height: totalHeaderHeight + 20),
-          if (_allOrders.isNotEmpty)
-            _buildEmptyFilterState(theme)
-          else
-            _buildEmptyState(theme),
+          SizedBox(
+            height:
+                MediaQuery.of(context).size.height -
+                (totalHeaderHeight + 20 + 50), // 50 for bottom nav/padding
+            child: _allOrders.isNotEmpty
+                ? _buildEmptyFilterState(theme)
+                : _buildEmptyState(theme),
+          ),
         ],
       );
     }
@@ -830,7 +931,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final boxWidth = constraints.constrainWidth();
         const dashWidth = 6.0;
-        final dashHeight = 1.0;
+        const dashHeight = 1.0;
         final dashCount = (boxWidth / (2 * dashWidth)).floor();
         return Flex(
           children: List.generate(dashCount, (_) {
@@ -894,7 +995,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
   Widget _buildShimmerList(ThemeData theme, Gradient bgGradient) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final topPadding = MediaQuery.of(context).padding.top;
-    final headerContentHeight = 130.0;
+    const headerContentHeight = 130.0;
     final totalHeaderHeight = topPadding + headerContentHeight;
 
     final baseColor = isDark ? Colors.grey[800]! : Colors.grey[300]!;
@@ -1161,7 +1262,7 @@ class _OrdersListScreenState extends State<OrdersListScreen> {
           lightStartBase.withOpacity(0.35),
           Colors.white,
         );
-        final lightModeEnd = Colors.white;
+        const lightModeEnd = Colors.white;
 
         final startColor = isDark
             ? _hexToColor(

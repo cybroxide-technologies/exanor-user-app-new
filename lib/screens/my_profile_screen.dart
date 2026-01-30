@@ -9,7 +9,8 @@ import 'package:exanor/screens/saved_addresses_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:exanor/services/user_service.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:exanor/components/my_profile_skeleton.dart';
+import 'dart:io';
+import 'package:in_app_update/in_app_update.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -164,6 +165,33 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
     }
   }
 
+  Future<void> _checkForUpdate() async {
+    if (Platform.isAndroid) {
+      try {
+        final AppUpdateInfo updateInfo = await InAppUpdate.checkForUpdate();
+        if (updateInfo.updateAvailability ==
+            UpdateAvailability.updateAvailable) {
+          await InAppUpdate.performImmediateUpdate();
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: TranslatedText('App is up to date')),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error checking for update: $e')),
+          );
+        }
+      }
+    } else if (Platform.isIOS) {
+      // For iOS, redirect to the App Store using the download URL
+      _launchUrl(FirebaseRemoteConfigService.getAppDownloadUrl());
+    }
+  }
+
   Color _hexToColor(String hex) {
     try {
       return Color(int.parse(hex.replaceFirst('#', '0xFF')));
@@ -185,7 +213,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          _isLoadingUserData ? const MyProfileSkeleton() : _buildBody(isDark),
+          _isLoadingUserData
+              ? const Center(child: CircularProgressIndicator())
+              : _buildBody(isDark),
 
           // 1. Sliding "Curtain" Header (Background + Title)
           Positioned(
@@ -856,6 +886,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> {
         title: 'Help & Support',
         iconColor: Colors.purple,
         onTap: () => _launchUrl('https://chat.exanor.com'),
+        isDark: isDark,
+      ),
+    );
+
+    // Check for Updates
+    items.add(_buildDivider(isDark));
+    items.add(
+      _buildSettingsTile(
+        icon: Icons.system_update_rounded,
+        title: 'Check for Updates',
+        iconColor: Colors.teal,
+        onTap: _checkForUpdate,
         isDark: isDark,
       ),
     );

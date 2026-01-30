@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:country_code_picker/country_code_picker.dart';
 import 'package:exanor/screens/simple_otp_verification_screen.dart';
 import 'package:exanor/services/api_service.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui'; // Add this import
 
 class SimplePhoneRegistrationScreen extends StatefulWidget {
   const SimplePhoneRegistrationScreen({super.key});
@@ -15,308 +13,450 @@ class SimplePhoneRegistrationScreen extends StatefulWidget {
 }
 
 class _SimplePhoneRegistrationScreenState
-    extends State<SimplePhoneRegistrationScreen>
-    with SingleTickerProviderStateMixin {
+    extends State<SimplePhoneRegistrationScreen> {
   final _phoneController = TextEditingController();
-
-  CountryCode _selectedCountry = CountryCode.fromCountryCode('IN');
+  final _scrollController = ScrollController();
+  final _phoneFocusNode = FocusNode();
+  // Using 91 as default directly for clean look
+  final String _countryCode = '91';
   bool _isLoading = false;
-
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
-    print('📱 SimplePhoneRegistrationScreen: initState called');
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-      ),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
-          ),
-        );
-
-    _animationController.forward();
+    // Listen for focus changes to scroll when keyboard appears
+    _phoneFocusNode.addListener(_onFocusChange);
   }
+
+  void _onFocusChange() {
+    if (_phoneFocusNode.hasFocus) {
+      // Delay slightly to allow keyboard to start appearing
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted && _scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  // Optimized grid colors to match the "Blinkit" aesthetic (Pastels)
+  final List<Map<String, dynamic>> _gridItems = [
+    {
+      'color': const Color(0xFFFFF7ED),
+      'icon': Icons.lunch_dining_rounded,
+    }, // Orange tint
+    {'color': const Color(0xFFF0FDF4), 'icon': Icons.eco_rounded}, // Green tint
+    {
+      'color': const Color(0xFFEFF6FF),
+      'icon': Icons.inventory_2_rounded,
+    }, // Blue tint
+    {
+      'color': const Color(0xFFFAF5FF),
+      'icon': Icons.shopping_bag_rounded,
+    }, // Purple tint
+    {
+      'color': const Color(0xFFFEF2F2),
+      'icon': Icons.favorite_rounded,
+    }, // Red tint
+    {
+      'color': const Color(0xFFF0F9FF),
+      'icon': Icons.local_drink_rounded,
+    }, // Cyan tint
+    {
+      'color': const Color(0xFFFFFBEB),
+      'icon': Icons.egg_alt_rounded,
+    }, // Yellow tint
+    {
+      'color': const Color(0xFFFDF4FF),
+      'icon': Icons.checkroom_rounded,
+    }, // Pink tint
+    {'color': const Color(0xFFECFCCB), 'icon': Icons.spa_rounded}, // Lime
+    {'color': const Color(0xFFF1F5F9), 'icon': Icons.watch_rounded}, // Slate
+    {
+      'color': const Color(0xFFEEF2FF),
+      'icon': Icons.local_laundry_service_rounded,
+    }, // Indigo
+    {'color': const Color(0xFFFDF2F8), 'icon': Icons.stroller_rounded}, // Rose
+  ];
 
   @override
   void dispose() {
-    print('📱 SimplePhoneRegistrationScreen: dispose called');
+    _phoneFocusNode.removeListener(_onFocusChange);
+    _phoneFocusNode.dispose();
+    _scrollController.dispose();
     _phoneController.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
+      backgroundColor: isDark
+          ? const Color(0xFF0F172A)
+          : const Color(0xFFF8FAFC),
+      // Disable auto-resize to prevent jerk, we handle scrolling manually
+      resizeToAvoidBottomInset: false,
+      appBar: AppBar(
+        toolbarHeight: 0,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        systemOverlayStyle: isDark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+      ),
       body: Stack(
         children: [
-          // Elegant Background - Subtle Mesh/Gradient
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [0.0, 1.0],
-                  colors: [
-                    theme.colorScheme.surface,
-                    theme.colorScheme.surfaceContainer.withOpacity(0.3),
-                  ],
+          // 1. Background Grid (Takes up the top portion)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: size.height * 0.5, // Occupy top 50%
+            child: Opacity(
+              opacity: isDark ? 0.3 : 1.0,
+              child: GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 4,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 1.0,
                 ),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                itemCount: _gridItems.length,
+                itemBuilder: (context, index) {
+                  final item = _gridItems[index];
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? (item['color'] as Color).withOpacity(0.1)
+                          : item['color'],
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: Icon(
+                      item['icon'],
+                      size: 28,
+                      color: isDark ? Colors.white60 : Colors.black87,
+                    ),
+                  );
+                },
               ),
             ),
           ),
 
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: SizedBox(
-                height: size.height * 0.88,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Spacer(),
-
-                        // Icon or Brand Mark (Minimal)
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primaryContainer
-                                .withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Icon(
-                            Icons.phone_iphone_rounded,
-                            size: 32,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-
-                        const SizedBox(height: 32),
-
-                        // Standard, Professional Header
-                        Text(
-                          "Enter your mobile number",
-                          style: GoogleFonts.outfit(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w600,
-                            height: 1.1,
-                            color: theme.colorScheme.onSurface,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "We will send you a confirmation code to verify your identity.",
-                          style: GoogleFonts.outfit(
-                            fontSize: 16,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
-                            height: 1.4,
-                          ),
-                        ),
-
-                        const SizedBox(height: 48),
-
-                        // Input Container
-                        Container(
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: theme.colorScheme.outline.withOpacity(0.2),
-                              width: 1,
+          // 2. Main Content Sheet - Using Align for efficient bottom positioning
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.black : Colors.white,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(32),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
+                        spreadRadius: 0,
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Logo and Title Row - CLEAN LUXURY REDESIGN
+                      Column(
+                        children: [
+                          // Logo - Larger & Premium
+                          // Logo - Big & Clean
+                          SizedBox(
+                            width: 88,
+                            height: 88,
+                            child: Image.asset(
+                              'assets/icon/exanor_blue.png',
+                              fit: BoxFit.contain,
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: theme.colorScheme.shadow.withOpacity(
-                                  0.05,
-                                ),
-                                blurRadius: 20,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 4,
-                          ),
-                          child: Row(
+                          const SizedBox(height: 32),
+
+                          // "Cool" Editorial Typographic Lockup
+                          Column(
                             children: [
-                              // Country Code Picker
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.surfaceContainerLow
-                                      .withOpacity(0.5),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: CountryCodePicker(
-                                  onChanged: (code) =>
-                                      setState(() => _selectedCountry = code),
-                                  initialSelection: 'IN',
-                                  favorite: const ['+91', 'IN'],
-                                  showFlag: true, // Show flag in main view
-                                  showFlagDialog: true, // Show flags in list
-                                  showCountryOnly: false,
-                                  alignLeft: false,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  textStyle: GoogleFonts.outfit(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: theme.colorScheme.onSurface,
-                                  ),
-                                  dialogTextStyle: GoogleFonts.outfit(
-                                    color: theme.colorScheme.onSurface,
-                                  ),
-                                  searchDecoration: InputDecoration(
-                                    prefixIcon: const Icon(Icons.search),
-                                    hintText: 'Search country',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                  ),
+                              // Top Line: "YOUR NEEDS" - The "Label" style
+                              Text(
+                                "YOUR NEEDS",
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: theme.colorScheme.primary,
+                                  letterSpacing: 4.0,
                                 ),
                               ),
-
-                              const SizedBox(width: 12),
-
-                              // Phone Input
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _phoneController,
-                                  keyboardType: TextInputType.phone,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: theme.colorScheme.onSurface,
-                                    letterSpacing: 0.5,
-                                  ),
-                                  inputFormatters: [
-                                    FilteringTextInputFormatter.digitsOnly,
-                                    LengthLimitingTextInputFormatter(10),
-                                  ],
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty)
-                                      return null;
-                                    if (value.length != 10) return null;
-                                    return null;
-                                  },
-                                  decoration: InputDecoration(
-                                    hintText: '00000 00000',
-                                    hintStyle: GoogleFonts.outfit(
-                                      color: theme.colorScheme.onSurface
-                                          .withOpacity(0.2),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    border: InputBorder.none,
-                                    enabledBorder: InputBorder.none,
-                                    focusedBorder: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      vertical: 16,
-                                    ),
-                                  ),
+                              const SizedBox(height: 2),
+                              // Bottom Line: "Under One Umbrella"
+                              Text(
+                                "Under One Umbrella",
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.playfairDisplay(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w500,
+                                  fontStyle: FontStyle.italic,
+                                  color: theme.colorScheme.onSurface,
+                                  height: 1.2,
+                                  letterSpacing: -0.5,
                                 ),
                               ),
                             ],
                           ),
-                        ),
 
-                        const SizedBox(height: 32),
+                          const SizedBox(height: 24),
 
-                        // Premium Action Button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 58,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _submitPhoneNumber,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: theme.colorScheme.onPrimary,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                          // Creative Subtitle - "Unlock your experience"
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                height: 1,
+                                width: 24,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.1,
+                                ),
                               ),
-                              shadowColor: theme.colorScheme.primary
-                                  .withOpacity(0.4),
-                              padding: EdgeInsets.zero,
-                            ),
-                            child: _isLoading
-                                ? SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: theme.colorScheme.onPrimary,
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        'Continue',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Icon(
-                                        Icons.arrow_forward_rounded,
-                                        size: 20,
+                              const SizedBox(width: 12),
+                              Text(
+                                "Unlock your experience",
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.colorScheme.onSurface
+                                      .withOpacity(0.6),
+                                  letterSpacing: 1.2,
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                height: 1,
+                                width: 24,
+                                color: theme.colorScheme.onSurface.withOpacity(
+                                  0.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Phone Input Field
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.transparent,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: theme.colorScheme.onSurface.withOpacity(0.2),
+                            width: 1,
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            // Country Code Section with Classy Flag
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Classy Flag Image (Network)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(4),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 2,
+                                        offset: const Offset(0, 1),
                                       ),
                                     ],
                                   ),
-                          ),
-                        ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      'https://flagcdn.com/w40/in.png',
+                                      width: 28,
+                                      height: 20,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              const Text(
+                                                "🇮🇳",
+                                                style: TextStyle(fontSize: 24),
+                                              ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 2),
+                                  child: Text(
+                                    "+$_countryCode",
+                                    style: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 18,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
 
-                        const Spacer(flex: 2),
+                            // Vertical Line Separator
+                            Container(
+                              height: 24,
+                              width: 1,
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              color: theme.colorScheme.onSurface.withOpacity(
+                                0.15,
+                              ),
+                            ),
 
-                        // Safe Terms
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: Text(
-                              'Standard data rates may apply',
-                              style: GoogleFonts.outfit(
-                                fontSize: 13,
-                                color: theme.colorScheme.onSurface.withOpacity(
-                                  0.4,
+                            // Phone Number Input
+                            Expanded(
+                              child: TextFormField(
+                                controller: _phoneController,
+                                focusNode: _phoneFocusNode,
+                                keyboardType: TextInputType.phone,
+                                textAlignVertical: TextAlignVertical.center,
+                                onChanged: (_) => setState(() {}),
+                                style: GoogleFonts.inter(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurface,
+                                  letterSpacing: 0.5,
+                                ),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(10),
+                                ],
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  filled: false,
+                                  fillColor: Colors.transparent,
+                                  contentPadding: EdgeInsets.zero,
+                                  border: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  errorBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  hintText: "0000000000",
+                                  hintStyle: GoogleFonts.inter(
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.2),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  suffixIconConstraints: const BoxConstraints(
+                                    maxHeight: 24,
+                                    maxWidth: 32,
+                                  ),
+                                  suffixIcon: _phoneController.text.isNotEmpty
+                                      ? GestureDetector(
+                                          onTap: () => setState(
+                                            () => _phoneController.clear(),
+                                          ),
+                                          child: Container(
+                                            margin: const EdgeInsets.only(
+                                              left: 8,
+                                            ),
+                                            padding: const EdgeInsets.all(4),
+                                            child: Icon(
+                                              Icons.close_rounded,
+                                              size: 18,
+                                              color: theme.colorScheme.onSurface
+                                                  .withOpacity(0.6),
+                                            ),
+                                          ),
+                                        )
+                                      : null,
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Verify Button - Full width, prominent
+                      SizedBox(
+                        height: 54,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _submitPhoneNumber,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            disabledBackgroundColor: theme.colorScheme.onSurface
+                                .withOpacity(0.1),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Text(
+                                  "Continue",
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Text(
+                        "By continuing, you agree to our Terms of Service & Privacy Policy",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurface.withOpacity(0.4),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Extra space for keyboard
+                      SizedBox(height: bottomPadding),
+                    ],
                   ),
                 ),
               ),
@@ -328,20 +468,34 @@ class _SimplePhoneRegistrationScreenState
   }
 
   void _submitPhoneNumber() async {
-    final phone = _phoneController.text.trim();
+    // Minimize keyboard immediately
+    FocusScope.of(context).unfocus();
 
+    final phone = _phoneController.text.trim();
     if (phone.isEmpty || phone.length != 10) {
-      _showErrorSnackBar("Please enter a valid 10-digit mobile number");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Please enter a valid 10-digit number',
+            style: GoogleFonts.inter(),
+          ),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
       return;
     }
 
     setState(() => _isLoading = true);
+    // Simulate slight delay for UX feel if super fast
+    // await Future.delayed(const Duration(milliseconds: 500));
 
     try {
       final cleanPhoneNumber = phone.replaceAll(RegExp(r'\D'), '');
-      final countryCode =
-          _selectedCountry.dialCode?.replaceAll('+', '') ?? '91';
-      final fullPhoneNumber = '$countryCode$cleanPhoneNumber';
+      final fullPhoneNumber = '$_countryCode$cleanPhoneNumber';
 
       print('📞 SimplePhoneRegistration: Sending OTP to: $fullPhoneNumber');
 
@@ -362,29 +516,27 @@ class _SimplePhoneRegistrationScreenState
             ),
           );
         } else {
-          _showErrorSnackBar(
-            response['data']?['message'] ?? 'Failed to send OTP',
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                response['data']?['message'] ?? 'Failed to send OTP',
+              ),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.all(16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
           );
         }
       }
     } catch (e) {
-      print('❌ SimplePhoneRegistration Error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        _showErrorSnackBar('Network error. Please try again.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Network error. Please try again.')),
+        );
       }
     }
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: GoogleFonts.outfit(color: Colors.white)),
-        backgroundColor: Theme.of(context).colorScheme.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
   }
 }

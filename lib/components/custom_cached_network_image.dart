@@ -65,11 +65,11 @@ class _CustomCachedNetworkImageState extends State<CustomCachedNetworkImage>
               end: Alignment.bottomRight,
               colors: [
                 widget.placeholderColor?.withOpacity(0.1) ??
-                    theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
                 widget.placeholderColor?.withOpacity(0.3) ??
-                    theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
                 widget.placeholderColor?.withOpacity(0.1) ??
-                    theme.colorScheme.surfaceVariant.withOpacity(0.3),
+                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
               ],
               stops: [0.0, 0.5 + (_shimmerAnimation.value * 0.1), 1.0],
             ),
@@ -94,7 +94,7 @@ class _CustomCachedNetworkImageState extends State<CustomCachedNetworkImage>
           height: widget.height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.borderRadius),
-            color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
           ),
           child: Center(
             child: Icon(

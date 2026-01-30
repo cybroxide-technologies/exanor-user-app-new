@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:exanor/components/universal_translation_wrapper.dart';
-import 'package:exanor/services/enhanced_translation_service.dart';
 
 /// Comprehensive Universal Translation Integration Guide
 /// Shows how to apply translation to ANY screen with ALL types of content

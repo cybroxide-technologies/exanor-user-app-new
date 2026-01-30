@@ -305,7 +305,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
       lightStartBase.withOpacity(0.35),
       Colors.white,
     );
-    final lightModeEnd = Colors.white;
+    const lightModeEnd = Colors.white;
 
     final startColor = isDark
         ? _hexToColor(
@@ -321,9 +321,9 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
         : lightModeEnd;
 
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.transparent,
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(15)),
         // No Shadow on Header
       ),
       child: ClipRRect(
@@ -451,24 +451,80 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
     }
 
     Color statusColor;
-    IconData statusIcon = Icons.hourglass_top_rounded;
 
-    if (title.toLowerCase().contains('cancelled') ||
-        title.toLowerCase().contains('failed')) {
-      statusColor = theme.colorScheme.error;
-      statusIcon = Icons.cancel_rounded;
-    } else if (title.toLowerCase().contains('refunded') ||
+    bool isCancelled =
+        title.toLowerCase().contains('cancelled') ||
+        title.toLowerCase().contains('failed');
+    bool isCompleted =
+        title.toLowerCase().contains('refunded') ||
         title.toLowerCase().contains('returned') ||
-        title.toLowerCase().contains('completed')) {
+        title.toLowerCase().contains('completed');
+
+    if (isCancelled) {
+      statusColor = theme.colorScheme.error;
+    } else if (isCompleted) {
       statusColor = const Color(0xFF00C853);
-      statusIcon = Icons.check_circle_rounded;
     } else {
       statusColor = Colors.orange;
-      statusIcon = Icons.assignment_return_rounded;
+    }
+
+    // Tracker Logic
+    bool step1 = true; // Requested
+    bool step2 =
+        !title.toLowerCase().contains('requested') &&
+        !title.toLowerCase().contains('return requested');
+    bool step3 = isCompleted;
+
+    // If cancelled, show special banner
+    if (isCancelled) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.errorContainer.withOpacity(0.4),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: theme.colorScheme.error.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.cancel_rounded,
+              color: theme.colorScheme.error,
+              size: 32,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: theme.colorScheme.error,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  if (description.isNotEmpty)
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
@@ -487,134 +543,159 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 24, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: statusColor.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(statusIcon, color: statusColor, size: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                        color: theme.colorScheme.onSurface,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 1.0,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                            if (description.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4.0),
-                                child: Text(
-                                  description,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurface
-                                        .withOpacity(0.6),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                          ],
+                    ),
+                    const SizedBox(height: 4),
+                    if (description.isNotEmpty)
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ],
-                  ),
-
-                  // Return Timeline
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      _buildTimelineStep(theme, true, statusColor),
-                      _buildTimelineLine(theme, true, statusColor),
-                      _buildTimelineStep(
-                        theme,
-                        !title.toLowerCase().contains('requested'),
-                        statusColor,
-                      ),
-                      _buildTimelineLine(
-                        theme,
-                        title.toLowerCase().contains('refunded') ||
-                            title.toLowerCase().contains('returned') ||
-                            title.toLowerCase().contains('completed'),
-                        statusColor,
-                      ),
-                      _buildTimelineStep(
-                        theme,
-                        title.toLowerCase().contains('refunded') ||
-                            title.toLowerCase().contains('returned') ||
-                            title.toLowerCase().contains('completed'),
-                        statusColor,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Requested", style: _timelineTextStyle(theme)),
-                      Text("Processing", style: _timelineTextStyle(theme)),
-                      Text("Refunded", style: _timelineTextStyle(theme)),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  isCompleted
+                      ? Icons.check_circle_rounded
+                      : Icons.assignment_return_rounded,
+                  color: statusColor,
+                  size: 28,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 32),
+
+          // 3-Step Tracker (Requested -> Processing -> Refunded)
+          Row(
+            children: [
+              _buildTrackerItem(
+                theme,
+                Icons.assignment_return_rounded,
+                "Requested",
+                step1,
+                step1,
+                statusColor,
+              ),
+              _buildTrackerLine(theme, step2, statusColor),
+              _buildTrackerItem(
+                theme,
+                Icons.inventory_2_rounded,
+                "Processing",
+                step2,
+                step3, // If step3 (Refunded) is active, then step2 is completed
+                statusColor,
+              ),
+              _buildTrackerLine(theme, step3, statusColor),
+              _buildTrackerItem(
+                theme,
+                Icons.account_balance_wallet_rounded,
+                "Refunded",
+                step3,
+                step3,
+                statusColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrackerItem(
+    ThemeData theme,
+    IconData icon,
+    String label,
+    bool isActive,
+    bool isCompleted,
+    Color activeColor,
+  ) {
+    return Column(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: isActive ? activeColor : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isActive
+                  ? activeColor
+                  : theme.dividerColor.withOpacity(0.5),
+              width: 1.5,
             ),
-          ],
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: activeColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(
+            icon,
+            color: isActive
+                ? Colors.white
+                : theme.colorScheme.onSurface.withOpacity(0.4),
+            size: 20,
+          ),
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+            color: isActive
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.onSurface.withOpacity(0.4),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildTimelineStep(ThemeData theme, bool isActive, Color color) {
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        color: isActive ? color : theme.dividerColor.withOpacity(0.2),
-        shape: BoxShape.circle,
-        border: isActive ? Border.all(color: Colors.white, width: 2) : null,
-        // No shadow to match user request
-      ),
-    );
-  }
-
-  Widget _buildTimelineLine(ThemeData theme, bool isActive, Color color) {
+  Widget _buildTrackerLine(ThemeData theme, bool isActive, Color color) {
     return Expanded(
       child: Container(
         height: 3,
+        margin: const EdgeInsets.only(bottom: 20, left: 2, right: 2),
         decoration: BoxDecoration(
-          color: isActive ? color : theme.dividerColor.withOpacity(0.1),
+          color: isActive ? color : theme.dividerColor.withOpacity(0.2),
           borderRadius: BorderRadius.circular(1.5),
         ),
       ),
-    );
-  }
-
-  TextStyle _timelineTextStyle(ThemeData theme) {
-    return TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w700,
-      color: theme.colorScheme.onSurface.withOpacity(0.4),
-      letterSpacing: 0.5,
     );
   }
 
@@ -757,12 +838,20 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
               itemBuilder: (context, index) {
                 final product = _products[index];
                 final quantity = product['quantity'] ?? 0;
-                final price =
+                double total =
                     double.tryParse(
                       product['amount_including_tax']?.toString() ?? '0',
                     ) ??
                     0.0;
-                final total = price * quantity;
+
+                if (total == 0) {
+                  final p =
+                      double.tryParse(product['price']?.toString() ?? '0') ??
+                      0.0;
+                  if (p != 0) total = p * quantity;
+                }
+
+                final unitPrice = quantity > 0 ? total / quantity : 0.0;
                 final variant = product['variant_name'];
                 final imageUrl =
                     product['image'] ??
@@ -883,7 +972,7 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
                                   ),
                                 ),
                               Text(
-                                "₹${price.toStringAsFixed(0)} / unit",
+                                "₹${unitPrice.toStringAsFixed(0)} / unit",
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: theme.colorScheme.onSurface
@@ -1020,11 +1109,19 @@ class _ReturnDetailsScreenState extends State<ReturnDetailsScreen> {
             final item = entry.value;
             String displayValue = "₹0.00";
             final value = item['value'];
+            double parsedValue = 0.0;
+
             if (value is num) {
-              displayValue = "₹${value.toStringAsFixed(2)}";
-            } else if (value is String && double.tryParse(value) != null) {
-              displayValue = "₹${double.parse(value).toStringAsFixed(2)}";
+              parsedValue = value.toDouble();
+            } else if (value != null) {
+              final cleaned = value.toString().replaceAll(
+                RegExp(r'[^0-9.-]'),
+                '',
+              );
+              parsedValue = double.tryParse(cleaned) ?? 0.0;
             }
+
+            displayValue = "₹${parsedValue.abs().toStringAsFixed(2)}";
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
